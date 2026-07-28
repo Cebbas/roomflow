@@ -1450,6 +1450,166 @@ function detectLang(hass) {
   return STRINGS[code] ? code : "en";
 }
 
+// ---------- icons ----------
+// Small icon() helper renders a native <ha-icon>, themed automatically by
+// Home Assistant (color/size via CSS custom properties in RF_STYLES below)
+// - no separate icon assets or sprite sheets needed.
+function icon(name, extraStyle, className) {
+  return `<ha-icon icon="${name}" class="${className || ""}" style="${extraStyle || ""}"></ha-icon>`;
+}
+
+const PERIOD_ICONS = {
+  morning: "mdi:weather-sunset-up",
+  day: "mdi:white-balance-sunny",
+  afternoon: "mdi:weather-sunny",
+  evening: "mdi:weather-sunset-down",
+  night: "mdi:weather-night",
+};
+const DEFAULT_PERIOD_ICON = "mdi:clock-outline";
+function periodIcon(periodId) {
+  return PERIOD_ICONS[periodId] || DEFAULT_PERIOD_ICON;
+}
+
+function deviceIcon(device) {
+  if (device.type === "outlet") return "mdi:power-plug-outline";
+  if (!device.supports_color_temp && !device.supports_brightness) return "mdi:lightbulb-outline";
+  return "mdi:lightbulb-on-outline";
+}
+
+const VARIANT_ICONS = {
+  default: "mdi:calendar-check-outline",
+  weekend: "mdi:calendar-weekend-outline",
+  away: "mdi:home-export-outline",
+  condition: "mdi:tune-variant",
+};
+
+const SOURCE_ICONS = {
+  schedule: "mdi:clock-time-eight-outline",
+  sun: "mdi:weather-sunny",
+  illuminance: "mdi:brightness-6",
+  boolean: "mdi:toggle-switch-outline",
+  sensor: "mdi:thermometer-lines",
+};
+
+// One shared stylesheet, injected once per render into the card's own
+// light-DOM innerHTML (RoomFlowCard has no shadow root) - re-parsing a
+// <style> tag on every render is cheap and keeps every rule scoped under
+// .rf-root so it can never leak into the surrounding dashboard.
+const RF_STYLES = `
+<style>
+  .rf-root { font-size: 0.95em; }
+  .rf-root ha-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); }
+
+  .rf-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--divider-color); padding: 0 8px;
+  }
+  .rf-tabs { display: flex; overflow-x: auto; }
+  .rf-tab {
+    display: flex; align-items: center; gap: 6px;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    padding: 10px 12px; cursor: pointer; font-size: 0.95em; white-space: nowrap;
+    color: var(--secondary-text-color); font-family: inherit;
+  }
+  .rf-tab ha-icon { --mdc-icon-size: 18px; }
+  .rf-tab.active { border-bottom-color: var(--primary-color); color: var(--primary-color); font-weight: 600; }
+  .rf-tab.active ha-icon { color: var(--primary-color); }
+
+  .rf-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--primary-color); color: var(--text-primary-color, #fff);
+    border: none; border-radius: 8px; padding: 7px 14px; cursor: pointer;
+    font-size: 0.9em; font-family: inherit; white-space: nowrap;
+  }
+  .rf-btn ha-icon { color: inherit; --mdc-icon-size: 18px; }
+  .rf-btn.rf-btn-flat {
+    background: none; color: var(--primary-color); padding: 7px 10px;
+  }
+  .rf-btn.rf-btn-danger { background: none; color: var(--error-color, #db4437); padding: 7px 10px; }
+  .rf-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .rf-icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; cursor: pointer; border-radius: 50%;
+    width: 32px; height: 32px; color: var(--secondary-text-color);
+  }
+  .rf-icon-btn:hover { background: var(--divider-color); }
+  .rf-icon-btn:disabled { opacity: 0.3; cursor: default; background: none; }
+  .rf-icon-btn ha-icon { --mdc-icon-size: 18px; }
+  .rf-icon-btn.rf-danger:hover { color: var(--error-color, #db4437); }
+
+  .rf-card {
+    background: var(--secondary-background-color); border-radius: 12px;
+    padding: 12px; margin-bottom: 12px;
+  }
+  .rf-card-title {
+    display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 4px;
+  }
+  .rf-help { opacity: 0.7; font-size: 0.85em; margin-top: 4px; }
+
+  .rf-section { margin-top: 22px; }
+  .rf-section-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 1.05em; }
+
+  .rf-room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .rf-room-header h2 { display: flex; align-items: center; gap: 8px; font-size: 1.15em; margin: 0; font-weight: 600; }
+
+  .rf-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rf-chip {
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 12px; border-radius: 999px; cursor: pointer;
+    background: var(--card-background-color); border: 1px solid var(--divider-color);
+    font-size: 0.85em; color: var(--primary-text-color); font-family: inherit;
+  }
+  .rf-chip ha-icon { --mdc-icon-size: 16px; }
+  .rf-chip.active { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
+  .rf-chip.active ha-icon { color: inherit; }
+
+  .rf-device {
+    background: var(--card-background-color); border: 1px solid var(--divider-color);
+    border-radius: 12px; margin-bottom: 10px; overflow: hidden;
+  }
+  .rf-device-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; cursor: pointer;
+  }
+  .rf-device-header .rf-caret { --mdc-icon-size: 20px; opacity: 0.5; flex: none; }
+  .rf-device.rf-open .rf-device-header { border-bottom: 1px solid var(--divider-color); }
+  .rf-device-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .rf-device-name .rf-device-icon { --mdc-icon-size: 22px; color: var(--state-icon-active-color, var(--paper-item-icon-active-color, #fdd835)); flex: none; }
+  .rf-device-name .rf-device-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rf-device-name small { opacity: 0.65; margin-left: 4px; }
+  .rf-device-body { padding: 10px 12px; }
+
+  .rf-badge {
+    font-size: 0.72em; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+    background: var(--divider-color); color: var(--primary-text-color); margin-left: 8px;
+  }
+  .rf-badge.rf-on { background: #4caf5026; color: #2e7d32; }
+  .rf-badge.rf-off { background: var(--divider-color); color: var(--secondary-text-color); }
+
+  .rf-variant {
+    border-radius: 8px; padding: 8px 10px; margin-top: 8px;
+    border-left: 3px solid var(--divider-color); background: var(--secondary-background-color);
+  }
+  .rf-variant.rf-disabled { opacity: 0.55; }
+  .rf-variant-default { border-left-color: var(--primary-color); }
+  .rf-variant-weekend { border-left-color: #8e6fce; }
+  .rf-variant-away { border-left-color: #ff8a50; }
+  .rf-variant-condition { border-left-color: #26a69a; }
+  .rf-variant-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.92em; }
+  .rf-variant-title ha-icon { --mdc-icon-size: 17px; }
+
+  .rf-source-row { margin-top: 6px; }
+  .rf-source-label { display: flex; align-items: center; gap: 6px; width: 190px; font-size: 0.92em; }
+  .rf-source-label ha-icon { --mdc-icon-size: 17px; }
+
+  .rf-slider-row { margin-top: 6px; }
+  .rf-slider-row input[type="range"] { width: 100%; accent-color: var(--primary-color); }
+
+  .rf-empty { opacity: 0.65; font-size: 0.9em; padding: 8px 0; }
+</style>
+`;
+
 class RoomFlowCard extends HTMLElement {
   constructor() {
     super();
@@ -1462,6 +1622,7 @@ class RoomFlowCard extends HTMLElement {
     this._entities = [];
     this._activeTab = {}; // deviceKey -> period
     this._activeRoomPeriod = {}; // room.id -> period, drives every device's tab in that room at once
+    this._openDevices = {}; // deviceKey -> bool, undefined defaults to open (matches pre-collapse behavior)
     this._activeRoomId = null; // room.id | "__add__" | "__buttons__" | "__settings__"
     this._saveTimeout = null;
     this._lang = "en";
@@ -1845,19 +2006,32 @@ class RoomFlowCard extends HTMLElement {
   _liveStatusText(device) {
     const st = this._hass && this._hass.states[device.entity_id];
     if (!st) return "";
-    if (st.state === "unavailable") return ` ${this._t("status_unavailable")}`;
-    if (st.state === "on") {
+    let raw;
+    if (st.state === "unavailable") {
+      raw = this._t("status_unavailable");
+    } else if (st.state === "on") {
       const b = st.attributes ? st.attributes.brightness : null;
-      return ` ${b ? this._t("status_on_pct", { pct: Math.round((b / 255) * 100) }) : this._t("status_on")}`;
+      raw = b ? this._t("status_on_pct", { pct: Math.round((b / 255) * 100) }) : this._t("status_on");
+    } else {
+      raw = this._t("status_off");
     }
-    return ` ${this._t("status_off")}`;
+    return raw.replace(/^·\s*/, "");
+  }
+
+  _liveStatusClass(device) {
+    const st = this._hass && this._hass.states[device.entity_id];
+    if (!st || st.state === "unavailable") return "";
+    return st.state === "on" ? "rf-on" : "rf-off";
   }
 
   _updateLiveStatusTexts() {
     this.querySelectorAll("[data-live-status]").forEach((el) => {
       const { roomId, entityId } = parseDeviceKey(el.getAttribute("data-live-status"));
       const device = this._findDevice(roomId, entityId);
-      if (device) el.textContent = this._liveStatusText(device);
+      if (device) {
+        el.textContent = this._liveStatusText(device);
+        el.className = `rf-badge ${this._liveStatusClass(device)}`.trim();
+      }
     });
   }
 
@@ -1881,6 +2055,17 @@ class RoomFlowCard extends HTMLElement {
     if (removeDeviceBtn) {
       const [roomId, entityId] = removeDeviceBtn.getAttribute("data-remove-device").split("|");
       this._removeDevice(roomId, entityId);
+      return;
+    }
+
+    // Collapse/expand a device card - checked after data-remove-device
+    // above so clicking the remove button (which lives inside this same
+    // header) removes the device instead of also toggling the card.
+    const deviceToggle = e.target.closest("[data-device-toggle]");
+    if (deviceToggle) {
+      const deviceKey = deviceToggle.getAttribute("data-device-toggle");
+      this._openDevices[deviceKey] = this._openDevices[deviceKey] === false;
+      this._render();
       return;
     }
 
@@ -2381,16 +2566,12 @@ class RoomFlowCard extends HTMLElement {
       this._activeRoomId = rooms.length ? rooms[0].id : "__add__";
     }
 
-    const tabBtn = (id, label) => `
-      <button data-room-tab="${id}" style="
-        ${id === this._activeRoomId
-          ? "font-weight:bold;border-bottom:2px solid var(--primary-color);color:var(--primary-color)"
-          : "border-bottom:2px solid transparent"};
-        background:none;border-top:none;border-left:none;border-right:none;
-        padding:8px 12px;cursor:pointer;font-size:1em;white-space:nowrap
-      ">${label}</button>`;
+    const tabBtn = (id, label, iconName) => `
+      <button data-room-tab="${id}" class="rf-tab${id === this._activeRoomId ? " active" : ""}">
+        ${iconName ? icon(iconName) : ""}${label}
+      </button>`;
 
-    const roomTabsHtml = rooms.map((r) => tabBtn(r.id, r.name)).join("");
+    const roomTabsHtml = rooms.map((r) => tabBtn(r.id, r.name, "mdi:sofa-outline")).join("");
     const activeRoom = rooms.find((r) => r.id === this._activeRoomId);
 
     let contentHtml;
@@ -2414,15 +2595,16 @@ class RoomFlowCard extends HTMLElement {
     `;
 
     this.innerHTML = `
-      <ha-card header="RoomFlow">
-        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--divider-color);padding:0 8px">
-          <div style="display:flex;overflow-x:auto">
+      ${RF_STYLES}
+      <ha-card header="RoomFlow" class="rf-root">
+        <div class="rf-topbar">
+          <div class="rf-tabs">
             ${roomTabsHtml}
-            ${tabBtn("__add__", this._t("tab_add_room"))}
-            ${tabBtn("__buttons__", `🔘 ${this._t("tab_buttons")}`)}
-            ${tabBtn("__settings__", `⚙ ${this._t("tab_settings")}`)}
+            ${tabBtn("__add__", this._t("tab_add_room").replace(/^\+\s*/, ""), "mdi:plus")}
+            ${tabBtn("__buttons__", this._t("tab_buttons"), "mdi:gesture-tap-button")}
+            ${tabBtn("__settings__", this._t("tab_settings"), "mdi:cog-outline")}
           </div>
-          <button id="apply-all-btn" style="margin:6px;white-space:nowrap">${this._t("test_all")}</button>
+          <button id="apply-all-btn" class="rf-btn" style="margin:6px">${icon("mdi:play-outline")}${this._t("test_all")}</button>
         </div>
         <div style="padding:16px">
           ${contentHtml}
@@ -2437,15 +2619,17 @@ class RoomFlowCard extends HTMLElement {
       .map((a) => `<option value="${a.area_id}">${a.name}</option>`)
       .join("");
     return `
-      <div>
-        <b>${this._t("add_room_header")}</b><br>
-        <select id="new-room-area" style="margin-top:6px">
-          <option value="">${this._t("custom_name_option")}</option>
-          ${areaOptions}
-        </select>
-        <input id="new-room-name" placeholder="${this._t("room_name_placeholder")}" style="margin-left:6px" />
-        <button id="add-room-btn" style="margin-left:6px">${this._t("add")}</button>
-        <div style="opacity:0.7;font-size:0.85em;margin-top:6px">
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:plus-circle-outline")}${this._t("add_room_header")}</div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select id="new-room-area">
+            <option value="">${this._t("custom_name_option")}</option>
+            ${areaOptions}
+          </select>
+          <input id="new-room-name" placeholder="${this._t("room_name_placeholder")}" />
+          <button id="add-room-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
+        </div>
+        <div class="rf-help">
           ${this._t("add_room_help")}
         </div>
       </div>
@@ -2458,7 +2642,8 @@ class RoomFlowCard extends HTMLElement {
     const rows = periods.map(
       (p) => `
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
-        <span style="width:110px">${p.name}</span>
+        ${icon(periodIcon(p.id))}
+        <span style="width:100px">${p.name}</span>
         <input type="number" min="0" step="0.5" value="${dt[p.id] ?? 0}"
           data-default-transition="${p.id}" style="width:70px" /> ${this._t("seconds")}
       </div>`
@@ -2467,22 +2652,22 @@ class RoomFlowCard extends HTMLElement {
     const hasDayType = this._hasDayType();
     const hasHome = this._hasHome();
     const capsInfo = `
-      <div style="margin-top:16px;font-size:0.9em;opacity:0.8">
-        ${this._t("day_type_condition_label")} ${hasDayType ? this._t("status_enabled") : this._t("status_not_configured")}<br>
-        ${this._t("home_away_condition_label")} ${hasHome ? this._t("status_enabled") : this._t("status_not_configured")}<br>
+      <div style="margin-top:16px;font-size:0.9em;opacity:0.8;display:flex;flex-direction:column;gap:4px">
+        <span>${icon(hasDayType ? "mdi:check-circle-outline" : "mdi:circle-outline")}${this._t("day_type_condition_label")} ${hasDayType ? this._t("status_enabled") : this._t("status_not_configured")}</span>
+        <span>${icon(hasHome ? "mdi:check-circle-outline" : "mdi:circle-outline")}${this._t("home_away_condition_label")} ${hasHome ? this._t("status_enabled") : this._t("status_not_configured")}</span>
         ${!hasDayType || !hasHome ? this._t("enable_more_conditions_help") : ""}
       </div>
     `;
 
     return `
       <div>
-        <b>${this._t("default_transition_header")}</b>
-        <div style="opacity:0.7;font-size:0.9em;margin-top:4px">
+        <div class="rf-section-title">${icon("mdi:transition")}${this._t("default_transition_header")}</div>
+        <div class="rf-help">
           ${this._t("default_transition_help")}
         </div>
         ${rows}
         ${capsInfo}
-        <div style="margin-top:20px;border-top:1px solid var(--divider-color);padding-top:12px">
+        <div style="margin-top:20px;border-top:1px solid var(--divider-color);padding-top:4px">
           ${this._renderPeriodsSection()}
           ${this._renderDayTypeSection()}
           ${this._renderHomeSection()}
@@ -2523,7 +2708,7 @@ class RoomFlowCard extends HTMLElement {
         <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
           <input type="checkbox" data-period-config="${p.id}|${sourceKey}|weekend_enabled"
             ${weekendEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
-          ${sourceKey === "schedule" ? this._t("weekend_override_time") : this._t("weekend_override_sun")}
+          ${icon("mdi:calendar-weekend-outline")}${sourceKey === "schedule" ? this._t("weekend_override_time") : this._t("weekend_override_sun")}
         </label>
         <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
           weekendEnabled ? "" : ";opacity:0.5"
@@ -2557,7 +2742,7 @@ class RoomFlowCard extends HTMLElement {
         <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
           <input type="checkbox" data-period-config="${p.id}|${sourceKey}|and_condition.enabled"
             ${andEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
-          ${this._t("and_condition_label")}
+          ${icon("mdi:filter-variant")}${this._t("and_condition_label")}
         </label>
         <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
           andEnabled ? "" : ";opacity:0.5"
@@ -2614,11 +2799,11 @@ class RoomFlowCard extends HTMLElement {
     const showWeekendOverride = hasDayType && (sourceKey === "schedule" || sourceKey === "sun");
 
     return `
-      <div style="margin-top:6px">
+      <div class="rf-source-row">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:4px;width:170px">
+          <label class="rf-source-label">
             <input type="checkbox" data-period-source-enabled="${p.id}|${sourceKey}" ${enabled ? "checked" : ""} />
-            ${label}
+            ${icon(SOURCE_ICONS[sourceKey])}${label}
           </label>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap${enabled ? "" : ";opacity:0.5"}">
             ${fieldsHtml}
@@ -2636,12 +2821,13 @@ class RoomFlowCard extends HTMLElement {
     const rows = periods
       .map(
         (p, i) => `
-      <div style="margin-top:8px;padding:8px;border:1px dashed var(--divider-color);border-radius:6px">
+      <div class="rf-card" style="margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${icon(periodIcon(p.id), "", "rf-device-icon")}
           <input data-period-name="${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px" />
-          <button data-move-period-up="${p.id}" ${i === 0 ? "disabled" : ""}>↑</button>
-          <button data-move-period-down="${p.id}" ${i === periods.length - 1 ? "disabled" : ""}>↓</button>
-          <button data-remove-period="${p.id}">✕</button>
+          <button class="rf-icon-btn" data-move-period-up="${p.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
+          <button class="rf-icon-btn" data-move-period-down="${p.id}" ${i === periods.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
+          <button class="rf-icon-btn rf-danger" data-remove-period="${p.id}">${icon("mdi:close")}</button>
         </div>
         ${PERIOD_SOURCES.map((s) => this._renderPeriodSourceRow(p, s.key, this._t(s.labelKey), hasDayType)).join("")}
       </div>`
@@ -2649,15 +2835,15 @@ class RoomFlowCard extends HTMLElement {
       .join("");
 
     return `
-      <div>
-        <b>${this._t("periods_header")}</b>
-        <div style="opacity:0.7;font-size:0.85em;margin-top:4px">
+      <div class="rf-section">
+        <div class="rf-section-title">${icon("mdi:clock-time-eight-outline")}${this._t("periods_header")}</div>
+        <div class="rf-help">
           ${this._t("periods_help")}
           ${hasDayType ? this._t("periods_help_weekend_yes") : this._t("periods_help_weekend_no")}
         </div>
-        ${rows}
-        <div style="margin-top:8px">
-          <button data-add-period>${this._t("add_period")}</button>
+        <div style="margin-top:10px">${rows}</div>
+        <div>
+          <button class="rf-btn rf-btn-flat" data-add-period>${icon("mdi:plus")}${this._t("add_period")}</button>
         </div>
       </div>
     `;
@@ -2698,8 +2884,8 @@ class RoomFlowCard extends HTMLElement {
     }
 
     return `
-      <div style="margin-top:20px">
-        <b>${this._t("weekday_weekend_header")}</b>
+      <div class="rf-section">
+        <div class="rf-section-title">${icon("mdi:calendar-weekend-outline")}${this._t("weekday_weekend_header")}</div>
         <div style="margin-top:6px">
           <select data-day-type-mode>
             <option value="none" ${mode === "none" ? "selected" : ""}>${this._t("option_not_used")}</option>
@@ -2729,8 +2915,8 @@ class RoomFlowCard extends HTMLElement {
         .map(
           (p) => `
         <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-          <span>${p}</span>
-          <button data-remove-person="${p}">✕</button>
+          ${icon("mdi:account-outline")}<span>${p}</span>
+          <button class="rf-icon-btn rf-danger" data-remove-person="${p}">${icon("mdi:close")}</button>
         </div>`
         )
         .join("");
@@ -2739,14 +2925,14 @@ class RoomFlowCard extends HTMLElement {
           ${rows}
           <div style="margin-top:6px">
             <input list="all-entities-list" id="new-person-entity" placeholder="person.alice" style="width:180px" />
-            <button id="add-person-btn" style="margin-left:6px">${this._t("add_person")}</button>
+            <button id="add-person-btn" class="rf-btn rf-btn-flat">${icon("mdi:plus")}${this._t("add_person")}</button>
           </div>
         </div>`;
     }
 
     return `
-      <div style="margin-top:20px">
-        <b>${this._t("home_away_header")}</b>
+      <div class="rf-section">
+        <div class="rf-section-title">${icon("mdi:home-export-outline")}${this._t("home_away_header")}</div>
         <div style="margin-top:6px">
           <select data-home-mode>
             <option value="none" ${mode === "none" ? "selected" : ""}>${this._t("option_not_used")}</option>
@@ -2766,9 +2952,9 @@ class RoomFlowCard extends HTMLElement {
       .join("");
 
     return `
-      <div style="margin-top:20px">
-        <b>${this._t("device_header")}</b>
-        <div style="opacity:0.7;font-size:0.85em;margin-top:4px">
+      <div class="rf-section">
+        <div class="rf-section-title">${icon("mdi:tune")}${this._t("device_header")}</div>
+        <div class="rf-help">
           ${this._t("device_help")}
         </div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
@@ -2801,9 +2987,9 @@ class RoomFlowCard extends HTMLElement {
             ? ` (${periods.find((p) => p.id === b.force_period)?.name || b.force_period})`
             : "");
         return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--secondary-background-color);border-radius:6px;margin-bottom:8px">
-          <span><b>${b.entity_id}</b> → ${room ? room.name : this._t("room_missing")}: ${actionText}</span>
-          <button data-remove-button="${b.id}">✕</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px;margin-bottom:8px">
+          <span style="display:flex;align-items:center;gap:8px">${icon("mdi:gesture-tap-button")}<b>${b.entity_id}</b> → ${room ? room.name : this._t("room_missing")}: ${actionText}</span>
+          <button class="rf-icon-btn rf-danger" data-remove-button="${b.id}">${icon("mdi:close")}</button>
         </div>`;
       })
       .join("");
@@ -2813,29 +2999,31 @@ class RoomFlowCard extends HTMLElement {
 
     return `
       <div>
-        <b>${this._t("buttons_header")}</b>
-        <div style="opacity:0.7;font-size:0.9em;margin-top:4px">
+        <div class="rf-section-title">${icon("mdi:gesture-tap-button")}${this._t("buttons_header")}</div>
+        <div class="rf-help">
           ${this._t("buttons_help")}
         </div>
         <div style="margin-top:12px">${buttonsHtml}</div>
-        <div style="margin-top:16px;border-top:1px solid var(--divider-color);padding-top:12px">
-          <b>${this._t("add_button_header")}</b><br>
-          <input id="new-button-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
-            style="margin-top:6px;width:220px" />
-          <select id="new-button-room" style="margin-left:6px">
-            <option value="">${this._t("choose_room_option")}</option>
-            ${roomOptions}
-          </select>
-          <select id="new-button-action" style="margin-left:6px">
-            <option value="toggle">${this._t("action_toggle")}</option>
-            <option value="off">${this._t("action_off")}</option>
-            <option value="apply_now">${this._t("action_apply_now")}</option>
-            <option value="force_period">${this._t("action_force_period")}</option>
-          </select>
-          <span id="new-button-period-wrap" style="display:none">
-            <select id="new-button-period">${periodOptions}</select>
-          </span>
-          <button id="add-button-btn" style="margin-left:6px">${this._t("add")}</button>
+        <div class="rf-card" style="margin-top:16px">
+          <div class="rf-card-title">${icon("mdi:plus-circle-outline")}${this._t("add_button_header")}</div>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <input id="new-button-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
+              style="width:220px" />
+            <select id="new-button-room">
+              <option value="">${this._t("choose_room_option")}</option>
+              ${roomOptions}
+            </select>
+            <select id="new-button-action">
+              <option value="toggle">${this._t("action_toggle")}</option>
+              <option value="off">${this._t("action_off")}</option>
+              <option value="apply_now">${this._t("action_apply_now")}</option>
+              <option value="force_period">${this._t("action_force_period")}</option>
+            </select>
+            <span id="new-button-period-wrap" style="display:none">
+              <select id="new-button-period">${periodOptions}</select>
+            </span>
+            <button id="add-button-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
+          </div>
         </div>
       </div>
     `;
@@ -2850,51 +3038,54 @@ class RoomFlowCard extends HTMLElement {
         if (t.type === "threshold_above") {
           return `
           <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-            <span style="opacity:0.7;font-size:0.9em;width:130px">${this._t("motion_sensor_value_above")}</span>
+            ${icon("mdi:gauge")}
+            <span style="opacity:0.7;font-size:0.9em;width:120px">${this._t("motion_sensor_value_above")}</span>
             <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
               value="${t.entity_id || ""}" placeholder="sensor.humidity_..." style="width:180px" />
             <input type="number" step="1" data-motion-trigger-threshold="${room.id}|${t.id}"
               value="${t.threshold ?? 60}" style="width:55px" />
-            <button data-remove-motion-trigger="${room.id}|${t.id}">✕</button>
+            <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${room.id}|${t.id}">${icon("mdi:close")}</button>
           </div>`;
         }
         return `
         <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-          <span style="opacity:0.7;font-size:0.9em;width:130px">${this._t("motion_label")}</span>
+          ${icon("mdi:motion-sensor")}
+          <span style="opacity:0.7;font-size:0.9em;width:120px">${this._t("motion_label")}</span>
           <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
             value="${t.entity_id || ""}" placeholder="binary_sensor.motion_..." style="width:220px" />
-          <button data-remove-motion-trigger="${room.id}|${t.id}">✕</button>
+          <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${room.id}|${t.id}">${icon("mdi:close")}</button>
         </div>`;
       })
       .join("");
 
     return `
-      <div style="margin-bottom:14px;padding:8px;border:1px dashed var(--divider-color);border-radius:6px">
-        <label>
+      <div class="rf-card">
+        <label class="rf-card-title" style="cursor:pointer">
           <input type="checkbox" data-motion-enabled="${room.id}" ${motion.enabled ? "checked" : ""} />
-          ${this._t("motion_active_label")}
+          ${icon("mdi:motion-sensor")} ${this._t("motion_active_label")}
         </label>
         <div style="margin-top:6px${motion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-          <div style="font-size:0.85em;opacity:0.7">
+          <div class="rf-help" style="margin-top:0">
             ${this._t("motion_or_logic_help")}
           </div>
           ${triggerRows}
           <div style="margin-top:8px">
-            <button data-add-motion-trigger="${room.id}|motion">${this._t("add_motion_sensor")}</button>
-            <button data-add-motion-trigger="${room.id}|threshold_above" style="margin-left:6px">${this._t("add_threshold")}</button>
+            <button class="rf-btn rf-btn-flat" data-add-motion-trigger="${room.id}|motion">${icon("mdi:motion-sensor")}${this._t("add_motion_sensor")}</button>
+            <button class="rf-btn rf-btn-flat" data-add-motion-trigger="${room.id}|threshold_above">${icon("mdi:gauge")}${this._t("add_threshold")}</button>
           </div>
-          <div style="margin-top:8px">
+          <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${icon("mdi:timer-off-outline")}
             ${this._t("turn_off_after")}
             <input type="number" min="1" data-motion-timeout="${room.id}"
               value="${motion.timeout_minutes || 10}" style="width:55px" />
             ${this._t("turn_off_after_suffix")}
           </div>
-          <div style="margin-top:8px">
-            <label>
+          <div style="margin-top:10px">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
               <input type="checkbox" data-motion-warn-enabled="${room.id}" ${
                 motion.warn_enabled ? "checked" : ""
               } />
-              ${this._t("dim_warning_label")}
+              ${icon("mdi:brightness-4")} ${this._t("dim_warning_label")}
             </label>
             <div style="margin-top:4px${motion.warn_enabled ? "" : ";opacity:0.5;pointer-events:none"}">
               ${this._t("dim_to")} <input type="number" min="1" max="255" data-motion-warn-brightness="${room.id}"
@@ -2904,7 +3095,7 @@ class RoomFlowCard extends HTMLElement {
             </div>
           </div>
         </div>
-        <div style="opacity:0.7;font-size:0.85em;margin-top:6px">
+        <div class="rf-help">
           ${this._t("motion_footer_help")}
         </div>
       </div>
@@ -2925,24 +3116,24 @@ class RoomFlowCard extends HTMLElement {
         <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
         <input data-condition-state="${room.id}|${c.id}" value="${c.state || ""}"
           placeholder="on" style="width:70px" />
-        <button data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>↑</button>
-        <button data-move-custom-condition-down="${room.id}|${c.id}" ${
+        <button class="rf-icon-btn" data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
+        <button class="rf-icon-btn" data-move-custom-condition-down="${room.id}|${c.id}" ${
           i === conditions.length - 1 ? "disabled" : ""
-        }>↓</button>
-        <button data-remove-custom-condition="${room.id}|${c.id}">✕</button>
+        }>${icon("mdi:arrow-down")}</button>
+        <button class="rf-icon-btn rf-danger" data-remove-custom-condition="${room.id}|${c.id}">${icon("mdi:close")}</button>
       </div>`
       )
       .join("");
 
     return `
-      <div style="margin-bottom:14px;padding:8px;border:1px dashed var(--divider-color);border-radius:6px">
-        <b>${this._t("custom_conditions_header")}</b>
-        <div style="opacity:0.7;font-size:0.85em;margin-top:4px">
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:tune-variant")}${this._t("custom_conditions_header")}</div>
+        <div class="rf-help" style="margin-top:0">
           ${this._t("custom_conditions_help")}
         </div>
         ${rows}
         <div style="margin-top:8px">
-          <button data-add-custom-condition="${room.id}">${this._t("add_condition")}</button>
+          <button class="rf-btn rf-btn-flat" data-add-custom-condition="${room.id}">${icon("mdi:plus")}${this._t("add_condition")}</button>
         </div>
       </div>
     `;
@@ -2950,11 +3141,11 @@ class RoomFlowCard extends HTMLElement {
 
   // One row of period tabs for the whole room: clicking a period here
   // switches every device below to that same period at once (see the
-  // data-room-tab handler in _onClick), so you can compare what all of the
-  // room's devices are set to do for one period side by side, instead of
-  // opening each device and clicking through its own tabs individually.
-  // Devices can still be flipped to a different period on their own below
-  // afterward for a closer look at just that one.
+  // data-room-period-tab handler in _onClick), so you can compare what all
+  // of the room's devices are set to do for one period side by side,
+  // instead of opening each device and clicking through its own tabs
+  // individually. Devices can still be flipped to a different period on
+  // their own below afterward for a closer look at just that one.
   _renderRoomPeriodTabs(room) {
     const periods = this._config_data.periods || [];
     if (!periods.length) return "";
@@ -2963,19 +3154,13 @@ class RoomFlowCard extends HTMLElement {
     const tabsHtml = periods
       .map(
         (p) => `
-      <button data-room-period-tab="${room.id}|${p.id}" style="${
-        p.id === activePeriod
-          ? "font-weight:bold;border-bottom:2px solid var(--primary-color)"
-          : ""
-      };margin-right:4px;background:none;border:none;padding:4px 6px;cursor:pointer">${p.name}</button>`
+      <button data-room-period-tab="${room.id}|${p.id}" class="rf-chip${p.id === activePeriod ? " active" : ""}">
+        ${icon(periodIcon(p.id))}${p.name}
+      </button>`
       )
       .join("");
 
-    return `
-      <div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--divider-color)">
-        ${tabsHtml}
-      </div>
-    `;
+    return `<div class="rf-chip-row" style="margin-bottom:14px">${tabsHtml}</div>`;
   }
 
   _renderRoom(room) {
@@ -2987,18 +3172,19 @@ class RoomFlowCard extends HTMLElement {
 
     return `
       <div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <b style="font-size:1.1em">${room.name}</b>
+        <div class="rf-room-header">
+          <h2>${icon("mdi:sofa-outline")}${room.name}</h2>
           <div>
-            <button data-apply-room="${room.id}" style="margin-right:6px">${this._t("test_now")}</button>
-            <button data-remove-room="${room.id}">${this._t("remove_room")}</button>
+            <button class="rf-btn rf-btn-flat" data-apply-room="${room.id}">${icon("mdi:play-outline")}${this._t("test_now")}</button>
+            <button class="rf-btn rf-btn-danger" data-remove-room="${room.id}">${icon("mdi:delete-outline")}${this._t("remove_room")}</button>
           </div>
         </div>
         ${this._renderMotionBox(room)}
         ${this._renderCustomConditionsBox(room)}
         ${this._renderRoomPeriodTabs(room)}
         <div>${devicesHtml}</div>
-        <div style="margin-top:10px">
+        <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+          ${icon("mdi:plus-circle-outline")}
           <select data-new-device="${room.id}">
             <option value="">${this._t("add_device_option")}</option>
             ${entityOptions}
@@ -3019,20 +3205,21 @@ class RoomFlowCard extends HTMLElement {
     // to enabled rather than disabled).
     const enabled = variant.enabled !== false;
     const disabled = hasToggle && !enabled;
+    const variantClass = ["default", "weekend", "away"].includes(variantKey) ? variantKey : "condition";
+    const variantIcon = icon(VARIANT_ICONS[variantClass]);
 
     const toggleHtml = hasToggle
-      ? `<label><input type="checkbox" data-variant-toggle="${fieldPrefix}" ${
-          enabled ? "checked" : ""
-        } /> ${toggleText || this._t("custom_setting_for", { label: label.toLowerCase() })}</label>`
-      : `<b>${label}</b>`;
+      ? `<label class="rf-variant-title" style="cursor:pointer">
+          <input type="checkbox" data-variant-toggle="${fieldPrefix}" ${enabled ? "checked" : ""} />
+          ${variantIcon}${toggleText || this._t("custom_setting_for", { label: label.toLowerCase() })}
+        </label>`
+      : `<div class="rf-variant-title">${variantIcon}${label}</div>`;
 
     return `
-      <div style="margin-top:10px;padding:8px;border:1px dashed var(--divider-color);border-radius:6px;${
-        disabled ? "opacity:0.5" : ""
-      }">
+      <div class="rf-variant rf-variant-${variantClass}${disabled ? " rf-disabled" : ""}">
         ${toggleHtml}
         <div style="margin-top:6px${disabled ? ";pointer-events:none" : ""}">
-          <label>
+          <label style="cursor:pointer">
             <input type="checkbox" data-field="${fieldPrefix}|state" ${
               variant.state === "on" ? "checked" : ""
             } ${disabled ? "disabled" : ""} />
@@ -3040,19 +3227,19 @@ class RoomFlowCard extends HTMLElement {
           </label>
           ${
             supportsBrightness
-              ? `<div style="margin-top:4px">
-                  ${this._t("brightness_label")} <span data-brightness-val="${fieldPrefix}">${variant.brightness ?? 255}</span><br>
+              ? `<div class="rf-slider-row">
+                  ${icon("mdi:brightness-6")} ${this._t("brightness_label")} <span data-brightness-val="${fieldPrefix}">${variant.brightness ?? 255}</span>
                   <input type="range" min="1" max="255" value="${variant.brightness ?? 255}"
-                    data-field="${fieldPrefix}|brightness" ${disabled ? "disabled" : ""} style="width:100%" />
+                    data-field="${fieldPrefix}|brightness" ${disabled ? "disabled" : ""} />
                 </div>`
               : ""
           }
           ${
             supportsColorTemp
-              ? `<div style="margin-top:4px">
-                  ${this._t("color_temp_label")} <span data-kelvin-val="${fieldPrefix}">${variant.color_temp_kelvin ?? 3000}</span><br>
+              ? `<div class="rf-slider-row">
+                  ${icon("mdi:thermometer")} ${this._t("color_temp_label")} <span data-kelvin-val="${fieldPrefix}">${variant.color_temp_kelvin ?? 3000}</span>
                   <input type="range" min="2000" max="6500" step="100" value="${variant.color_temp_kelvin ?? 3000}"
-                    data-field="${fieldPrefix}|color_temp_kelvin" ${disabled ? "disabled" : ""} style="width:100%" />
+                    data-field="${fieldPrefix}|color_temp_kelvin" ${disabled ? "disabled" : ""} />
                 </div>`
               : ""
           }
@@ -3063,87 +3250,110 @@ class RoomFlowCard extends HTMLElement {
 
   _renderDevice(room, device) {
     const deviceKey = `${room.id}:${device.entity_id}`;
-    const periods = this._config_data.periods || [];
-    const activePeriod = this._activeTab[deviceKey] || (periods[0] && periods[0].id);
+    // Undefined (never toggled) defaults to open, matching the old
+    // always-expanded behavior so nothing looks like it "disappeared" for
+    // existing users after this became collapsible.
+    const isOpen = this._openDevices[deviceKey] !== false;
 
-    const tabsHtml = periods.map(
-      (p) => `
-      <button data-tab="${deviceKey}|${p.id}" style="${
-        p.id === activePeriod
-          ? "font-weight:bold;border-bottom:2px solid var(--primary-color)"
-          : ""
-      };margin-right:4px;background:none;border:none;padding:4px 6px;cursor:pointer">${p.name}</button>`
-    ).join("");
+    let bodyHtml = "";
+    if (isOpen) {
+      const periods = this._config_data.periods || [];
+      const activePeriod = this._activeTab[deviceKey] || (periods[0] && periods[0].id);
 
-    let controlsHtml = this._renderVariantControls(
-      deviceKey, device, activePeriod, "default", this._t("variant_default"), true,
-      this._t("default_variant_help")
-    );
-    if (this._hasDayType()) {
-      controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "weekend", this._t("variant_weekend"), true);
-    }
-    if (this._hasHome()) {
-      controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "away", this._t("variant_away"), true);
-    }
-    (room.custom_conditions || []).forEach((cond) => {
-      // Lazily initialize this condition's variant so conditions added
-      // mid-session don't need a reload to become editable per device.
-      if (!device.behaviors[activePeriod][cond.id]) {
-        device.behaviors[activePeriod][cond.id] = emptyVariant(device.behaviors[activePeriod].default, true);
-      }
-      controlsHtml += this._renderVariantControls(
-        deviceKey, device, activePeriod, cond.id, cond.name || this._t("condition_fallback_name"), true
+      const tabsHtml = periods
+        .map(
+          (p) => `
+        <button data-tab="${deviceKey}|${p.id}" class="rf-chip${p.id === activePeriod ? " active" : ""}">
+          ${icon(periodIcon(p.id))}${p.name}
+        </button>`
+        )
+        .join("");
+
+      let controlsHtml = this._renderVariantControls(
+        deviceKey, device, activePeriod, "default", this._t("variant_default"), true,
+        this._t("default_variant_help")
       );
-    });
+      if (this._hasDayType()) {
+        controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "weekend", this._t("variant_weekend"), true);
+      }
+      if (this._hasHome()) {
+        controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "away", this._t("variant_away"), true);
+      }
+      (room.custom_conditions || []).forEach((cond) => {
+        // Lazily initialize this condition's variant so conditions added
+        // mid-session don't need a reload to become editable per device.
+        if (!device.behaviors[activePeriod][cond.id]) {
+          device.behaviors[activePeriod][cond.id] = emptyVariant(device.behaviors[activePeriod].default, true);
+        }
+        controlsHtml += this._renderVariantControls(
+          deviceKey, device, activePeriod, cond.id, cond.name || this._t("condition_fallback_name"), true
+        );
+      });
 
-    if (device.type === "light") {
-      const deviceTransition = device.transitions ? device.transitions[activePeriod] : null;
-      const globalDefault = this._config_data.default_transitions
-        ? this._config_data.default_transitions[activePeriod] ?? 0
-        : 0;
-      controlsHtml += `
-        <div style="margin-top:10px;font-size:0.9em">
-          ${this._t("transition_time_label", { s: globalDefault })}
-          <input type="number" min="0" step="0.5" placeholder="${globalDefault}"
-            value="${deviceTransition !== null && deviceTransition !== undefined ? deviceTransition : ""}"
-            data-transition="${deviceKey}|${activePeriod}" style="width:70px" />
-        </div>
-      `;
-    }
-
-    if (room.motion && room.motion.enabled) {
-      const deviceMotion = device.motion || { enabled: false, off_delay_minutes: null };
-      controlsHtml += `
-        <div style="margin-top:10px;font-size:0.9em">
-          <label>
-            <input type="checkbox" data-device-motion-enabled="${deviceKey}" ${
-              deviceMotion.enabled ? "checked" : ""
-            } />
-            ${this._t("device_motion_reacts")}
-          </label>
-          <div style="margin-top:4px${deviceMotion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-            ${this._t("device_off_after")}
-            <input type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}"
-              value="${
-                deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
-                  ? deviceMotion.off_delay_minutes
-                  : ""
-              }"
-              data-device-motion-delay="${deviceKey}" style="width:55px" />
-            ${this._t("device_off_after_suffix")}
+      if (device.type === "light") {
+        const deviceTransition = device.transitions ? device.transitions[activePeriod] : null;
+        const globalDefault = this._config_data.default_transitions
+          ? this._config_data.default_transitions[activePeriod] ?? 0
+          : 0;
+        controlsHtml += `
+          <div style="margin-top:10px;font-size:0.9em;display:flex;align-items:center;gap:6px">
+            ${icon("mdi:transition")}
+            ${this._t("transition_time_label", { s: globalDefault })}
+            <input type="number" min="0" step="0.5" placeholder="${globalDefault}"
+              value="${deviceTransition !== null && deviceTransition !== undefined ? deviceTransition : ""}"
+              data-transition="${deviceKey}|${activePeriod}" style="width:70px" />
           </div>
+        `;
+      }
+
+      if (room.motion && room.motion.enabled) {
+        const deviceMotion = device.motion || { enabled: false, off_delay_minutes: null };
+        controlsHtml += `
+          <div style="margin-top:10px;font-size:0.9em">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+              <input type="checkbox" data-device-motion-enabled="${deviceKey}" ${
+                deviceMotion.enabled ? "checked" : ""
+              } />
+              ${icon("mdi:motion-sensor")} ${this._t("device_motion_reacts")}
+            </label>
+            <div style="margin-top:4px${deviceMotion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
+              ${this._t("device_off_after")}
+              <input type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}"
+                value="${
+                  deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
+                    ? deviceMotion.off_delay_minutes
+                    : ""
+                }"
+                data-device-motion-delay="${deviceKey}" style="width:55px" />
+              ${this._t("device_off_after_suffix")}
+            </div>
+          </div>
+        `;
+      }
+
+      bodyHtml = `
+        <div class="rf-device-body">
+          <div class="rf-chip-row">${tabsHtml}</div>
+          <div style="margin-top:8px">${controlsHtml}</div>
         </div>
       `;
     }
 
     return `
-      <div style="margin-bottom:14px;padding:8px;background:var(--secondary-background-color);border-radius:6px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span>${device.name} <small style="opacity:0.7">(${device.entity_id})</small><small data-live-status="${deviceKey}">${this._liveStatusText(device)}</small></span>
-          <button data-remove-device="${room.id}|${device.entity_id}">✕</button>
+      <div class="rf-device${isOpen ? " rf-open" : ""}">
+        <div class="rf-device-header" data-device-toggle="${deviceKey}">
+          <div class="rf-device-name">
+            ${icon(deviceIcon(device), "", "rf-device-icon")}
+            <span class="rf-device-text">${device.name}</span>
+            <small>(${device.entity_id})</small>
+            <span class="rf-badge ${this._liveStatusClass(device)}" data-live-status="${deviceKey}">${this._liveStatusText(device)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:2px;flex:none">
+            <button class="rf-icon-btn rf-danger" data-remove-device="${room.id}|${device.entity_id}">${icon("mdi:delete-outline")}</button>
+            ${icon(isOpen ? "mdi:chevron-up" : "mdi:chevron-down", "", "rf-caret")}
+          </div>
         </div>
-        <div style="margin-top:6px">${tabsHtml}</div>
-        <div style="margin-top:8px">${controlsHtml}</div>
+        ${bodyHtml}
       </div>
     `;
   }

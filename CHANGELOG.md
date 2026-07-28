@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Visual redesign of the card.** Icons throughout (device type, period,
+  Default/Weekend/Away/condition variant, source type, and every action
+  button), a shared stylesheet replacing most of the scattered inline
+  styles, colored accent borders per behavior variant so
+  Default/Weekend/Away/condition boxes are easier to tell apart at a
+  glance, and device cards are now collapsible (click the header to
+  expand/collapse, open by default) with a live on/off status badge
+  instead of plain text. Purely visual - no config shape or behavior
+  changes.
 - **Fixed: a room's period tabs didn't work.** They shared the same
   `data-room-tab` attribute as the unrelated room-switcher tabs (Living
   Room/Kitchen/+ Room/etc.), so clicking a period tab was silently

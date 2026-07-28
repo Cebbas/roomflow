@@ -2,13 +2,17 @@
 
 ## Unreleased
 
-- **Reverted: native `ha-switch`/`ha-textfield` form components (v0.0.7).**
-  After release, many fields became unreadable/uneditable in practice -
-  reverted back to plain browser `<input>` for checkboxes and text/number
-  fields, since that was proven to work reliably throughout this project
-  and the Material component swap couldn't be verified live before
-  shipping. Same visual redesign (icons, colors, layout) stays in place;
-  only the underlying form elements changed back.
+- **Fixed: `ha-switch`/`ha-textfield` fields could end up unreadable/
+  uneditable (v0.0.7).** Unlike `ha-icon`, which is always part of Home
+  Assistant's core frontend bundle, `ha-textfield`/`ha-switch` are only
+  loaded by more specialized panels (settings dialogs, config flows) and
+  aren't guaranteed to be registered as custom elements yet just because
+  the frontend is running - depends on what else was open in that browser
+  session. An unregistered custom element silently renders as an empty,
+  non-interactive box instead of erroring. Every checkbox and text/number
+  field now checks `customElements.get(...)` first and falls back to a
+  plain `<input>` when the native component isn't actually available, so
+  it always works either way.
 - **Fixed: "Test now" (room and all-rooms) lost its icon after the first
   click.** The button's transient "Applying…"/"Done!" text was set via
   `textContent`, which wiped out the icon element inside it instead of

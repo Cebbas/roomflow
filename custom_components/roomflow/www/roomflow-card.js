@@ -5,28 +5,64 @@
 
 // Periods are a user-editable, priority-ordered list stored in
 // this._config_data.periods (mirrors const.py's `periods`/infer_periods -
-// each {id, name, sources: {type: {enabled, ...fields}}}). A period can
-// have several of its 5 sources enabled at once - it's active if ANY of
-// them currently resolves true (OR logic). These constants are only the
-// *shape* helpers (source-type choices, default seed values,
-// legacy-migration inputs) - never a fixed list of periods themselves.
+// each {id, name, condition_groups}). A period is active if ANY of its
+// condition groups is true (OR across groups); a group is true only if
+// ALL of its conditions hold (AND within a group) - i.e. "OR of AND
+// groups", built by picking a condition type from a flat list instead of a
+// fixed set of always-visible source rows. First period (list order, top
+// = highest) with a true group wins - see _get_period in __init__.py.
 
-const PERIOD_SOURCES = [
-  { key: "schedule", labelKey: "source_schedule" },
-  { key: "sun", labelKey: "source_sun" },
-  { key: "illuminance", labelKey: "source_illuminance" },
-  { key: "boolean", labelKey: "source_boolean" },
-  { key: "sensor", labelKey: "source_sensor" },
+const CONDITION_TYPES = [
+  { key: "time", labelKey: "condition_type_time" },
+  { key: "sun", labelKey: "condition_type_sun" },
+  { key: "numeric", labelKey: "condition_type_numeric" },
+  { key: "state", labelKey: "condition_type_state" },
+  { key: "day_type", labelKey: "condition_type_day_type" },
+  { key: "home", labelKey: "condition_type_home" },
 ];
 
-// Every source can also require an extra AND condition on top of its own
-// check - e.g. a sun-sourced period only counts as active at sunrise AND
-// only if a lux sensor is currently below some value too. Mirrors
-// const.py's DEFAULT_AND_CONDITION; "value" is always a plain string,
-// parsed as a number for above/below or compared as text for equals.
-const DEFAULT_AND_CONDITION = { enabled: false, entity_id: null, operator: "above", value: "" };
+// Every condition type's own fields (besides "id"/"type") with their
+// defaults - mirrors const.py's DEFAULT_CONDITION_FIELDS, used both to
+// backfill an entry saved before a field existed and to seed a freshly
+// added condition of that type. "value" is reused across types for
+// whatever that type's single comparison value is (a time-of-day, a
+// sensor value, or a fixed weekday/weekend | home/away choice).
+const DEFAULT_CONDITION_FIELDS = {
+  time: { operator: "after", value: "00:00:00" },
+  sun: { operator: "after", event: "sunrise", offset_minutes: 0, earliest: "", latest: "" },
+  numeric: { operator: "above", entity_id: null, value: "" },
+  state: { operator: "is", entity_id: null, value: "on" },
+  day_type: { operator: "is", value: "weekend" },
+  home: { operator: "is", value: "away" },
+};
 
-const DEFAULT_SOURCE_FIELDS = {
+function normalizeCondition(condition) {
+  const ctype = DEFAULT_CONDITION_FIELDS[condition.type] ? condition.type : "time";
+  const defaults = DEFAULT_CONDITION_FIELDS[ctype];
+  const rest = { ...condition };
+  delete rest.id;
+  delete rest.type;
+  return { id: condition.id || uid(), type: ctype, ...defaults, ...rest };
+}
+
+function normalizeConditionGroups(groups) {
+  return (groups || [])
+    .map((group) => ({ id: group.id || uid(), conditions: (group.conditions || []).map(normalizeCondition) }))
+    .filter((group) => group.conditions.length > 0);
+}
+
+// ---------- legacy period migration ----------
+// Entries saved before periods used condition_groups have either a
+// `sources` dict (5 fixed source types, each optionally enabled) or -
+// oldest of all - a single `source`/`config` pair. Both migrate into the
+// current shape below, mirroring const.py's _migrate_sources_periods /
+// _normalize_periods_list - see that module for the full reasoning (the
+// old boundary-race algorithm resolved a period's clock sources against
+// *every other period's* clock sources at once, so the migration has to
+// too, batching every legacy period together rather than one at a time).
+const LEGACY_SOURCE_TYPES = ["schedule", "sun", "illuminance", "boolean", "sensor"];
+const LEGACY_DEFAULT_AND_CONDITION = { enabled: false, entity_id: null, operator: "above", value: "" };
+const LEGACY_DEFAULT_SOURCE_FIELDS = {
   schedule: { time: "00:00:00", weekend_enabled: false, weekend_time: "00:00:00" },
   sun: {
     event: "sunrise",
@@ -40,45 +76,199 @@ const DEFAULT_SOURCE_FIELDS = {
   boolean: { entity_id: null },
   sensor: { entity_id: null, value: "" },
 };
-PERIOD_SOURCES.forEach(({ key }) => {
-  DEFAULT_SOURCE_FIELDS[key].and_condition = { ...DEFAULT_AND_CONDITION };
+LEGACY_SOURCE_TYPES.forEach((key) => {
+  LEGACY_DEFAULT_SOURCE_FIELDS[key].and_condition = { ...LEGACY_DEFAULT_AND_CONDITION };
 });
 
-// Normalize one period to the current multi-source shape ({id, name,
-// sources: {type: {enabled, and_condition, ...fields}}}), mirroring
-// const.py's _normalize_period. Entries saved before a period could
-// combine several sources at once have a single `source`/`config` pair
-// instead - migrate that one active source in as enabled; every other type
-// is present but disabled with blank defaults so the card can always show
-// all 5 side by side. Also backfills any type - or any field within a
-// type, e.g. `and_condition`/`min_time` added after a period was already
-// multi-source - missing from an already-saved entry.
-function normalizePeriod(period) {
-  if (period.sources) {
-    const sources = {};
-    PERIOD_SOURCES.forEach(({ key }) => {
-      const defaults = DEFAULT_SOURCE_FIELDS[key];
-      const saved = period.sources[key] || {};
-      sources[key] = {
-        enabled: false,
-        ...defaults,
-        ...saved,
-        and_condition: { ...defaults.and_condition, ...(saved.and_condition || {}) },
-      };
+// A legacy source's approximate time-of-day, in minutes since midnight,
+// used only to sort/chain legacy clock sources during migration - the
+// *relative* order of solar events within a day is fixed everywhere, so a
+// rough fixed table is enough to reproduce the old boundary-race priority
+// correctly without needing hass/astral access.
+const SUN_EVENT_APPROX_MINUTES = {
+  midnight: 0,
+  dawn: 5 * 60 + 30,
+  sunrise: 6 * 60,
+  noon: 12 * 60,
+  sunset: 18 * 60,
+  dusk: 18 * 60 + 30,
+};
+
+function hmsToMinutes(value) {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function andConditionToExtra(andCfg) {
+  if (!andCfg || !andCfg.enabled || !andCfg.entity_id) return null;
+  const operator = andCfg.operator || "above";
+  if (operator === "equals") {
+    return { id: uid(), type: "state", operator: "is", entity_id: andCfg.entity_id, value: andCfg.value || "" };
+  }
+  return { id: uid(), type: "numeric", operator, entity_id: andCfg.entity_id, value: andCfg.value || "" };
+}
+
+function legacyClockCondition(kind, cfg, weekend) {
+  if (kind === "time") {
+    const value = (weekend ? cfg.weekend_time : cfg.time) || "00:00:00";
+    return { id: uid(), type: "time", operator: "after", value };
+  }
+  const event = (weekend ? cfg.weekend_event : cfg.event) || "sunrise";
+  const offset = (weekend ? cfg.weekend_offset_minutes : cfg.offset_minutes) || 0;
+  let earliest = weekend ? "" : cfg.min_time || "";
+  if (earliest === "00:00:00") earliest = "";
+  return { id: uid(), type: "sun", operator: "after", event, offset_minutes: offset, earliest, latest: "" };
+}
+
+function legacyClockMinutes(condition) {
+  if (condition.type === "time") return hmsToMinutes(condition.value);
+  const minutes = (SUN_EVENT_APPROX_MINUTES[condition.event] || 0) + (condition.offset_minutes || 0);
+  return ((minutes % 1440) + 1440) % 1440;
+}
+
+// Convert a batch of legacy-shape periods (id, normalized `sources` dict)
+// into {periodId: condition_groups} - see the header comment above.
+function migrateSourcesPeriods(entries) {
+  const chain = [];
+  const result = {};
+  entries.forEach(([periodId]) => {
+    result[periodId] = [];
+  });
+
+  entries.forEach(([periodId, sources]) => {
+    [
+      ["time", "schedule"],
+      ["sun", "sun"],
+    ].forEach(([kind, sourceKey]) => {
+      const cfg = sources[sourceKey];
+      if (!cfg || !cfg.enabled) return;
+      const andExtra = andConditionToExtra(cfg.and_condition);
+      const cond = legacyClockCondition(kind, cfg, false);
+      // A weekend override makes the two variants mutually exclusive by
+      // day (the old algorithm substituted one time_str for the other
+      // rather than considering both at once) - tag the normal variant
+      // "weekday" too in that case, not just the override "weekend".
+      const dayTypeValue = cfg.weekend_enabled ? "weekday" : null;
+      chain.push([legacyClockMinutes(cond), periodId, cond, dayTypeValue, andExtra]);
+      if (cfg.weekend_enabled) {
+        const weekendCond = legacyClockCondition(kind, cfg, true);
+        chain.push([legacyClockMinutes(weekendCond), periodId, weekendCond, "weekend", andExtra]);
+      }
     });
-    return { id: period.id, name: period.name || "", sources };
+  });
+
+  chain.sort((a, b) => a[0] - b[0]);
+  const count = chain.length;
+
+  function extraConditions(dayTypeValue, andExtra) {
+    const extra = [];
+    if (dayTypeValue) extra.push({ id: uid(), type: "day_type", operator: "is", value: dayTypeValue });
+    if (andExtra) extra.push({ ...andExtra, id: uid() });
+    return extra;
   }
 
-  const oldSource = period.source || "schedule";
-  const oldConfig = period.config || {};
+  chain.forEach(([, periodId, cond, dayTypeValue, andExtra], i) => {
+    const extra = extraConditions(dayTypeValue, andExtra);
+
+    if (count === 1) {
+      // The only clock condition in this whole batch - the old algorithm
+      // always resolved to it regardless of time of day, so it must match
+      // all 24h: "after X" OR "before X".
+      const before = { ...cond, id: uid(), operator: "before" };
+      result[periodId].push({ id: uid(), conditions: [{ ...cond }, ...extra] });
+      result[periodId].push({ id: uid(), conditions: [before, ...extra] });
+      return;
+    }
+
+    const nextCond = chain[(i + 1) % count][2];
+    const before = { ...nextCond, id: uid(), operator: "before" };
+    if (i === count - 1) {
+      // Latest boundary of the chain - wraps past midnight into the
+      // first one, so it needs two OR'd groups instead of one range.
+      result[periodId].push({ id: uid(), conditions: [{ ...cond }, ...extra] });
+      result[periodId].push({ id: uid(), conditions: [before, ...extra] });
+    } else {
+      result[periodId].push({ id: uid(), conditions: [{ ...cond }, before, ...extra] });
+    }
+  });
+
+  const independentSources = [
+    ["illuminance", "numeric", "above", (cfg) => String(cfg.threshold ?? 0)],
+    ["boolean", "state", "is", () => "on"],
+    ["sensor", "state", "is", (cfg) => cfg.value || ""],
+  ];
+  entries.forEach(([periodId, sources]) => {
+    independentSources.forEach(([sourceKey, ctype, operator, valueFn]) => {
+      const cfg = sources[sourceKey];
+      if (!cfg || !cfg.enabled || !cfg.entity_id) return;
+      const conditions = [{ id: uid(), type: ctype, operator, entity_id: cfg.entity_id, value: valueFn(cfg) }];
+      const andExtra = andConditionToExtra(cfg.and_condition);
+      if (andExtra) conditions.push(andExtra);
+      result[periodId].push({ id: uid(), conditions });
+    });
+  });
+
+  return result;
+}
+
+function normalizeLegacySources(existing) {
   const sources = {};
-  PERIOD_SOURCES.forEach(({ key }) => {
+  LEGACY_SOURCE_TYPES.forEach((key) => {
+    const defaults = LEGACY_DEFAULT_SOURCE_FIELDS[key];
+    const saved = existing[key] || {};
+    sources[key] = {
+      enabled: false,
+      ...defaults,
+      ...saved,
+      and_condition: { ...defaults.and_condition, ...(saved.and_condition || {}) },
+    };
+  });
+  return sources;
+}
+
+function legacySourcesFromSingle(oldSource, oldConfig) {
+  const sources = {};
+  LEGACY_SOURCE_TYPES.forEach((key) => {
     sources[key] =
       key === oldSource
-        ? { enabled: true, ...DEFAULT_SOURCE_FIELDS[key], ...oldConfig }
-        : { enabled: false, ...DEFAULT_SOURCE_FIELDS[key] };
+        ? { enabled: true, ...LEGACY_DEFAULT_SOURCE_FIELDS[key], ...oldConfig }
+        : { enabled: false, ...LEGACY_DEFAULT_SOURCE_FIELDS[key] };
   });
-  return { id: period.id, name: period.name || "", sources };
+  return sources;
+}
+
+// The single source of truth for turning a whole stored `periods` list
+// (in whichever shape each entry was saved in) into the current {id,
+// name, condition_groups} shape - mirrors const.py's
+// _normalize_periods_list. Must see every legacy-shape entry at once (not
+// one period at a time) since their implicit clock-boundary chain spans
+// all of them together.
+function normalizePeriodsList(rawPeriods) {
+  const entries = rawPeriods.map((period) => {
+    if (period.condition_groups) {
+      return { kind: "new", id: period.id, name: period.name || "", payload: period.condition_groups };
+    }
+    if (period.sources) {
+      return { kind: "legacy", id: period.id, name: period.name || "", payload: normalizeLegacySources(period.sources) };
+    }
+    const oldSource = period.source || "schedule";
+    const oldConfig = period.config || {};
+    return {
+      kind: "legacy",
+      id: period.id,
+      name: period.name || "",
+      payload: legacySourcesFromSingle(oldSource, oldConfig),
+    };
+  });
+
+  const legacyEntries = entries.filter((e) => e.kind === "legacy").map((e) => [e.id, e.payload]);
+  const migrated = legacyEntries.length ? migrateSourcesPeriods(legacyEntries) : {};
+
+  return entries.map((e) => ({
+    id: e.id,
+    name: e.name,
+    condition_groups: e.kind === "new" ? normalizeConditionGroups(e.payload) : migrated[e.id] || [],
+  }));
 }
 
 // Keys must match actual astral.sun attribute names (what Home Assistant's
@@ -233,26 +423,30 @@ const STRINGS = {
     default_transition_help:
       "Applies to every light, unless an individual device has its own transition time set.",
 
-    weekend_override_time: "Different time on weekend",
-    weekend_override_sun: "Different sun event on weekend",
-
     operator_above: "is above",
     operator_below: "is below",
     operator_equals: "equals",
-    and_condition_label: "Also require a sensor condition",
+    operator_after: "after",
+    operator_before: "before",
+    operator_is: "is",
+    operator_is_not: "is not",
 
-    never_before: "· never before",
-    min_time_title:
-      "Floor - the resolved start time is never earlier than this, even if the sun event is. 00:00 = no floor.",
     min_offset: "min offset",
     lx: "lx",
     value_placeholder: "value",
+    earliest_label: "· earliest",
+    latest_label: "· latest",
 
-    source_schedule: "Schedule",
-    source_sun: "Sun position",
-    source_illuminance: "Illuminance (lux) sensor",
-    source_boolean: "Existing boolean",
-    source_sensor: "Existing sensor",
+    condition_type_time: "Time",
+    condition_type_sun: "Sun position",
+    condition_type_numeric: "Numeric sensor",
+    condition_type_state: "Sensor state",
+    condition_type_day_type: "Weekday/weekend",
+    condition_type_home: "Home/away",
+    condition_value_weekday: "weekday",
+    condition_value_weekend: "weekend",
+    condition_value_home: "home",
+    condition_value_away: "away",
 
     sun_event_dawn: "Dawn",
     sun_event_sunrise: "Sunrise",
@@ -263,9 +457,11 @@ const STRINGS = {
 
     periods_header: "Time-of-day periods",
     periods_help:
-      'Priority order (top wins) - the first period with any enabled source currently resolving to "active" is the current period. Add, remove, rename or reorder freely; check off whichever sources you want each period to use - if more than one is checked, the period is active when ANY of them says so.',
-    periods_help_weekend_yes: "Schedule/sun sources can also have a different time on weekends.",
-    periods_help_weekend_no: "Set a Weekday/weekend source below to unlock a weekend override on schedule/sun sources.",
+      "Priority order (top wins) - the first period with a true condition group is the current period. Each period is a list of OR'd groups (any group being true makes the period active); each group is a list of AND'd conditions (all of them must hold). Pick a condition type to add one.",
+    and_within_group_help: "All conditions below must hold (AND)",
+    or_between_groups_label: "or",
+    add_condition_placeholder: "+ Add condition...",
+    add_condition_group: "+ Add OR group",
     name_placeholder: "Name",
     add_period: "+ Add period",
 
@@ -386,26 +582,30 @@ const STRINGS = {
     default_transition_help:
       "Gäller alla lampor, om inte en specifik enhet har en egen transitionstid inställd.",
 
-    weekend_override_time: "Annan tid på helgen",
-    weekend_override_sun: "Annan solhändelse på helgen",
-
     operator_above: "är över",
     operator_below: "är under",
     operator_equals: "är lika med",
-    and_condition_label: "Kräv även ett sensorvillkor",
+    operator_after: "efter",
+    operator_before: "före",
+    operator_is: "är",
+    operator_is_not: "är inte",
 
-    never_before: "· aldrig före",
-    min_time_title:
-      "Golv - den beräknade starttiden är aldrig tidigare än detta, även om solhändelsen är det. 00:00 = inget golv.",
     min_offset: "min offset",
     lx: "lx",
     value_placeholder: "värde",
+    earliest_label: "· tidigast",
+    latest_label: "· senast",
 
-    source_schedule: "Schema",
-    source_sun: "Solens position",
-    source_illuminance: "Luxsensor",
-    source_boolean: "Befintlig boolean",
-    source_sensor: "Befintlig sensor",
+    condition_type_time: "Klockslag",
+    condition_type_sun: "Solens position",
+    condition_type_numeric: "Numerisk sensor",
+    condition_type_state: "Sensortillstånd",
+    condition_type_day_type: "Vardag/helg",
+    condition_type_home: "Hemma/borta",
+    condition_value_weekday: "vardag",
+    condition_value_weekend: "helg",
+    condition_value_home: "hemma",
+    condition_value_away: "borta",
 
     sun_event_dawn: "Gryning",
     sun_event_sunrise: "Soluppgång",
@@ -416,9 +616,11 @@ const STRINGS = {
 
     periods_header: "Tid-på-dygnet-perioder",
     periods_help:
-      'Prioritetsordning (överst vinner) - den första perioden med någon aktiverad källa som just nu är "aktiv" är den aktuella perioden. Lägg till, ta bort, döp om eller ändra ordning fritt; kryssa i vilka källor du vill att varje period ska använda - om fler än en är ikryssad är perioden aktiv när NÅGON av dem säger det.',
-    periods_help_weekend_yes: "Schema-/solkällor kan också ha en annan tid på helger.",
-    periods_help_weekend_no: "Ställ in en Vardag/helg-källa nedan för att låsa upp ett helgundantag för schema-/solkällor.",
+      "Prioritetsordning (överst vinner) - den första perioden med en sann villkorsgrupp är den aktuella perioden. Varje period är en lista av ELLER-ihopkopplade grupper (perioden är aktiv om NÅGON grupp är sann); varje grupp är en lista av OCH-ihopkopplade villkor (alla måste stämma). Välj en villkorstyp för att lägga till ett.",
+    and_within_group_help: "Alla villkor nedan måste stämma (OCH)",
+    or_between_groups_label: "eller",
+    add_condition_placeholder: "+ Lägg till villkor...",
+    add_condition_group: "+ Lägg till ELLER-grupp",
     name_placeholder: "Namn",
     add_period: "+ Lägg till period",
 
@@ -1458,6 +1660,28 @@ function icon(name, extraStyle, className) {
   return `<ha-icon icon="${name}" class="${className || ""}" style="${extraStyle || ""}"></ha-icon>`;
 }
 
+// ---------- native HA form components, with a plain-HTML fallback ----------
+// ha-icon is always part of Home Assistant's core frontend bundle, but
+// ha-textfield/ha-switch are only pulled in by more specialized panels
+// (e.g. settings dialogs, config flows) and aren't guaranteed to be
+// registered as custom elements yet just because the frontend is running -
+// depends on what else the user has opened in that browser session. An
+// unregistered custom element renders as an empty, non-interactive box (no
+// value shown, nothing happens on click) - not an error, just silently
+// broken. customElements.get() is a reliable, synchronous way to check
+// "is this actually going to work" before using it, so every field falls
+// back to a plain native element instead of risking that silent failure.
+function textField(attrsHtml) {
+  return typeof customElements !== "undefined" && customElements.get("ha-textfield")
+    ? `<ha-textfield ${attrsHtml}></ha-textfield>`
+    : `<input ${attrsHtml} />`;
+}
+function switchEl(attrsHtml) {
+  return typeof customElements !== "undefined" && customElements.get("ha-switch")
+    ? `<ha-switch ${attrsHtml}></ha-switch>`
+    : `<input type="checkbox" ${attrsHtml} />`;
+}
+
 const PERIOD_ICONS = {
   morning: "mdi:weather-sunset-up",
   day: "mdi:white-balance-sunny",
@@ -1483,12 +1707,13 @@ const VARIANT_ICONS = {
   condition: "mdi:tune-variant",
 };
 
-const SOURCE_ICONS = {
-  schedule: "mdi:clock-time-eight-outline",
+const CONDITION_TYPE_ICONS = {
+  time: "mdi:clock-time-eight-outline",
   sun: "mdi:weather-sunny",
-  illuminance: "mdi:brightness-6",
-  boolean: "mdi:toggle-switch-outline",
-  sensor: "mdi:thermometer-lines",
+  numeric: "mdi:thermometer-lines",
+  state: "mdi:toggle-switch-outline",
+  day_type: "mdi:calendar-weekend-outline",
+  home: "mdi:home-export-outline",
 };
 
 // One shared stylesheet, injected once per render into the card's own
@@ -1599,12 +1824,26 @@ const RF_STYLES = `
   .rf-variant-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.92em; }
   .rf-variant-title ha-icon { --mdc-icon-size: 17px; }
 
-  .rf-source-row { margin-top: 6px; }
-  .rf-source-label { display: flex; align-items: center; gap: 6px; width: 190px; font-size: 0.92em; }
-  .rf-source-label ha-icon { --mdc-icon-size: 17px; }
+  .rf-condition-group {
+    margin-top: 6px;
+    padding: 8px;
+    border: 1px solid var(--divider-color);
+    border-radius: 8px;
+  }
+  .rf-or-divider {
+    text-align: center;
+    font-size: 0.8em;
+    font-weight: 600;
+    opacity: 0.6;
+    margin: 4px 0;
+    text-transform: uppercase;
+  }
 
   .rf-slider-row { margin-top: 6px; }
   .rf-slider-row input[type="range"] { width: 100%; accent-color: var(--primary-color); }
+
+  .rf-root ha-textfield { --mdc-typography-subtitle1-font-size: 0.92em; }
+  .rf-root ha-switch { flex: none; vertical-align: middle; }
 
   .rf-empty { opacity: 0.65; font-size: 0.9em; padding: 8px 0; }
 </style>
@@ -1694,16 +1933,16 @@ class RoomFlowCard extends HTMLElement {
     if (!cd.default_transitions) cd.default_transitions = { ...DEFAULT_TRANSITIONS };
 
     // Periods: a user-editable, priority-ordered list (add/remove/rename/
-    // reorder), each combining any of 5 sources at once (OR logic). Older
-    // installs have either the pre-existing global time_sources/time_mode
-    // plus parallel per-period dicts instead of a `periods` list, or a
-    // `periods` list from before a period could combine several sources -
-    // normalizePeriod migrates both into the current shape (mirrors
-    // const.py's infer_periods on the backend).
+    // reorder), each holding a list of OR'd condition groups (AND within a
+    // group). Older installs have either the pre-existing global
+    // time_sources/time_mode plus parallel per-period dicts instead of a
+    // `periods` list, or a `periods` list from before condition_groups
+    // existed - normalizePeriodsList migrates all of those into the
+    // current shape (mirrors const.py's infer_periods on the backend).
     if (!cd.periods) {
       cd.periods = buildPeriodsFromLegacy(cd);
     }
-    cd.periods = cd.periods.map(normalizePeriod);
+    cd.periods = normalizePeriodsList(cd.periods);
 
     // Day-type/home-away: infer "sensor" if an older bare sensor field is
     // already set and no explicit mode was ever saved.
@@ -1939,16 +2178,15 @@ class RoomFlowCard extends HTMLElement {
   }
 
   // Time-of-day periods: a top-level ORDERED list (order = priority, top =
-  // highest, first period whose own sources resolve active wins). Each
-  // period can have several of its 5 sources enabled at once - it's active
-  // if ANY of them currently resolves true (OR logic, same pattern as a
-  // room's motion triggers/custom conditions) - mirrors custom conditions
-  // above and const.py's DEFAULT_PERIODS/infer_periods on the backend.
+  // highest, first period with a true condition group wins). Each period
+  // holds a list of condition groups, OR'd together; each group holds a
+  // list of conditions, AND'd together - "OR of AND groups", mirrors
+  // const.py's DEFAULT_PERIODS/infer_periods on the backend. Unlike custom
+  // conditions above, groups/conditions don't need move-up/down: AND and
+  // OR are both commutative, so only add/remove are needed.
   _addPeriod() {
     if (!this._config_data.periods) this._config_data.periods = [];
-    this._config_data.periods.push(
-      normalizePeriod({ id: uid(), name: this._t("new_period_name"), source: "schedule", config: { time: "00:00:00" } })
-    );
+    this._config_data.periods.push({ id: uid(), name: this._t("new_period_name"), condition_groups: [] });
     this._scheduleSave();
     this._render();
   }
@@ -1966,19 +2204,69 @@ class RoomFlowCard extends HTMLElement {
     this._scheduleSave();
   }
 
-  _updatePeriodConfig(periodId, sourceType, field, value) {
+  // Adds a new OR'd group to the period, seeded with one default ("time")
+  // condition - an empty group would never match anything (see
+  // _period_condition_groups_match in __init__.py) so there's no point
+  // showing one with nothing in it.
+  _addConditionGroup(periodId) {
     const period = (this._config_data.periods || []).find((p) => p.id === periodId);
     if (!period) return;
-    // field is either a top-level key ("time") or a dotted sub-path into a
-    // nested object ("and_condition.entity_id").
-    if (field.includes(".")) {
-      const [parent, child] = field.split(".");
-      period.sources[sourceType][parent][child] = value;
-    } else {
-      period.sources[sourceType][field] = value;
+    period.condition_groups.push({ id: uid(), conditions: [normalizeCondition({ type: "time" })] });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removeConditionGroup(periodId, groupId) {
+    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+    if (!period) return;
+    period.condition_groups = period.condition_groups.filter((g) => g.id !== groupId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  // Adds a new AND'd condition to an existing group.
+  _addCondition(periodId, groupId, type) {
+    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+    const group = period && period.condition_groups.find((g) => g.id === groupId);
+    if (!group) return;
+    group.conditions.push(normalizeCondition({ type }));
+    this._scheduleSave();
+    this._render();
+  }
+
+  // Removes one condition from a group; a group left with none is dropped
+  // too rather than lingering as a dead, never-matching group in the UI.
+  _removeCondition(periodId, groupId, conditionId) {
+    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+    const group = period && period.condition_groups.find((g) => g.id === groupId);
+    if (!group) return;
+    group.conditions = group.conditions.filter((c) => c.id !== conditionId);
+    if (group.conditions.length === 0) {
+      period.condition_groups = period.condition_groups.filter((g) => g.id !== groupId);
     }
     this._scheduleSave();
-    if (field.endsWith("enabled")) this._render();
+    this._render();
+  }
+
+  // Switching a condition's type resets its fields to that type's
+  // defaults (the old type's fields don't apply), keeping only its id.
+  _updateConditionType(periodId, groupId, conditionId, newType) {
+    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+    const group = period && period.condition_groups.find((g) => g.id === groupId);
+    const index = group ? group.conditions.findIndex((c) => c.id === conditionId) : -1;
+    if (index === -1) return;
+    group.conditions[index] = normalizeCondition({ id: conditionId, type: newType });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _updateCondition(periodId, groupId, conditionId, field, value) {
+    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+    const group = period && period.condition_groups.find((g) => g.id === groupId);
+    const condition = group && group.conditions.find((c) => c.id === conditionId);
+    if (!condition) return;
+    condition[field] = value;
+    this._scheduleSave();
   }
 
   _movePeriod(periodId, direction) {
@@ -2154,6 +2442,26 @@ class RoomFlowCard extends HTMLElement {
     const movePeriodDownBtn = e.target.closest("[data-move-period-down]");
     if (movePeriodDownBtn) {
       this._movePeriod(movePeriodDownBtn.getAttribute("data-move-period-down"), "down");
+      return;
+    }
+
+    const addConditionGroupBtn = e.target.closest("[data-add-condition-group]");
+    if (addConditionGroupBtn) {
+      this._addConditionGroup(addConditionGroupBtn.getAttribute("data-add-condition-group"));
+      return;
+    }
+
+    const removeConditionGroupBtn = e.target.closest("[data-remove-condition-group]");
+    if (removeConditionGroupBtn) {
+      const [periodId, groupId] = removeConditionGroupBtn.getAttribute("data-remove-condition-group").split("|");
+      this._removeConditionGroup(periodId, groupId);
+      return;
+    }
+
+    const removePeriodConditionBtn = e.target.closest("[data-remove-condition]");
+    if (removePeriodConditionBtn) {
+      const [periodId, groupId, conditionId] = removePeriodConditionBtn.getAttribute("data-remove-condition").split("|");
+      this._removeCondition(periodId, groupId, conditionId);
       return;
     }
 
@@ -2432,29 +2740,35 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
-    const periodSourceEnabled = e.target.closest("[data-period-source-enabled]");
-    if (periodSourceEnabled) {
-      const [periodId, sourceType] = periodSourceEnabled.getAttribute("data-period-source-enabled").split("|");
-      this._updatePeriodConfig(periodId, sourceType, "enabled", periodSourceEnabled.checked);
+    const conditionTypeSelect = e.target.closest("[data-condition-type]");
+    if (conditionTypeSelect) {
+      const [periodId, groupId, conditionId] = conditionTypeSelect.getAttribute("data-condition-type").split("|");
+      this._updateConditionType(periodId, groupId, conditionId, conditionTypeSelect.value);
       return;
     }
 
-    const periodConfigField = e.target.closest("[data-period-config]");
-    if (periodConfigField) {
-      const [periodId, sourceType, field] = periodConfigField.getAttribute("data-period-config").split("|");
+    const addConditionSelect = e.target.closest("[data-add-condition]");
+    if (addConditionSelect) {
+      const [periodId, groupId] = addConditionSelect.getAttribute("data-add-condition").split("|");
+      if (addConditionSelect.value) this._addCondition(periodId, groupId, addConditionSelect.value);
+      return;
+    }
+
+    const conditionField = e.target.closest("[data-condition]");
+    if (conditionField) {
+      const [periodId, groupId, conditionId, field] = conditionField.getAttribute("data-condition").split("|");
       let value;
-      if (periodConfigField.type === "checkbox") {
-        value = periodConfigField.checked;
-      } else if (field === "threshold" || field === "offset_minutes" || field === "weekend_offset_minutes") {
-        const val = parseFloat(periodConfigField.value);
+      if (field === "offset_minutes") {
+        const val = parseFloat(conditionField.value);
         value = isNaN(val) ? 0 : val;
-      } else if (field === "time" || field === "weekend_time" || field === "min_time") {
-        const raw = periodConfigField.value; // "HH:MM" or "HH:MM:SS" depending on browser
-        value = raw ? (raw.length === 5 ? `${raw}:00` : raw) : "00:00:00";
+      } else if (conditionField.type === "time") {
+        const raw = conditionField.value; // "HH:MM" or "HH:MM:SS" depending on browser
+        const normalized = raw ? (raw.length === 5 ? `${raw}:00` : raw) : "";
+        value = normalized || (field === "earliest" || field === "latest" ? "" : "00:00:00");
       } else {
-        value = periodConfigField.value.trim();
+        value = conditionField.value.trim();
       }
-      this._updatePeriodConfig(periodId, sourceType, field, value);
+      this._updateCondition(periodId, groupId, conditionId, field, value);
       return;
     }
 
@@ -2628,7 +2942,7 @@ class RoomFlowCard extends HTMLElement {
             <option value="">${this._t("custom_name_option")}</option>
             ${areaOptions}
           </select>
-          <input id="new-room-name" placeholder="${this._t("room_name_placeholder")}" />
+          ${textField(`id="new-room-name" placeholder="${this._t("room_name_placeholder")}"`)}
           <button id="add-room-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
         </div>
         <div class="rf-help">
@@ -2646,8 +2960,7 @@ class RoomFlowCard extends HTMLElement {
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
         ${icon(periodIcon(p.id))}
         <span style="width:100px">${p.name}</span>
-        <input type="number" min="0" step="0.5" value="${dt[p.id] ?? 0}"
-          data-default-transition="${p.id}" style="width:70px" /> ${this._t("seconds")}
+        ${textField(`type="number" min="0" step="0.5" value="${dt[p.id] ?? 0}" data-default-transition="${p.id}" style="width:70px"`)} ${this._t("seconds")}
       </div>`
     ).join("");
 
@@ -2679,161 +2992,132 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
-  // Weekend override: only schedule/sun (the two clock-based sources) get
-  // one - a period's start time/sun event can differ on weekend_days
-  // without needing a whole separate period. Only useful (and only shown)
-  // once a weekend/weekday day-type source is configured, mirroring how
-  // the device Weekend variant box is itself gated on _hasDayType().
-  _renderPeriodWeekendOverride(p, sourceKey, cfg, sourceEnabled) {
-    const weekendEnabled = !!cfg.weekend_enabled;
-    const fieldsDisabled = !sourceEnabled || !weekendEnabled;
+  // One condition's type-specific operator + value field(s). Every
+  // condition type gets its own <select data-condition-type> so switching
+  // it (see _updateConditionType) resets the row to that type's defaults.
+  _renderConditionFields(p, groupId, c) {
+    const path = `${p.id}|${groupId}|${c.id}`;
 
-    let weekendFieldsHtml = "";
-    if (sourceKey === "schedule") {
-      weekendFieldsHtml = `
-        <input type="time" step="1" data-period-config="${p.id}|schedule|weekend_time"
-          value="${cfg.weekend_time || "00:00:00"}" ${fieldsDisabled ? "disabled" : ""} style="width:110px" />`;
-    } else {
-      const weekendSunEventOptions = SUN_EVENTS.map(
-        (s) => `<option value="${s.key}" ${s.key === cfg.weekend_event ? "selected" : ""}>${this._t(s.labelKey)}</option>`
-      ).join("");
-      weekendFieldsHtml = `
-        <select data-period-config="${p.id}|sun|weekend_event" ${fieldsDisabled ? "disabled" : ""}>${weekendSunEventOptions}</select>
-        <input type="number" step="1" data-period-config="${p.id}|sun|weekend_offset_minutes"
-          value="${cfg.weekend_offset_minutes ?? 0}" ${fieldsDisabled ? "disabled" : ""} style="width:70px" /> ${this._t("min_offset")}`;
+    if (c.type === "time") {
+      const operatorOptions = ["after", "before"]
+        .map((op) => `<option value="${op}" ${op === c.operator ? "selected" : ""}>${this._t(`operator_${op}`)}</option>`)
+        .join("");
+      return `
+        <select data-condition="${path}|operator">${operatorOptions}</select>
+        <input type="time" step="1" data-condition="${path}|value" value="${c.value || "00:00:00"}" style="width:110px" />`;
     }
 
-    return `
-      <div style="margin:4px 0 0 24px;padding-left:8px;border-left:2px solid var(--divider-color)${
-        sourceEnabled ? "" : ";opacity:0.5"
-      }">
-        <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
-          <input type="checkbox" data-period-config="${p.id}|${sourceKey}|weekend_enabled"
-            ${weekendEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
-          ${icon("mdi:calendar-weekend-outline")}${sourceKey === "schedule" ? this._t("weekend_override_time") : this._t("weekend_override_sun")}
-        </label>
-        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
-          weekendEnabled ? "" : ";opacity:0.5"
-        }">
-          ${weekendFieldsHtml}
-        </div>
-      </div>`;
-  }
-
-  // Extra AND condition, on top of a source's own check - e.g. a
-  // sun-sourced period only counts as active at sunrise AND only if a lux
-  // sensor is also currently below some value. Available on all 5 source
-  // types (unlike the weekend override, which only makes sense on the two
-  // clock-based ones).
-  _renderPeriodAndCondition(p, sourceKey, cfg, sourceEnabled) {
-    const andCfg = cfg.and_condition || DEFAULT_AND_CONDITION;
-    const andEnabled = !!andCfg.enabled;
-    const fieldsDisabled = !sourceEnabled || !andEnabled;
-    const operatorOptions = [
-      { key: "above", labelKey: "operator_above" },
-      { key: "below", labelKey: "operator_below" },
-      { key: "equals", labelKey: "operator_equals" },
-    ]
-      .map((o) => `<option value="${o.key}" ${o.key === andCfg.operator ? "selected" : ""}>${this._t(o.labelKey)}</option>`)
-      .join("");
-
-    return `
-      <div style="margin:4px 0 0 24px;padding-left:8px;border-left:2px solid var(--divider-color)${
-        sourceEnabled ? "" : ";opacity:0.5"
-      }">
-        <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
-          <input type="checkbox" data-period-config="${p.id}|${sourceKey}|and_condition.enabled"
-            ${andEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
-          ${icon("mdi:filter-variant")}${this._t("and_condition_label")}
-        </label>
-        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
-          andEnabled ? "" : ";opacity:0.5"
-        }">
-          <input list="all-entities-list" data-period-config="${p.id}|${sourceKey}|and_condition.entity_id"
-            value="${andCfg.entity_id || ""}" placeholder="sensor...." ${fieldsDisabled ? "disabled" : ""} style="width:190px" />
-          <select data-period-config="${p.id}|${sourceKey}|and_condition.operator" ${fieldsDisabled ? "disabled" : ""}>${operatorOptions}</select>
-          <input data-period-config="${p.id}|${sourceKey}|and_condition.value"
-            value="${andCfg.value || ""}" placeholder="${this._t("value_placeholder")}" ${fieldsDisabled ? "disabled" : ""} style="width:90px" />
-        </div>
-      </div>`;
-  }
-
-  _renderPeriodSourceRow(p, sourceKey, label, hasDayType) {
-    const cfg = p.sources[sourceKey];
-    const enabled = !!cfg.enabled;
-
-    let fieldsHtml = "";
-    if (sourceKey === "schedule") {
-      fieldsHtml = `
-        <input type="time" step="1" data-period-config="${p.id}|schedule|time"
-          value="${cfg.time || "00:00:00"}" ${enabled ? "" : "disabled"} style="width:110px" />`;
-    } else if (sourceKey === "sun") {
+    if (c.type === "sun") {
+      const operatorOptions = ["after", "before"]
+        .map((op) => `<option value="${op}" ${op === c.operator ? "selected" : ""}>${this._t(`operator_${op}`)}</option>`)
+        .join("");
       const sunEventOptions = SUN_EVENTS.map(
-        (s) => `<option value="${s.key}" ${s.key === cfg.event ? "selected" : ""}>${this._t(s.labelKey)}</option>`
+        (s) => `<option value="${s.key}" ${s.key === c.event ? "selected" : ""}>${this._t(s.labelKey)}</option>`
       ).join("");
-      fieldsHtml = `
-        <select data-period-config="${p.id}|sun|event" ${enabled ? "" : "disabled"}>${sunEventOptions}</select>
-        <input type="number" step="1" data-period-config="${p.id}|sun|offset_minutes"
-          value="${cfg.offset_minutes ?? 0}" ${enabled ? "" : "disabled"} style="width:70px" /> ${this._t("min_offset")}
-        <span style="opacity:0.7;font-size:0.85em">${this._t("never_before")}</span>
-        <input type="time" step="1" data-period-config="${p.id}|sun|min_time"
-          value="${cfg.min_time || "00:00:00"}" ${enabled ? "" : "disabled"} style="width:110px"
-          title="${this._t("min_time_title")}" />`;
-    } else if (sourceKey === "illuminance") {
-      fieldsHtml = `
-        <input list="all-entities-list" data-period-config="${p.id}|illuminance|entity_id"
-          value="${cfg.entity_id || ""}" placeholder="sensor.outdoor_illuminance" ${enabled ? "" : "disabled"} style="width:200px" />
-        <input type="number" data-period-config="${p.id}|illuminance|threshold"
-          value="${cfg.threshold ?? 0}" ${enabled ? "" : "disabled"} style="width:80px" /> ${this._t("lx")}`;
-    } else if (sourceKey === "boolean") {
-      fieldsHtml = `
-        <input list="all-entities-list" data-period-config="${p.id}|boolean|entity_id"
-          value="${cfg.entity_id || ""}" placeholder="binary_sensor...." ${enabled ? "" : "disabled"} style="width:220px" />`;
-    } else if (sourceKey === "sensor") {
-      fieldsHtml = `
-        <input list="all-entities-list" data-period-config="${p.id}|sensor|entity_id"
-          value="${cfg.entity_id || ""}" placeholder="sensor.time_of_day" ${enabled ? "" : "disabled"} style="width:200px" />
-        <span style="opacity:0.7;font-size:0.85em">=</span>
-        <input data-period-config="${p.id}|sensor|value" value="${cfg.value || ""}"
-          placeholder="${this._t("value_placeholder")}" ${enabled ? "" : "disabled"} style="width:100px" />`;
+      return `
+        <select data-condition="${path}|operator">${operatorOptions}</select>
+        <select data-condition="${path}|event">${sunEventOptions}</select>
+        ${textField(`type="number" step="1" data-condition="${path}|offset_minutes" value="${c.offset_minutes ?? 0}" style="width:70px"`)} ${this._t("min_offset")}
+        <span style="opacity:0.7;font-size:0.85em">${this._t("earliest_label")}</span>
+        <input type="time" step="1" data-condition="${path}|earliest" value="${c.earliest || ""}" style="width:110px" />
+        <span style="opacity:0.7;font-size:0.85em">${this._t("latest_label")}</span>
+        <input type="time" step="1" data-condition="${path}|latest" value="${c.latest || ""}" style="width:110px" />`;
     }
 
-    const showWeekendOverride = hasDayType && (sourceKey === "schedule" || sourceKey === "sun");
+    if (c.type === "numeric") {
+      const operatorOptions = ["above", "below", "equals"]
+        .map((op) => `<option value="${op}" ${op === c.operator ? "selected" : ""}>${this._t(`operator_${op}`)}</option>`)
+        .join("");
+      return `
+        <input list="all-entities-list" data-condition="${path}|entity_id" value="${c.entity_id || ""}"
+          placeholder="sensor...." style="width:190px" />
+        <select data-condition="${path}|operator">${operatorOptions}</select>
+        ${textField(`data-condition="${path}|value" value="${c.value || ""}" placeholder="${this._t("value_placeholder")}" style="width:90px"`)}`;
+    }
 
+    if (c.type === "state") {
+      const operatorOptions = ["is", "is_not"]
+        .map((op) => `<option value="${op}" ${op === c.operator ? "selected" : ""}>${this._t(`operator_${op}`)}</option>`)
+        .join("");
+      return `
+        <input list="all-entities-list" data-condition="${path}|entity_id" value="${c.entity_id || ""}"
+          placeholder="binary_sensor...." style="width:190px" />
+        <select data-condition="${path}|operator">${operatorOptions}</select>
+        ${textField(`data-condition="${path}|value" value="${c.value || ""}" placeholder="on" style="width:90px"`)}`;
+    }
+
+    if (c.type === "day_type") {
+      const valueOptions = ["weekday", "weekend"]
+        .map((v) => `<option value="${v}" ${v === c.value ? "selected" : ""}>${this._t(`condition_value_${v}`)}</option>`)
+        .join("");
+      return `<select data-condition="${path}|value">${valueOptions}</select>`;
+    }
+
+    // c.type === "home"
+    const valueOptions = ["home", "away"]
+      .map((v) => `<option value="${v}" ${v === c.value ? "selected" : ""}>${this._t(`condition_value_${v}`)}</option>`)
+      .join("");
+    return `<select data-condition="${path}|value">${valueOptions}</select>`;
+  }
+
+  _renderConditionRow(p, groupId, c) {
+    const typeOptions = CONDITION_TYPES.map(
+      (t) => `<option value="${t.key}" ${t.key === c.type ? "selected" : ""}>${this._t(t.labelKey)}</option>`
+    ).join("");
     return `
-      <div class="rf-source-row">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <label class="rf-source-label">
-            <input type="checkbox" data-period-source-enabled="${p.id}|${sourceKey}" ${enabled ? "checked" : ""} />
-            ${icon(SOURCE_ICONS[sourceKey])}${label}
-          </label>
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap${enabled ? "" : ";opacity:0.5"}">
-            ${fieldsHtml}
-          </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+        ${icon(CONDITION_TYPE_ICONS[c.type])}
+        <select data-condition-type="${p.id}|${groupId}|${c.id}">${typeOptions}</select>
+        ${this._renderConditionFields(p, groupId, c)}
+        <button class="rf-icon-btn rf-danger" data-remove-condition="${p.id}|${groupId}|${c.id}">${icon("mdi:close")}</button>
+      </div>`;
+  }
+
+  // One OR'd group: its conditions are AND'd together (see const.py's
+  // period docs). No move-up/down needed here (or between groups) - AND/OR
+  // are both commutative, so only add/remove matter.
+  _renderConditionGroup(p, group) {
+    const rows = group.conditions.map((c) => this._renderConditionRow(p, group.id, c)).join("");
+    const addOptions = CONDITION_TYPES.map((t) => `<option value="${t.key}">${this._t(t.labelKey)}</option>`).join("");
+    return `
+      <div class="rf-condition-group">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:0.85em;opacity:0.7;flex:1">${this._t("and_within_group_help")}</span>
+          <button class="rf-icon-btn rf-danger" data-remove-condition-group="${p.id}|${group.id}">${icon("mdi:close")}</button>
         </div>
-        ${showWeekendOverride ? this._renderPeriodWeekendOverride(p, sourceKey, cfg, enabled) : ""}
-        ${this._renderPeriodAndCondition(p, sourceKey, cfg, enabled)}
+        ${rows}
+        <div style="margin-top:6px">
+          <select data-add-condition="${p.id}|${group.id}">
+            <option value="" selected disabled>${this._t("add_condition_placeholder")}</option>
+            ${addOptions}
+          </select>
+        </div>
       </div>`;
   }
 
   _renderPeriodsSection() {
     const periods = this._config_data.periods || [];
-    const hasDayType = this._hasDayType();
 
     const rows = periods
-      .map(
-        (p, i) => `
+      .map((p, i) => {
+        const groupsHtml = p.condition_groups
+          .map((g, gi) => `${gi > 0 ? `<div class="rf-or-divider">${this._t("or_between_groups_label")}</div>` : ""}${this._renderConditionGroup(p, g)}`)
+          .join("");
+        return `
       <div class="rf-card" style="margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${icon(periodIcon(p.id), "", "rf-device-icon")}
-          <input data-period-name="${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px" />
+          ${textField(`data-period-name="${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px"`)}
           <button class="rf-icon-btn" data-move-period-up="${p.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
           <button class="rf-icon-btn" data-move-period-down="${p.id}" ${i === periods.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
           <button class="rf-icon-btn rf-danger" data-remove-period="${p.id}">${icon("mdi:close")}</button>
         </div>
-        ${PERIOD_SOURCES.map((s) => this._renderPeriodSourceRow(p, s.key, this._t(s.labelKey), hasDayType)).join("")}
-      </div>`
-      )
+        <div style="margin-top:6px">${groupsHtml}</div>
+        <div style="margin-top:6px">
+          <button class="rf-btn rf-btn-flat" data-add-condition-group="${p.id}">${icon("mdi:plus")}${this._t("add_condition_group")}</button>
+        </div>
+      </div>`;
+      })
       .join("");
 
     return `
@@ -2841,7 +3125,6 @@ class RoomFlowCard extends HTMLElement {
         <div class="rf-section-title">${icon("mdi:clock-time-eight-outline")}${this._t("periods_header")}</div>
         <div class="rf-help">
           ${this._t("periods_help")}
-          ${hasDayType ? this._t("periods_help_weekend_yes") : this._t("periods_help_weekend_no")}
         </div>
         <div style="margin-top:10px">${rows}</div>
         <div>
@@ -2866,7 +3149,7 @@ class RoomFlowCard extends HTMLElement {
           ${this._t("day_type_sensor_help")}
         </div>
         <label style="display:inline-flex;align-items:center;gap:4px;margin-top:4px">
-          <input type="checkbox" data-day-type-sensor-inverted ${cd.day_type_sensor_inverted ? "checked" : ""} />
+          ${switchEl(`data-day-type-sensor-inverted ${cd.day_type_sensor_inverted ? "checked" : ""}`)}
           ${this._t("day_type_sensor_inverted_label")}
         </label>`;
     } else if (mode === "weekday_selection") {
@@ -2874,7 +3157,7 @@ class RoomFlowCard extends HTMLElement {
       const checkboxes = WEEKDAYS.map(
         (w) => `
         <label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;margin-top:6px">
-          <input type="checkbox" data-weekend-day="${w.key}" ${weekendDays.includes(w.key) ? "checked" : ""} />
+          ${switchEl(`data-weekend-day="${w.key}" ${weekendDays.includes(w.key) ? "checked" : ""}`)}
           ${this._t(w.labelKey)}
         </label>`
       ).join("");
@@ -2960,7 +3243,7 @@ class RoomFlowCard extends HTMLElement {
           ${this._t("device_help")}
         </div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
-          <input data-device-name value="${cd.device_name || "RoomFlow"}" style="width:200px" />
+          ${textField(`data-device-name value="${cd.device_name || "RoomFlow"}" style="width:200px"`)}
           <select data-area-id>
             <option value="">${this._t("no_area_option")}</option>
             ${areaOptions}
@@ -3044,8 +3327,7 @@ class RoomFlowCard extends HTMLElement {
             <span style="opacity:0.7;font-size:0.9em;width:120px">${this._t("motion_sensor_value_above")}</span>
             <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
               value="${t.entity_id || ""}" placeholder="sensor.humidity_..." style="width:180px" />
-            <input type="number" step="1" data-motion-trigger-threshold="${room.id}|${t.id}"
-              value="${t.threshold ?? 60}" style="width:55px" />
+            ${textField(`type="number" step="1" data-motion-trigger-threshold="${room.id}|${t.id}" value="${t.threshold ?? 60}" style="width:55px"`)}
             <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${room.id}|${t.id}">${icon("mdi:close")}</button>
           </div>`;
         }
@@ -3063,7 +3345,7 @@ class RoomFlowCard extends HTMLElement {
     return `
       <div class="rf-card">
         <label class="rf-card-title" style="cursor:pointer">
-          <input type="checkbox" data-motion-enabled="${room.id}" ${motion.enabled ? "checked" : ""} />
+          ${switchEl(`data-motion-enabled="${room.id}" ${motion.enabled ? "checked" : ""}`)}
           ${icon("mdi:motion-sensor")} ${this._t("motion_active_label")}
         </label>
         <div style="margin-top:6px${motion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
@@ -3078,22 +3360,17 @@ class RoomFlowCard extends HTMLElement {
           <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${icon("mdi:timer-off-outline")}
             ${this._t("turn_off_after")}
-            <input type="number" min="1" data-motion-timeout="${room.id}"
-              value="${motion.timeout_minutes || 10}" style="width:55px" />
+            ${textField(`type="number" min="1" data-motion-timeout="${room.id}" value="${motion.timeout_minutes || 10}" style="width:55px"`)}
             ${this._t("turn_off_after_suffix")}
           </div>
           <div style="margin-top:10px">
             <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
-              <input type="checkbox" data-motion-warn-enabled="${room.id}" ${
-                motion.warn_enabled ? "checked" : ""
-              } />
+              ${switchEl(`data-motion-warn-enabled="${room.id}" ${motion.warn_enabled ? "checked" : ""}`)}
               ${icon("mdi:brightness-4")} ${this._t("dim_warning_label")}
             </label>
             <div style="margin-top:4px${motion.warn_enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-              ${this._t("dim_to")} <input type="number" min="1" max="255" data-motion-warn-brightness="${room.id}"
-                value="${motion.warn_brightness ?? 25}" style="width:55px" /> ${this._t("brightness_for")}
-              <input type="number" min="1" data-motion-warn-minutes="${room.id}"
-                value="${motion.warn_minutes ?? 3}" style="width:55px" /> ${this._t("minutes_before_off")}
+              ${this._t("dim_to")} ${textField(`type="number" min="1" max="255" data-motion-warn-brightness="${room.id}" value="${motion.warn_brightness ?? 25}" style="width:55px"`)} ${this._t("brightness_for")}
+              ${textField(`type="number" min="1" data-motion-warn-minutes="${room.id}" value="${motion.warn_minutes ?? 3}" style="width:55px"`)} ${this._t("minutes_before_off")}
             </div>
           </div>
         </div>
@@ -3111,13 +3388,11 @@ class RoomFlowCard extends HTMLElement {
       .map(
         (c, i) => `
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-        <input data-condition-name="${room.id}|${c.id}" value="${c.name || ""}"
-          placeholder="${this._t("name_placeholder")}" style="width:120px" />
+        ${textField(`data-condition-name="${room.id}|${c.id}" value="${c.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:120px"`)}
         <input list="all-entities-list" data-condition-entity="${room.id}|${c.id}"
           value="${c.entity_id || ""}" placeholder="binary_sensor...." style="width:200px" />
         <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
-        <input data-condition-state="${room.id}|${c.id}" value="${c.state || ""}"
-          placeholder="on" style="width:70px" />
+        ${textField(`data-condition-state="${room.id}|${c.id}" value="${c.state || ""}" placeholder="on" style="width:70px"`)}
         <button class="rf-icon-btn" data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
         <button class="rf-icon-btn" data-move-custom-condition-down="${room.id}|${c.id}" ${
           i === conditions.length - 1 ? "disabled" : ""
@@ -3212,7 +3487,7 @@ class RoomFlowCard extends HTMLElement {
 
     const toggleHtml = hasToggle
       ? `<label class="rf-variant-title" style="cursor:pointer">
-          <input type="checkbox" data-variant-toggle="${fieldPrefix}" ${enabled ? "checked" : ""} />
+          ${switchEl(`data-variant-toggle="${fieldPrefix}" ${enabled ? "checked" : ""}`)}
           ${variantIcon}${toggleText || this._t("custom_setting_for", { label: label.toLowerCase() })}
         </label>`
       : `<div class="rf-variant-title">${variantIcon}${label}</div>`;
@@ -3222,9 +3497,7 @@ class RoomFlowCard extends HTMLElement {
         ${toggleHtml}
         <div style="margin-top:6px${disabled ? ";pointer-events:none" : ""}">
           <label style="cursor:pointer">
-            <input type="checkbox" data-field="${fieldPrefix}|state" ${
-              variant.state === "on" ? "checked" : ""
-            } ${disabled ? "disabled" : ""} />
+            ${switchEl(`data-field="${fieldPrefix}|state" ${variant.state === "on" ? "checked" : ""} ${disabled ? "disabled" : ""}`)}
             ${this._t("on_label")}
           </label>
           ${
@@ -3301,9 +3574,7 @@ class RoomFlowCard extends HTMLElement {
           <div style="margin-top:10px;font-size:0.9em;display:flex;align-items:center;gap:6px">
             ${icon("mdi:transition")}
             ${this._t("transition_time_label", { s: globalDefault })}
-            <input type="number" min="0" step="0.5" placeholder="${globalDefault}"
-              value="${deviceTransition !== null && deviceTransition !== undefined ? deviceTransition : ""}"
-              data-transition="${deviceKey}|${activePeriod}" style="width:70px" />
+            ${textField(`type="number" min="0" step="0.5" placeholder="${globalDefault}" value="${deviceTransition !== null && deviceTransition !== undefined ? deviceTransition : ""}" data-transition="${deviceKey}|${activePeriod}" style="width:70px"`)}
           </div>
         `;
       }
@@ -3313,20 +3584,16 @@ class RoomFlowCard extends HTMLElement {
         controlsHtml += `
           <div style="margin-top:10px;font-size:0.9em">
             <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
-              <input type="checkbox" data-device-motion-enabled="${deviceKey}" ${
-                deviceMotion.enabled ? "checked" : ""
-              } />
+              ${switchEl(`data-device-motion-enabled="${deviceKey}" ${deviceMotion.enabled ? "checked" : ""}`)}
               ${icon("mdi:motion-sensor")} ${this._t("device_motion_reacts")}
             </label>
             <div style="margin-top:4px${deviceMotion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
               ${this._t("device_off_after")}
-              <input type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}"
-                value="${
+              ${textField(`type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}" value="${
                   deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
                     ? deviceMotion.off_delay_minutes
                     : ""
-                }"
-                data-device-motion-delay="${deviceKey}" style="width:55px" />
+                }" data-device-motion-delay="${deviceKey}" style="width:55px"`)}
               ${this._t("device_off_after_suffix")}
             </div>
           </div>

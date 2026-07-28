@@ -1,3 +1,5 @@
+<p align="center"><img src="logo.png" alt="RoomFlow" width="420"></p>
+
 # RoomFlow
 
 Control lights and outlets per room based on time of day — with optional

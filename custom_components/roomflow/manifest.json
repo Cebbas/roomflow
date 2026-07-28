@@ -1,12 +1,12 @@
 {
   "domain": "roomflow",
   "name": "RoomFlow",
-  "version": "0.0.1",
+  "codeowners": ["@Cebbas"],
   "config_flow": true,
   "dependencies": ["http", "panel_custom"],
   "documentation": "https://github.com/Cebbas/roomflow",
+  "iot_class": "local_push",
   "issue_tracker": "https://github.com/Cebbas/roomflow/issues",
-  "codeowners": ["@Cebbas"],
   "requirements": [],
-  "iot_class": "local_push"
+  "version": "0.0.1"
 }

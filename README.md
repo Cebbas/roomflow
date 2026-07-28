@@ -42,7 +42,11 @@ triggers.
   logic). Which period is "current" is resolved by priority: the first
   active period in the list (top = highest priority) wins — so you can
   freely mix source types (e.g. an illuminance-sourced period above a
-  schedule-sourced one to let darkness override the clock).
+  schedule-sourced one to let darkness override the clock). Once
+  weekday/weekend is configured (see below), the schedule and sun sources
+  can each optionally set a different time/solar event for weekends — e.g.
+  morning can start later on Saturdays and Sundays — without needing a
+  whole separate period just for that.
 - **Weekend and away overrides** (optional) — for each, choose an existing
   sensor (a plain on/off `binary_sensor` works too — just tell RoomFlow which
   polarity "on" means for weekday/weekend), a built-in option (pick which
@@ -140,7 +144,9 @@ triggers.
      - Existing sensor: an entity + the state value that means this period
        is active (works with any time-of-day sensor in any language).
      The current period is whichever one is highest in the list that's
-     currently active.
+     currently active. Once Weekday/weekend below is configured, Schedule
+     and Sun position each get an optional weekend override — a separate
+     start time or solar event just for weekend days.
    - **Weekday/weekend** and **Home/away** — each either "not used", an
      existing sensor, or a built-in option (weekday checklist; one or more
      `person.*` entities), independent of everything else.
@@ -175,7 +181,10 @@ natural next steps).
 
 ## Supported languages
 
-English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl) —
+this README, the card's own UI, and the config flow all follow the same 8
+languages. The card picks its language from Home Assistant's language
+setting automatically.
 
 ## License
 

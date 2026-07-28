@@ -178,6 +178,35 @@ def _sun_boundary(hass: HomeAssistant, period_id: str, event: str, offset_minute
     return local_dt.strftime("%H:%M:%S")
 
 
+def _and_condition_ok(hass: HomeAssistant, and_condition: dict | None) -> bool:
+    """Extra AND condition a period source can require on top of its own
+    check (see DEFAULT_AND_CONDITION in const.py) - e.g. a sun-sourced
+    period only counts as active at sunrise AND only if a lux sensor is
+    currently below some value too. True (i.e. doesn't block anything) when
+    disabled or unconfigured; a missing/unavailable entity fails closed
+    (doesn't count as met) rather than silently ignoring the condition."""
+    if not and_condition or not and_condition.get("enabled"):
+        return True
+    entity_id = and_condition.get("entity_id")
+    if not entity_id:
+        return True
+    state = hass.states.get(entity_id)
+    if state is None:
+        return False
+    operator = and_condition.get("operator", "above")
+    raw_value = and_condition.get("value")
+    if operator == "equals":
+        return bool(raw_value) and state.state.lower() == str(raw_value).lower()
+    try:
+        current = float(state.state)
+        threshold = float(raw_value)
+    except (TypeError, ValueError):
+        return False
+    if operator == "below":
+        return current <= threshold
+    return current >= threshold
+
+
 def _migrate_period_keys(cfg: dict) -> dict:
     """One-time migration of period dict keys from the legacy Swedish
     identifiers to the canonical English ones. Safe to run on every load."""
@@ -278,14 +307,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # true/false checks. Priority order (not sorting) is what resolves
         # any conflict between a period's own sources and/or other periods.
         # Each clock-based source can also carry its own weekend override -
-        # swap in its weekend_* fields instead when today is a weekend day.
+        # swap in its weekend_* fields instead when today is a weekend day -
+        # plus an optional extra AND condition (see _and_condition_ok) that
+        # must also currently hold for its boundary to count at all; a
+        # source whose AND condition fails simply contributes no boundary,
+        # so it can't win the period below either.
         clock_boundaries: list[tuple[str, str]] = []
         for period in periods:
             sources = period["sources"]
             period_id = period["id"]
 
             schedule_cfg = sources[PERIOD_SOURCE_SCHEDULE]
-            if schedule_cfg["enabled"]:
+            if schedule_cfg["enabled"] and _and_condition_ok(hass, schedule_cfg.get("and_condition")):
                 time_str = (
                     schedule_cfg.get("weekend_time")
                     if is_weekend and schedule_cfg.get("weekend_enabled")
@@ -295,11 +328,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     clock_boundaries.append((period_id, time_str))
 
             sun_cfg = sources[PERIOD_SOURCE_SUN]
-            if sun_cfg["enabled"]:
+            if sun_cfg["enabled"] and _and_condition_ok(hass, sun_cfg.get("and_condition")):
                 use_weekend = is_weekend and sun_cfg.get("weekend_enabled")
                 event = sun_cfg.get("weekend_event") if use_weekend else sun_cfg.get("event")
                 offset = sun_cfg.get("weekend_offset_minutes", 0) if use_weekend else sun_cfg.get("offset_minutes", 0)
                 boundary = _sun_boundary(hass, period_id, event, offset)
+                min_time = sun_cfg.get("min_time")
+                if boundary and min_time and _parse_hms(boundary) < _parse_hms(min_time):
+                    boundary = min_time
                 if boundary:
                     clock_boundaries.append((period_id, boundary))
 
@@ -317,7 +353,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return period_id
 
             illuminance_cfg = sources[PERIOD_SOURCE_ILLUMINANCE]
-            if illuminance_cfg["enabled"]:
+            if illuminance_cfg["enabled"] and _and_condition_ok(hass, illuminance_cfg.get("and_condition")):
                 entity_id = illuminance_cfg.get("entity_id")
                 state = hass.states.get(entity_id) if entity_id else None
                 if state is not None:
@@ -329,14 +365,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         return period_id
 
             boolean_cfg = sources[PERIOD_SOURCE_BOOLEAN]
-            if boolean_cfg["enabled"]:
+            if boolean_cfg["enabled"] and _and_condition_ok(hass, boolean_cfg.get("and_condition")):
                 entity_id = boolean_cfg.get("entity_id")
                 state = hass.states.get(entity_id) if entity_id else None
                 if state is not None and state.state == "on":
                     return period_id
 
             sensor_cfg = sources[PERIOD_SOURCE_SENSOR]
-            if sensor_cfg["enabled"]:
+            if sensor_cfg["enabled"] and _and_condition_ok(hass, sensor_cfg.get("and_condition")):
                 entity_id = sensor_cfg.get("entity_id")
                 expected = sensor_cfg.get("value")
                 state = hass.states.get(entity_id) if entity_id and expected else None
@@ -783,6 +819,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 has_schedule_period = True
             if sources[PERIOD_SOURCE_SUN]["enabled"]:
                 has_sun_period = True
+            # Any source's extra AND condition (see _and_condition_ok) also
+            # needs its entity tracked, so an unrelated sensor flipping
+            # still reacts immediately instead of waiting for the next
+            # schedule boundary/sun poll.
+            for source_cfg in sources.values():
+                and_condition = source_cfg.get("and_condition") or {}
+                and_entity_id = and_condition.get("entity_id")
+                if and_condition.get("enabled") and and_entity_id:
+                    tracked_entities.append(and_entity_id)
 
         if day_type_mode == DAY_TYPE_MODE_SENSOR and day_type_sensor:
             tracked_entities.append(day_type_sensor)

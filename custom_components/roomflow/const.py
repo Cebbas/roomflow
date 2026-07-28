@@ -1,5 +1,5 @@
 DOMAIN = "roomflow"
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -128,15 +128,33 @@ PERIOD_SOURCES = [
 # (illuminance/boolean/sensor).
 CLOCK_BASED_PERIOD_SOURCES = (PERIOD_SOURCE_SCHEDULE, PERIOD_SOURCE_SUN)
 
-# Each source type's own fields (besides "enabled"), with their defaults -
-# every period gets an entry for every type in `sources`, most left
-# disabled, so the card can always show all 5 side by side. The two
-# clock-based types also carry an optional weekend override
-# (weekend_enabled + their own weekend_* fields) - e.g. a period whose
-# schedule normally starts at 06:00 can start at 08:00 on weekend_days
-# instead, without needing a whole separate period. Only meaningful once a
-# weekend/weekday day-type source is configured (see infer_day_type_mode) -
-# otherwise every day resolves "weekday" and the override never applies.
+# Every source can also require an extra AND condition on top of its own
+# check - e.g. a sun-sourced period only counts as active at sunrise AND
+# only if a lux sensor is currently below some value too. This is separate
+# from (and stacks with) the OR relationship between a period's different
+# *sources* - "value" is a plain string here and parsed as a number for
+# above/below (blank/invalid = condition not met) or compared case-
+# insensitively as text for equals, mirroring the existing "sensor" source.
+DEFAULT_AND_CONDITION = {
+    "enabled": False,
+    "entity_id": None,
+    "operator": "above",  # "above" | "below" | "equals"
+    "value": "",
+}
+
+# Each source type's own fields (besides "enabled" and "and_condition",
+# added to every type below), with their defaults - every period gets an
+# entry for every type in `sources`, most left disabled, so the card can
+# always show all 5 side by side. The two clock-based types also carry an
+# optional weekend override (weekend_enabled + their own weekend_* fields)
+# - e.g. a period whose schedule normally starts at 06:00 can start at
+# 08:00 on weekend_days instead, without needing a whole separate period.
+# Only meaningful once a weekend/weekday day-type source is configured (see
+# infer_day_type_mode) - otherwise every day resolves "weekday" and the
+# override never applies. The sun source also has "min_time": a floor -
+# its resolved boundary is never earlier than this on any day - e.g. sunrise
+# but never before 08:00. "00:00:00" (midnight) is a no-op floor (nothing
+# resolves earlier than that within a day), so it's a safe inert default.
 DEFAULT_SOURCE_FIELDS = {
     PERIOD_SOURCE_SCHEDULE: {
         "time": "00:00:00",
@@ -146,6 +164,7 @@ DEFAULT_SOURCE_FIELDS = {
     PERIOD_SOURCE_SUN: {
         "event": "sunrise",
         "offset_minutes": 0,
+        "min_time": "00:00:00",
         "weekend_enabled": False,
         "weekend_event": "sunrise",
         "weekend_offset_minutes": 0,
@@ -154,6 +173,8 @@ DEFAULT_SOURCE_FIELDS = {
     PERIOD_SOURCE_BOOLEAN: {"entity_id": None},
     PERIOD_SOURCE_SENSOR: {"entity_id": None, "value": ""},
 }
+for _fields in DEFAULT_SOURCE_FIELDS.values():
+    _fields["and_condition"] = dict(DEFAULT_AND_CONDITION)
 
 DEFAULT_PERIOD_LABELS = {
     "morning": "Morning",
@@ -278,25 +299,29 @@ def infer_time_sources(data: dict) -> list[str]:
 
 def _normalize_period(period: dict) -> dict:
     """Normalize one period entry to the current multi-source shape ({id,
-    name, sources: {type: {enabled, ...fields}}}), where a period can have
-    several of its 5 sources enabled at once (OR logic - see _get_period in
-    __init__.py). Entries saved before that (single `source`/`config` pair)
-    migrate that one active source in as enabled; every other type is
-    present but disabled with blank defaults so the card can always show
-    all 5 side by side. Also backfills any type missing from an already
-    multi-source entry, e.g. one saved by an older version of this file."""
+    name, sources: {type: {enabled, and_condition, ...fields}}}), where a
+    period can have several of its 5 sources enabled at once (OR logic -
+    see _get_period in __init__.py). Entries saved before that (single
+    `source`/`config` pair) migrate that one active source in as enabled;
+    every other type is present but disabled with blank defaults so the
+    card can always show all 5 side by side. Also backfills any type - or
+    any field within a type, e.g. `and_condition`/`min_time` added after a
+    period was already multi-source - missing from an already-saved entry,
+    so upgrading never crashes on a field that didn't exist yet when it was
+    saved."""
     if "sources" in period:
         existing = period["sources"]
-        return {
-            "id": period["id"],
-            "name": period.get("name", ""),
-            "sources": {
-                source_type: dict(existing[source_type])
-                if source_type in existing
-                else {"enabled": False, **DEFAULT_SOURCE_FIELDS[source_type]}
-                for source_type in PERIOD_SOURCES
-            },
-        }
+        sources = {}
+        for source_type in PERIOD_SOURCES:
+            defaults = DEFAULT_SOURCE_FIELDS[source_type]
+            saved = existing.get(source_type) or {}
+            merged = {"enabled": False, **defaults, **saved}
+            merged["and_condition"] = {
+                **defaults["and_condition"],
+                **(saved.get("and_condition") or {}),
+            }
+            sources[source_type] = merged
+        return {"id": period["id"], "name": period.get("name", ""), "sources": sources}
 
     old_source = period.get("source", PERIOD_SOURCE_SCHEDULE)
     old_config = period.get("config") or {}

@@ -50,7 +50,11 @@ mouvement/capteurs.
   liste (en haut = priorité la plus élevée) l'emporte — vous pouvez donc
   librement mélanger les types de sources (par ex. une période basée sur la
   luminosité au-dessus d'une période basée sur l'horaire pour laisser
-  l'obscurité l'emporter sur l'horloge).
+  l'obscurité l'emporter sur l'horloge). Une fois semaine/week-end configuré
+  (voir ci-dessous), les sources horaire fixe et position du soleil peuvent
+  chacune définir une heure/un événement solaire différent pour le
+  week-end — par ex. le matin peut commencer plus tard le samedi et le
+  dimanche — sans avoir besoin d'une période entièrement séparée pour cela.
 - **Dérogations week-end et absence** (optionnel) — pour chacune, choisissez
   un capteur existant (un simple `binary_sensor` allumé/éteint fonctionne
   aussi — indiquez simplement à RoomFlow quelle polarité "allumé" signifie
@@ -164,7 +168,10 @@ mouvement/capteurs.
        cette période est active (fonctionne avec n'importe quel capteur
        d'heure de la journée, dans n'importe quelle langue).
      La période actuelle est celle qui se trouve le plus haut dans la liste
-     et qui est actuellement active.
+     et qui est actuellement active. Une fois Semaine/week-end configuré
+     ci-dessous, Horaire fixe et Position du soleil bénéficient chacun d'une
+     exception de week-end facultative — une heure de début ou un événement
+     solaire distinct, uniquement pour les jours de week-end.
    - **Semaine/week-end** et **Présent/absent** — chacun soit "non utilisé",
      un capteur existant, ou une option intégrée (case à cocher par jour de
      la semaine ; une ou plusieurs entités `person.*`), indépendamment de
@@ -203,7 +210,10 @@ prochaines étapes naturelles).
 
 ## Langues prises en charge
 
-English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl) —
+ce README, l'interface propre de la carte et le config flow suivent tous
+les mêmes 8 langues. La carte choisit sa langue automatiquement selon le
+paramètre de langue de Home Assistant.
 
 ## Licence
 

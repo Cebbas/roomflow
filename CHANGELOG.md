@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The card and the config flow are now fully multi-language**, matching
+  the README's 7 languages (sv/no/da/fi/de/fr/nl) plus English. The card
+  (`www/roomflow-card.js`) picks its language from Home Assistant's own
+  `hass.language`, via an in-file string table (`STRINGS`/`_t()`) with
+  English fallback for any missing key — no build step, no external
+  translation files. The config flow's confirmation step
+  (`custom_components/roomflow/translations/`) is translated the same way.
+  Room/device/period/condition names you type in yourself are left alone —
+  only the card's own labels, buttons, and help text are translated.
 - **Schedule/sun period sources can have a different time on weekends.**
   Once a Weekday/weekend source is configured, a schedule-sourced period
   can optionally set a separate start time for weekend days, and a

@@ -44,7 +44,10 @@ rörelse-/sensortriggers ovanpå det.
   avgörs av prioritetsordning: den första aktiva perioden i listan (överst =
   högst prioritet) vinner — så du kan fritt blanda källtyper (t.ex. en
   luxbaserad period ovanför en schemabaserad för att låta mörker
-  åsidosätta klockan).
+  åsidosätta klockan). När vardag/helg är konfigurerat (se nedan) kan
+  schema- och solkällorna var för sig sätta en annan tid/solhändelse för
+  helger — t.ex. att morgonen börjar senare på lördagar och söndagar — utan
+  att behöva en helt egen period för det.
 - **Helg- och borta-undantag** (valfritt) — för vardera väljer du en
   befintlig sensor (en vanlig på/av-`binary_sensor` funkar också — tala bara
   om för RoomFlow vilken polaritet "på" betyder för vardag/helg), ett
@@ -148,7 +151,9 @@ rörelse-/sensortriggers ovanpå det.
        här perioden är aktiv (fungerar med vilken tid-på-dygnet-sensor som
        helst, på vilket språk som helst).
      Den aktuella perioden är den som ligger högst upp i listan och som är
-     aktiv just nu.
+     aktiv just nu. När Vardag/helg nedan är konfigurerat får Schema och
+     Solens position var sitt valfria helgundantag — en egen starttid eller
+     solhändelse bara för helgdagar.
    - **Vardag/helg** och **Hemma/borta** — vardera antingen "används inte",
      en befintlig sensor, eller ett inbyggt alternativ (veckodagskryssruta;
      en eller flera `person.*`-entiteter), oberoende av allt annat.
@@ -182,7 +187,10 @@ naturliga nästa steg).
 
 ## Språk som stöds
 
-English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl) —
+den här READMEn, kortets eget gränssnitt och config flow följer alla samma
+8 språk. Kortet väljer språk automatiskt utifrån Home Assistants
+språkinställning.
 
 ## Licens
 

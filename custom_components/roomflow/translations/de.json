@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RoomFlow",
+        "description": "Das war's - hier gibt es nichts zu konfigurieren. Tageszeit-Quellen, Werktag/Wochenende, Zuhause/Abwesend, Räume, Geräte, Tasten und Bewegung werden alle anschließend über die RoomFlow-Karte (Seitenleiste) → Einstellungen-Tab konfiguriert und gelten sofort."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "RoomFlow ist bereits konfiguriert."
+    }
+  }
+}

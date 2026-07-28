@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RoomFlow",
+        "description": "C'est tout - rien à configurer ici. Les sources d'heure de la journée, semaine/week-end, présent/absent, les pièces, appareils, boutons et mouvements sont tous configurés ensuite depuis la carte RoomFlow (panneau latéral) → onglet Paramètres, et s'appliquent instantanément."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "RoomFlow est déjà configuré."
+    }
+  }
+}

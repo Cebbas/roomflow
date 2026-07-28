@@ -46,7 +46,11 @@ tulevat vielä fyysiset painikkeet ja liike-/anturilaukaisimet.
   tärkeysjärjestyksen mukaan: ensimmäinen aktiivinen jakso listassa
   (ylimpänä = korkein prioriteetti) voittaa — voit siis vapaasti sekoittaa
   lähdetyyppejä (esim. valaistuspohjainen jakso aikataulupohjaisen yläpuolella,
-  jotta pimeys voi ohittaa kellon).
+  jotta pimeys voi ohittaa kellon). Kun arki/viikonloppu on määritetty (katso
+  alla), aikataulu- ja aurinkolähteet voivat kumpikin asettaa erillisen
+  ajan/auringon tapahtuman viikonlopuille — esim. aamu voi alkaa myöhemmin
+  lauantaisin ja sunnuntaisin — ilman että tarvitaan kokonaan erillistä
+  jaksoa sitä varten.
 - **Viikonloppu- ja poissa-poikkeukset** (valinnainen) — kummallekin
   valitset olemassa olevan anturin (tavallinen päällä/pois-`binary_sensor`
   toimii myös — kerro vain RoomFlow'lle, kumpi napaisuus "päällä" tarkoittaa
@@ -155,7 +159,10 @@ tulevat vielä fyysiset painikkeet ja liike-/anturilaukaisimet.
        tämä jakso on aktiivinen (toimii minkä tahansa
        vuorokaudenaika-anturin kanssa, millä tahansa kielellä).
      Nykyinen jakso on se, joka on korkeimmalla listassa ja on aktiivinen
-     juuri nyt.
+     juuri nyt. Kun alla oleva Arki/viikonloppu on määritetty, Aikataulu ja
+     Auringon asema saavat molemmat oman valinnaisen viikonloppupoikkeuksensa
+     — erillisen aloitusajan tai auringon tapahtuman vain viikonlopun
+     päiville.
    - **Arki/viikonloppu** ja **Koti/poissa** — kumpikin joko "ei käytössä",
      olemassa oleva anturi, tai sisäänrakennettu vaihtoehto
      (viikonpäivävalinta; yksi tai useampi `person.*`-entiteetti),
@@ -193,7 +200,10 @@ media_player jne. ovat luonnollisia seuraavia askelia).
 
 ## Tuetut kielet
 
-English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl) —
+tämä README, kortin oma käyttöliittymä ja config flow noudattavat kaikki
+samoja 8 kieltä. Kortti valitsee kielen automaattisesti Home Assistantin
+kieliasetuksen mukaan.
 
 ## Lisenssi
 

@@ -12,35 +12,59 @@
 // legacy-migration inputs) - never a fixed list of periods themselves.
 
 const PERIOD_SOURCES = [
-  { key: "schedule", label: "Schedule" },
-  { key: "sun", label: "Sun position" },
-  { key: "illuminance", label: "Illuminance (lux) sensor" },
-  { key: "boolean", label: "Existing boolean" },
-  { key: "sensor", label: "Existing sensor" },
+  { key: "schedule", labelKey: "source_schedule" },
+  { key: "sun", labelKey: "source_sun" },
+  { key: "illuminance", labelKey: "source_illuminance" },
+  { key: "boolean", labelKey: "source_boolean" },
+  { key: "sensor", labelKey: "source_sensor" },
 ];
+
+// Every source can also require an extra AND condition on top of its own
+// check - e.g. a sun-sourced period only counts as active at sunrise AND
+// only if a lux sensor is currently below some value too. Mirrors
+// const.py's DEFAULT_AND_CONDITION; "value" is always a plain string,
+// parsed as a number for above/below or compared as text for equals.
+const DEFAULT_AND_CONDITION = { enabled: false, entity_id: null, operator: "above", value: "" };
 
 const DEFAULT_SOURCE_FIELDS = {
   schedule: { time: "00:00:00", weekend_enabled: false, weekend_time: "00:00:00" },
-  sun: { event: "sunrise", offset_minutes: 0, weekend_enabled: false, weekend_event: "sunrise", weekend_offset_minutes: 0 },
+  sun: {
+    event: "sunrise",
+    offset_minutes: 0,
+    min_time: "00:00:00",
+    weekend_enabled: false,
+    weekend_event: "sunrise",
+    weekend_offset_minutes: 0,
+  },
   illuminance: { entity_id: null, threshold: 0 },
   boolean: { entity_id: null },
   sensor: { entity_id: null, value: "" },
 };
+PERIOD_SOURCES.forEach(({ key }) => {
+  DEFAULT_SOURCE_FIELDS[key].and_condition = { ...DEFAULT_AND_CONDITION };
+});
 
 // Normalize one period to the current multi-source shape ({id, name,
-// sources: {type: {enabled, ...fields}}}), mirroring const.py's
-// _normalize_period. Entries saved before a period could combine several
-// sources at once have a single `source`/`config` pair instead - migrate
-// that one active source in as enabled; every other type is present but
-// disabled with blank defaults so the card can always show all 5 side by
-// side. Also backfills any type missing from an already multi-source entry.
+// sources: {type: {enabled, and_condition, ...fields}}}), mirroring
+// const.py's _normalize_period. Entries saved before a period could
+// combine several sources at once have a single `source`/`config` pair
+// instead - migrate that one active source in as enabled; every other type
+// is present but disabled with blank defaults so the card can always show
+// all 5 side by side. Also backfills any type - or any field within a
+// type, e.g. `and_condition`/`min_time` added after a period was already
+// multi-source - missing from an already-saved entry.
 function normalizePeriod(period) {
   if (period.sources) {
     const sources = {};
     PERIOD_SOURCES.forEach(({ key }) => {
-      sources[key] = period.sources[key]
-        ? { ...period.sources[key] }
-        : { enabled: false, ...DEFAULT_SOURCE_FIELDS[key] };
+      const defaults = DEFAULT_SOURCE_FIELDS[key];
+      const saved = period.sources[key] || {};
+      sources[key] = {
+        enabled: false,
+        ...defaults,
+        ...saved,
+        and_condition: { ...defaults.and_condition, ...(saved.and_condition || {}) },
+      };
     });
     return { id: period.id, name: period.name || "", sources };
   }
@@ -61,22 +85,22 @@ function normalizePeriod(period) {
 // get_astral_event_date looks up) - "noon"/"midnight", not "solar_noon"/
 // "solar_midnight".
 const SUN_EVENTS = [
-  { key: "dawn", label: "Dawn" },
-  { key: "sunrise", label: "Sunrise" },
-  { key: "noon", label: "Solar noon" },
-  { key: "sunset", label: "Sunset" },
-  { key: "dusk", label: "Dusk" },
-  { key: "midnight", label: "Solar midnight" },
+  { key: "dawn", labelKey: "sun_event_dawn" },
+  { key: "sunrise", labelKey: "sun_event_sunrise" },
+  { key: "noon", labelKey: "sun_event_noon" },
+  { key: "sunset", labelKey: "sun_event_sunset" },
+  { key: "dusk", labelKey: "sun_event_dusk" },
+  { key: "midnight", labelKey: "sun_event_midnight" },
 ];
 
 const WEEKDAYS = [
-  { key: "mon", label: "Monday" },
-  { key: "tue", label: "Tuesday" },
-  { key: "wed", label: "Wednesday" },
-  { key: "thu", label: "Thursday" },
-  { key: "fri", label: "Friday" },
-  { key: "sat", label: "Saturday" },
-  { key: "sun", label: "Sunday" },
+  { key: "mon", labelKey: "weekday_mon" },
+  { key: "tue", labelKey: "weekday_tue" },
+  { key: "wed", labelKey: "weekday_wed" },
+  { key: "thu", labelKey: "weekday_thu" },
+  { key: "fri", labelKey: "weekday_fri" },
+  { key: "sat", labelKey: "weekday_sat" },
+  { key: "sun", labelKey: "weekday_sun" },
 ];
 
 const DEFAULT_TRANSITIONS = { morning: 1, day: 0, afternoon: 0, evening: 2, night: 3 };
@@ -177,6 +201,1255 @@ function emptyVariant(base, withToggle) {
   return v;
 }
 
+// ---------- i18n ----------
+// The card has no build step, so this is a plain in-file lookup table
+// (keyed by ISO language code) rather than separate translation files or
+// Home Assistant's own frontend translation system. English is the
+// canonical set of keys; every other language falls back to English for
+// any key it doesn't have, so an incomplete/future translation never
+// breaks rendering. Room/device/period/condition *names* the user typed
+// in themselves are data, not UI copy, and are never looked up here.
+const STRINGS = {
+  en: {
+    tab_add_room: "+ Room",
+    tab_buttons: "Buttons",
+    tab_settings: "Settings",
+    test_all: "Test all",
+
+    add_room_header: "Add room",
+    custom_name_option: "— Custom name —",
+    room_name_placeholder: "Room name",
+    add: "Add",
+    add_room_help: "Picking an area adds its lights/outlets to the room automatically.",
+
+    seconds: "seconds",
+    day_type_condition_label: "Day-type condition (weekend):",
+    home_away_condition_label: "Home/away condition:",
+    status_enabled: "enabled",
+    status_not_configured: "not configured",
+    enable_more_conditions_help:
+      "Set the relevant source below (Weekday/weekend and/or Home/away) to enable more conditions.",
+    default_transition_header: "Default transition time per period",
+    default_transition_help:
+      "Applies to every light, unless an individual device has its own transition time set.",
+
+    weekend_override_time: "Different time on weekend",
+    weekend_override_sun: "Different sun event on weekend",
+
+    operator_above: "is above",
+    operator_below: "is below",
+    operator_equals: "equals",
+    and_condition_label: "Also require a sensor condition",
+
+    never_before: "· never before",
+    min_time_title:
+      "Floor - the resolved start time is never earlier than this, even if the sun event is. 00:00 = no floor.",
+    min_offset: "min offset",
+    lx: "lx",
+    value_placeholder: "value",
+
+    source_schedule: "Schedule",
+    source_sun: "Sun position",
+    source_illuminance: "Illuminance (lux) sensor",
+    source_boolean: "Existing boolean",
+    source_sensor: "Existing sensor",
+
+    sun_event_dawn: "Dawn",
+    sun_event_sunrise: "Sunrise",
+    sun_event_noon: "Solar noon",
+    sun_event_sunset: "Sunset",
+    sun_event_dusk: "Dusk",
+    sun_event_midnight: "Solar midnight",
+
+    periods_header: "Time-of-day periods",
+    periods_help:
+      'Priority order (top wins) - the first period with any enabled source currently resolving to "active" is the current period. Add, remove, rename or reorder freely; check off whichever sources you want each period to use - if more than one is checked, the period is active when ANY of them says so.',
+    periods_help_weekend_yes: "Schedule/sun sources can also have a different time on weekends.",
+    periods_help_weekend_no: "Set a Weekday/weekend source below to unlock a weekend override on schedule/sun sources.",
+    name_placeholder: "Name",
+    add_period: "+ Add period",
+
+    day_type_sensor_help: 'For a plain on/off sensor (no "weekend"/"helg"-style text), pick what "on" means:',
+    day_type_sensor_inverted_label:
+      '"On" means weekday (e.g. a workday/jobbdag-style sensor) - unchecked means "on" = weekend',
+    weekend_days_help: 'Which days count as "weekend":',
+    weekday_weekend_header: "Weekday/weekend",
+    option_not_used: "Not used",
+    option_existing_sensor: "Existing sensor",
+    option_weekday_selection: "Weekday selection",
+
+    weekday_mon: "Monday",
+    weekday_tue: "Tuesday",
+    weekday_wed: "Wednesday",
+    weekday_thu: "Thursday",
+    weekday_fri: "Friday",
+    weekday_sat: "Saturday",
+    weekday_sun: "Sunday",
+
+    home_away_header: "Home/away",
+    option_person_entities: "Person entities",
+    add_person: "+ Add",
+
+    device_header: "Device",
+    device_help: "Groups RoomFlow's own sensors (current period, day type, home state, per-period booleans).",
+    no_area_option: "— No area —",
+
+    buttons_header: "Physical buttons",
+    buttons_help:
+      'Bind a physical button/remote (e.g. a Zigbee button that shows up as an "event" or "sensor" entity in Home Assistant) to an action in a room.',
+    add_button_header: "Add button",
+    new_button_entity_placeholder: "entity_id (e.g. event.kitchen_button)",
+    choose_room_option: "Choose room…",
+    action_toggle: "Toggle on/off",
+    action_off: "Turn off room",
+    action_apply_now: "Run scheduled behavior now",
+    action_force_period: "Force a specific period",
+    room_missing: "(room missing)",
+
+    motion_sensor_value_above: "Sensor value above",
+    motion_label: "Motion",
+    motion_active_label: "Motion control active in this room",
+    motion_or_logic_help: 'The room counts as "active" if ANY condition below is currently true (OR logic).',
+    add_motion_sensor: "+ Motion sensor",
+    add_threshold: "+ Threshold (e.g. humidity)",
+    turn_off_after: "Turn off after",
+    turn_off_after_suffix: "minutes with no condition true (default for devices below with no override of their own)",
+    dim_warning_label: "Dim as a warning before turning off",
+    dim_to: "Dim to",
+    brightness_for: "brightness for",
+    minutes_before_off: "minutes before turning off - motion during this window restores full brightness instead.",
+    motion_footer_help:
+      'When active, the room\'s scheduled behavior runs immediately (like "Test now"). Pick which devices react to motion, and their own off-delay, on each device below.',
+
+    condition_is: "is",
+    custom_conditions_header: "Custom conditions",
+    custom_conditions_help:
+      "Room-specific overrides, checked in priority order (top wins) - above away/weekend/default. Each gets its own morning/day/afternoon/evening/night behavior per device below, same as away/weekend.",
+    add_condition: "+ Add condition",
+
+    test_now: "Test now",
+    remove_room: "Remove room",
+    add_device_option: "+ Add device…",
+
+    default_variant_help:
+      "Let the schedule control this period (uncheck to leave this device alone here - e.g. button/manual only)",
+    custom_setting_for: "Custom setting for {label}",
+    on_label: "On",
+    brightness_label: "Brightness:",
+    color_temp_label: "Color temp (K):",
+
+    variant_default: "Default",
+    variant_weekend: "Weekend",
+    variant_away: "Away",
+    condition_fallback_name: "Condition",
+
+    transition_time_label: "Transition time (sec) — default is {s}s:",
+    device_motion_reacts: "Reacts to this room's motion/threshold triggers",
+    device_off_after: "Off after",
+    device_off_after_suffix: "minutes (blank = room default)",
+
+    status_unavailable: "· unavailable",
+    status_on: "· now: on",
+    status_on_pct: "· now: on ({pct}%)",
+    status_off: "· now: off",
+
+    applying: "Applying…",
+    done: "Done!",
+
+    new_condition_name: "New condition",
+    new_period_name: "New period",
+    period_fallback_name: "Period",
+
+    loading: "Loading…",
+  },
+
+  sv: {
+    tab_add_room: "+ Rum",
+    tab_buttons: "Knappar",
+    tab_settings: "Inställningar",
+    test_all: "Testa alla",
+
+    add_room_header: "Lägg till rum",
+    custom_name_option: "— Eget namn —",
+    room_name_placeholder: "Rumsnamn",
+    add: "Lägg till",
+    add_room_help: "Att välja en area lägger automatiskt till dess lampor/uttag i rummet.",
+
+    seconds: "sekunder",
+    day_type_condition_label: "Dagstyp-villkor (helg):",
+    home_away_condition_label: "Hemma/borta-villkor:",
+    status_enabled: "aktiverat",
+    status_not_configured: "inte konfigurerat",
+    enable_more_conditions_help:
+      "Ställ in relevant källa nedan (Vardag/helg och/eller Hemma/borta) för att aktivera fler villkor.",
+    default_transition_header: "Standard transitionstid per period",
+    default_transition_help:
+      "Gäller alla lampor, om inte en specifik enhet har en egen transitionstid inställd.",
+
+    weekend_override_time: "Annan tid på helgen",
+    weekend_override_sun: "Annan solhändelse på helgen",
+
+    operator_above: "är över",
+    operator_below: "är under",
+    operator_equals: "är lika med",
+    and_condition_label: "Kräv även ett sensorvillkor",
+
+    never_before: "· aldrig före",
+    min_time_title:
+      "Golv - den beräknade starttiden är aldrig tidigare än detta, även om solhändelsen är det. 00:00 = inget golv.",
+    min_offset: "min offset",
+    lx: "lx",
+    value_placeholder: "värde",
+
+    source_schedule: "Schema",
+    source_sun: "Solens position",
+    source_illuminance: "Luxsensor",
+    source_boolean: "Befintlig boolean",
+    source_sensor: "Befintlig sensor",
+
+    sun_event_dawn: "Gryning",
+    sun_event_sunrise: "Soluppgång",
+    sun_event_noon: "Solmiddag",
+    sun_event_sunset: "Solnedgång",
+    sun_event_dusk: "Skymning",
+    sun_event_midnight: "Solmidnatt",
+
+    periods_header: "Tid-på-dygnet-perioder",
+    periods_help:
+      'Prioritetsordning (överst vinner) - den första perioden med någon aktiverad källa som just nu är "aktiv" är den aktuella perioden. Lägg till, ta bort, döp om eller ändra ordning fritt; kryssa i vilka källor du vill att varje period ska använda - om fler än en är ikryssad är perioden aktiv när NÅGON av dem säger det.',
+    periods_help_weekend_yes: "Schema-/solkällor kan också ha en annan tid på helger.",
+    periods_help_weekend_no: "Ställ in en Vardag/helg-källa nedan för att låsa upp ett helgundantag för schema-/solkällor.",
+    name_placeholder: "Namn",
+    add_period: "+ Lägg till period",
+
+    day_type_sensor_help: 'För en vanlig på/av-sensor (ingen "weekend"/"helg"-liknande text), välj vad "på" betyder:',
+    day_type_sensor_inverted_label:
+      '"På" betyder vardag (t.ex. en jobbdag-liknande sensor) - avkryssad betyder "på" = helg',
+    weekend_days_help: 'Vilka dagar räknas som "helg":',
+    weekday_weekend_header: "Vardag/helg",
+    option_not_used: "Används inte",
+    option_existing_sensor: "Befintlig sensor",
+    option_weekday_selection: "Veckodagsval",
+
+    weekday_mon: "Måndag",
+    weekday_tue: "Tisdag",
+    weekday_wed: "Onsdag",
+    weekday_thu: "Torsdag",
+    weekday_fri: "Fredag",
+    weekday_sat: "Lördag",
+    weekday_sun: "Söndag",
+
+    home_away_header: "Hemma/borta",
+    option_person_entities: "Personentiteter",
+    add_person: "+ Lägg till",
+
+    device_header: "Enhet",
+    device_help: "Grupperar RoomFlows egna sensorer (aktuell period, dagstyp, hemma-status, per-period-booleaner).",
+    no_area_option: "— Ingen area —",
+
+    buttons_header: "Fysiska knappar",
+    buttons_help:
+      'Bind en fysisk knapp/fjärrkontroll (t.ex. en Zigbee-knapp som visas som en "event"- eller "sensor"-entitet i Home Assistant) till en åtgärd i ett rum.',
+    add_button_header: "Lägg till knapp",
+    new_button_entity_placeholder: "entity_id (t.ex. event.kitchen_button)",
+    choose_room_option: "Välj rum…",
+    action_toggle: "Växla på/av",
+    action_off: "Stäng av rum",
+    action_apply_now: "Kör schemalagt beteende nu",
+    action_force_period: "Tvinga en specifik period",
+    room_missing: "(rum saknas)",
+
+    motion_sensor_value_above: "Sensorvärde över",
+    motion_label: "Rörelse",
+    motion_active_label: "Rörelsekontroll aktiv i det här rummet",
+    motion_or_logic_help: 'Rummet räknas som "aktivt" om NÅGOT villkor nedan just nu är sant (ELLER-logik).',
+    add_motion_sensor: "+ Rörelsesensor",
+    add_threshold: "+ Tröskelvärde (t.ex. luftfuktighet)",
+    turn_off_after: "Stäng av efter",
+    turn_off_after_suffix: "minuter utan att något villkor är sant (standard för enheter nedan utan egen inställning)",
+    dim_warning_label: "Dimra som en varning innan avstängning",
+    dim_to: "Dimra till",
+    brightness_for: "ljusstyrka i",
+    minutes_before_off: "minuter innan avstängning - rörelse under det fönstret återställer full ljusstyrka istället.",
+    motion_footer_help:
+      'När aktivt körs rummets schemalagda beteende direkt (som "Testa nu"). Välj vilka enheter som reagerar på rörelse, och deras egen avstängningsfördröjning, på varje enhet nedan.',
+
+    condition_is: "är",
+    custom_conditions_header: "Egna villkor",
+    custom_conditions_help:
+      "Rumsspecifika undantag, kontrollerade i prioritetsordning (överst vinner) - ovanför borta/helg/standard. Varje villkor får sin egen morgon/dag/eftermiddag/kväll/natt-beteendevariant per enhet nedan, precis som helg/borta.",
+    add_condition: "+ Lägg till villkor",
+
+    test_now: "Testa nu",
+    remove_room: "Ta bort rum",
+    add_device_option: "+ Lägg till enhet…",
+
+    default_variant_help:
+      "Låt schemat styra den här perioden (avmarkera för att lämna den här enheten ifred här - t.ex. knapp/manuellt läge)",
+    custom_setting_for: "Egen inställning för {label}",
+    on_label: "På",
+    brightness_label: "Ljusstyrka:",
+    color_temp_label: "Färgtemp (K):",
+
+    variant_default: "Standard",
+    variant_weekend: "Helg",
+    variant_away: "Borta",
+    condition_fallback_name: "Villkor",
+
+    transition_time_label: "Transitionstid (sek) — standard är {s}s:",
+    device_motion_reacts: "Reagerar på det här rummets rörelse-/tröskelvärdestriggers",
+    device_off_after: "Av efter",
+    device_off_after_suffix: "minuter (tomt = rummets standard)",
+
+    status_unavailable: "· otillgänglig",
+    status_on: "· nu: på",
+    status_on_pct: "· nu: på ({pct}%)",
+    status_off: "· nu: av",
+
+    applying: "Tillämpar…",
+    done: "Klart!",
+
+    new_condition_name: "Nytt villkor",
+    new_period_name: "Ny period",
+    period_fallback_name: "Period",
+
+    loading: "Laddar…",
+  },
+
+  no: {
+    tab_add_room: "+ Rom",
+    tab_buttons: "Knapper",
+    tab_settings: "Innstillinger",
+    test_all: "Test alle",
+
+    add_room_header: "Legg til rom",
+    custom_name_option: "— Eget navn —",
+    room_name_placeholder: "Romnavn",
+    add: "Legg til",
+    add_room_help: "Å velge et område legger automatisk til dets lys/stikkontakter i rommet.",
+
+    seconds: "sekunder",
+    day_type_condition_label: "Dagstype-betingelse (helg):",
+    home_away_condition_label: "Hjemme/borte-betingelse:",
+    status_enabled: "aktivert",
+    status_not_configured: "ikke konfigurert",
+    enable_more_conditions_help:
+      "Sett relevant kilde nedenfor (Hverdag/helg og/eller Hjemme/borte) for å aktivere flere betingelser.",
+    default_transition_header: "Standard overgangstid per periode",
+    default_transition_help:
+      "Gjelder alle lys, med mindre en enkelt enhet har sin egen overgangstid satt.",
+
+    weekend_override_time: "Annet tidspunkt i helgen",
+    weekend_override_sun: "Annen solhendelse i helgen",
+
+    operator_above: "er over",
+    operator_below: "er under",
+    operator_equals: "er lik",
+    and_condition_label: "Krev også en sensorbetingelse",
+
+    never_before: "· aldri før",
+    min_time_title:
+      "Gulv - det beregnede starttidspunktet er aldri tidligere enn dette, selv om solhendelsen er det. 00:00 = ingen begrensning.",
+    min_offset: "min offset",
+    lx: "lx",
+    value_placeholder: "verdi",
+
+    source_schedule: "Tidsplan",
+    source_sun: "Solens posisjon",
+    source_illuminance: "Lyssensor",
+    source_boolean: "Eksisterende boolsk",
+    source_sensor: "Eksisterende sensor",
+
+    sun_event_dawn: "Demring",
+    sun_event_sunrise: "Soloppgang",
+    sun_event_noon: "Middag",
+    sun_event_sunset: "Solnedgang",
+    sun_event_dusk: "Skumring",
+    sun_event_midnight: "Solmidnatt",
+
+    periods_header: "Tid-på-døgnet-perioder",
+    periods_help:
+      'Prioritetsrekkefølge (øverst vinner) - den første perioden med en aktivert kilde som for øyeblikket er "aktiv" er den gjeldende perioden. Legg til, fjern, gi nytt navn eller endre rekkefølge fritt; kryss av for hvilke kilder du vil at hver periode skal bruke - hvis mer enn én er krysset av, er perioden aktiv når NOEN av dem sier det.',
+    periods_help_weekend_yes: "Tidsplan-/sol-kilder kan også ha et annet tidspunkt i helger.",
+    periods_help_weekend_no: "Sett en Hverdag/helg-kilde nedenfor for å låse opp et helgeunntak for tidsplan-/sol-kilder.",
+    name_placeholder: "Navn",
+    add_period: "+ Legg til periode",
+
+    day_type_sensor_help: 'For en vanlig på/av-sensor (ingen "weekend"/"helg"-lignende tekst), velg hva "på" betyr:',
+    day_type_sensor_inverted_label:
+      '"På" betyr hverdag (f.eks. en hverdag/jobbdag-lignende sensor) - avkrysset betyr "på" = helg',
+    weekend_days_help: 'Hvilke dager teller som "helg":',
+    weekday_weekend_header: "Hverdag/helg",
+    option_not_used: "Ikke i bruk",
+    option_existing_sensor: "Eksisterende sensor",
+    option_weekday_selection: "Ukedagsvalg",
+
+    weekday_mon: "Mandag",
+    weekday_tue: "Tirsdag",
+    weekday_wed: "Onsdag",
+    weekday_thu: "Torsdag",
+    weekday_fri: "Fredag",
+    weekday_sat: "Lørdag",
+    weekday_sun: "Søndag",
+
+    home_away_header: "Hjemme/borte",
+    option_person_entities: "Personentiteter",
+    add_person: "+ Legg til",
+
+    device_header: "Enhet",
+    device_help: "Grupperer RoomFlows egne sensorer (gjeldende periode, dagstype, hjemme-status, per-periode-boolske).",
+    no_area_option: "— Ingen sone —",
+
+    buttons_header: "Fysiske knapper",
+    buttons_help:
+      'Bind en fysisk knapp/fjernkontroll (f.eks. en Zigbee-knapp som vises som en "event"- eller "sensor"-entitet i Home Assistant) til en handling i et rom.',
+    add_button_header: "Legg til knapp",
+    new_button_entity_placeholder: "entity_id (f.eks. event.kitchen_button)",
+    choose_room_option: "Velg rom…",
+    action_toggle: "Veksle på/av",
+    action_off: "Slå av rom",
+    action_apply_now: "Kjør planlagt atferd nå",
+    action_force_period: "Tving frem en bestemt periode",
+    room_missing: "(rom mangler)",
+
+    motion_sensor_value_above: "Sensorverdi over",
+    motion_label: "Bevegelse",
+    motion_active_label: "Bevegelseskontroll aktiv i dette rommet",
+    motion_or_logic_help: 'Rommet regnes som "aktivt" hvis NOEN betingelse nedenfor for øyeblikket er sann (ELLER-logikk).',
+    add_motion_sensor: "+ Bevegelsessensor",
+    add_threshold: "+ Terskel (f.eks. luftfuktighet)",
+    turn_off_after: "Slå av etter",
+    turn_off_after_suffix: "minutter uten at noen betingelse er sann (standard for enheter nedenfor uten egen innstilling)",
+    dim_warning_label: "Demp som en advarsel før avslåing",
+    dim_to: "Demp til",
+    brightness_for: "lysstyrke i",
+    minutes_before_off: "minutter før avslåing - bevegelse i det vinduet gjenoppretter full lysstyrke i stedet.",
+    motion_footer_help:
+      'Når aktivt kjøres rommets planlagte atferd umiddelbart (som "Test nå"). Velg hvilke enheter som reagerer på bevegelse, og deres egen avslåingsforsinkelse, på hver enhet nedenfor.',
+
+    condition_is: "er",
+    custom_conditions_header: "Egendefinerte betingelser",
+    custom_conditions_help:
+      "Romspesifikke unntak, sjekket i prioritert rekkefølge (øverst vinner) - over borte/helg/standard. Hver betingelse får sin egen morgen/dag/ettermiddag/kveld/natt-atferdsvariant per enhet nedenfor, akkurat som helg/borte.",
+    add_condition: "+ Legg til betingelse",
+
+    test_now: "Test nå",
+    remove_room: "Fjern rom",
+    add_device_option: "+ Legg til enhet…",
+
+    default_variant_help:
+      "La tidsplanen styre denne perioden (fjern haken for å la denne enheten være i fred her - f.eks. knapp/manuell modus)",
+    custom_setting_for: "Egendefinert innstilling for {label}",
+    on_label: "På",
+    brightness_label: "Lysstyrke:",
+    color_temp_label: "Fargetemp (K):",
+
+    variant_default: "Standard",
+    variant_weekend: "Helg",
+    variant_away: "Borte",
+    condition_fallback_name: "Betingelse",
+
+    transition_time_label: "Overgangstid (sek) — standard er {s}s:",
+    device_motion_reacts: "Reagerer på dette rommets bevegelses-/terskeltriggere",
+    device_off_after: "Av etter",
+    device_off_after_suffix: "minutter (tomt = romstandard)",
+
+    status_unavailable: "· utilgjengelig",
+    status_on: "· nå: på",
+    status_on_pct: "· nå: på ({pct}%)",
+    status_off: "· nå: av",
+
+    applying: "Bruker…",
+    done: "Ferdig!",
+
+    new_condition_name: "Ny betingelse",
+    new_period_name: "Ny periode",
+    period_fallback_name: "Periode",
+
+    loading: "Laster…",
+  },
+
+  da: {
+    tab_add_room: "+ Rum",
+    tab_buttons: "Knapper",
+    tab_settings: "Indstillinger",
+    test_all: "Test alle",
+
+    add_room_header: "Tilføj rum",
+    custom_name_option: "— Eget navn —",
+    room_name_placeholder: "Rumnavn",
+    add: "Tilføj",
+    add_room_help: "At vælge et område tilføjer automatisk dets lys/stikkontakter til rummet.",
+
+    seconds: "sekunder",
+    day_type_condition_label: "Dagstype-betingelse (weekend):",
+    home_away_condition_label: "Hjemme/væk-betingelse:",
+    status_enabled: "aktiveret",
+    status_not_configured: "ikke konfigureret",
+    enable_more_conditions_help:
+      "Angiv den relevante kilde nedenfor (Hverdag/weekend og/eller Hjemme/væk) for at aktivere flere betingelser.",
+    default_transition_header: "Standard overgangstid per periode",
+    default_transition_help:
+      "Gælder for alle lys, medmindre en bestemt enhed har sin egen overgangstid indstillet.",
+
+    weekend_override_time: "Andet tidspunkt i weekenden",
+    weekend_override_sun: "Anden solbegivenhed i weekenden",
+
+    operator_above: "er over",
+    operator_below: "er under",
+    operator_equals: "er lig med",
+    and_condition_label: "Kræv også en sensorbetingelse",
+
+    never_before: "· aldrig før",
+    min_time_title:
+      "Gulv - det beregnede starttidspunkt er aldrig tidligere end dette, selv hvis solbegivenheden er det. 00:00 = ingen begrænsning.",
+    min_offset: "min offset",
+    lx: "lx",
+    value_placeholder: "værdi",
+
+    source_schedule: "Tidsplan",
+    source_sun: "Solens position",
+    source_illuminance: "Lyssensor",
+    source_boolean: "Eksisterende boolean",
+    source_sensor: "Eksisterende sensor",
+
+    sun_event_dawn: "Daggry",
+    sun_event_sunrise: "Solopgang",
+    sun_event_noon: "Middag",
+    sun_event_sunset: "Solnedgang",
+    sun_event_dusk: "Skumring",
+    sun_event_midnight: "Solmidnat",
+
+    periods_header: "Tid-på-dagen-perioder",
+    periods_help:
+      'Prioritetsrækkefølge (øverst vinder) - den første periode med en aktiveret kilde, der lige nu er "aktiv", er den aktuelle periode. Tilføj, fjern, omdøb eller omorganiser frit; afkryds hvilke kilder du vil have hver periode til at bruge - hvis mere end én er afkrydset, er perioden aktiv, når NOGEN af dem siger det.',
+    periods_help_weekend_yes: "Tidsplan-/sol-kilder kan også have et andet tidspunkt i weekender.",
+    periods_help_weekend_no: "Angiv en Hverdag/weekend-kilde nedenfor for at låse op for en weekendundtagelse på tidsplan-/sol-kilder.",
+    name_placeholder: "Navn",
+    add_period: "+ Tilføj periode",
+
+    day_type_sensor_help: 'For en almindelig til/fra-sensor (ingen "weekend"-lignende tekst), vælg hvad "til" betyder:',
+    day_type_sensor_inverted_label:
+      '"Til" betyder hverdag (f.eks. en hverdag-lignende sensor) - afkrydset betyder "til" = weekend',
+    weekend_days_help: 'Hvilke dage tæller som "weekend":',
+    weekday_weekend_header: "Hverdag/weekend",
+    option_not_used: "Ikke brugt",
+    option_existing_sensor: "Eksisterende sensor",
+    option_weekday_selection: "Ugedagsvalg",
+
+    weekday_mon: "Mandag",
+    weekday_tue: "Tirsdag",
+    weekday_wed: "Onsdag",
+    weekday_thu: "Torsdag",
+    weekday_fri: "Fredag",
+    weekday_sat: "Lørdag",
+    weekday_sun: "Søndag",
+
+    home_away_header: "Hjemme/væk",
+    option_person_entities: "Personentiteter",
+    add_person: "+ Tilføj",
+
+    device_header: "Enhed",
+    device_help: "Grupperer RoomFlows egne sensorer (aktuel periode, dagstype, hjemme-status, per-periode-booleans).",
+    no_area_option: "— Intet område —",
+
+    buttons_header: "Fysiske knapper",
+    buttons_help:
+      'Bind en fysisk knap/fjernbetjening (f.eks. en Zigbee-knap, der vises som en "event"- eller "sensor"-entitet i Home Assistant) til en handling i et rum.',
+    add_button_header: "Tilføj knap",
+    new_button_entity_placeholder: "entity_id (f.eks. event.kitchen_button)",
+    choose_room_option: "Vælg rum…",
+    action_toggle: "Skift til/fra",
+    action_off: "Sluk rum",
+    action_apply_now: "Kør planlagt adfærd nu",
+    action_force_period: "Gennemtving en bestemt periode",
+    room_missing: "(rum mangler)",
+
+    motion_sensor_value_above: "Sensorværdi over",
+    motion_label: "Bevægelse",
+    motion_active_label: "Bevægelseskontrol aktiv i dette rum",
+    motion_or_logic_help: 'Rummet betragtes som "aktivt", hvis NOGEN betingelse nedenfor lige nu er sand (ELLER-logik).',
+    add_motion_sensor: "+ Bevægelsessensor",
+    add_threshold: "+ Tærskel (f.eks. luftfugtighed)",
+    turn_off_after: "Sluk efter",
+    turn_off_after_suffix: "minutter uden at nogen betingelse er sand (standard for enheder nedenfor uden egen indstilling)",
+    dim_warning_label: "Dæmp som en advarsel før slukning",
+    dim_to: "Dæmp til",
+    brightness_for: "lysstyrke i",
+    minutes_before_off: "minutter før slukning - bevægelse i det vindue genopretter fuld lysstyrke i stedet.",
+    motion_footer_help:
+      'Når aktivt køres rummets planlagte adfærd med det samme (som "Test nu"). Vælg hvilke enheder der reagerer på bevægelse, og deres egen slukforsinkelse, på hver enhed nedenfor.',
+
+    condition_is: "er",
+    custom_conditions_header: "Brugerdefinerede betingelser",
+    custom_conditions_help:
+      "Rumspecifikke undtagelser, tjekket i prioriteret rækkefølge (øverst vinder) - over væk/weekend/standard. Hver betingelse får sin egen morgen/dag/eftermiddag/aften/nat-adfærdsvariant per enhed nedenfor, ligesom weekend/væk.",
+    add_condition: "+ Tilføj betingelse",
+
+    test_now: "Test nu",
+    remove_room: "Fjern rum",
+    add_device_option: "+ Tilføj enhed…",
+
+    default_variant_help:
+      "Lad tidsplanen styre denne periode (fjern fluebenet for at lade denne enhed være i fred her - f.eks. knap/manuel tilstand)",
+    custom_setting_for: "Brugerdefineret indstilling for {label}",
+    on_label: "Til",
+    brightness_label: "Lysstyrke:",
+    color_temp_label: "Farvetemp. (K):",
+
+    variant_default: "Standard",
+    variant_weekend: "Weekend",
+    variant_away: "Væk",
+    condition_fallback_name: "Betingelse",
+
+    transition_time_label: "Overgangstid (sek) — standard er {s}s:",
+    device_motion_reacts: "Reagerer på dette rums bevægelses-/tærskeltriggere",
+    device_off_after: "Fra efter",
+    device_off_after_suffix: "minutter (tomt = rumstandard)",
+
+    status_unavailable: "· utilgængelig",
+    status_on: "· nu: til",
+    status_on_pct: "· nu: til ({pct}%)",
+    status_off: "· nu: fra",
+
+    applying: "Anvender…",
+    done: "Færdig!",
+
+    new_condition_name: "Ny betingelse",
+    new_period_name: "Ny periode",
+    period_fallback_name: "Periode",
+
+    loading: "Indlæser…",
+  },
+
+  fi: {
+    tab_add_room: "+ Huone",
+    tab_buttons: "Painikkeet",
+    tab_settings: "Asetukset",
+    test_all: "Testaa kaikki",
+
+    add_room_header: "Lisää huone",
+    custom_name_option: "— Oma nimi —",
+    room_name_placeholder: "Huoneen nimi",
+    add: "Lisää",
+    add_room_help: "Alueen valitseminen lisää automaattisesti sen valot/pistorasiat huoneeseen.",
+
+    seconds: "sekuntia",
+    day_type_condition_label: "Päivätyyppiehto (viikonloppu):",
+    home_away_condition_label: "Koti/poissa-ehto:",
+    status_enabled: "käytössä",
+    status_not_configured: "ei määritetty",
+    enable_more_conditions_help:
+      "Aseta asiaankuuluva lähde alla (Arki/viikonloppu ja/tai Koti/poissa) ottaaksesi käyttöön lisää ehtoja.",
+    default_transition_header: "Oletussiirtymäaika jaksoa kohti",
+    default_transition_help:
+      "Koskee jokaista valoa, ellei yksittäiselle laitteelle ole asetettu omaa siirtymäaikaa.",
+
+    weekend_override_time: "Eri aika viikonloppuna",
+    weekend_override_sun: "Eri auringon tapahtuma viikonloppuna",
+
+    operator_above: "on yli",
+    operator_below: "on alle",
+    operator_equals: "on yhtä suuri kuin",
+    and_condition_label: "Vaadi myös anturiehto",
+
+    never_before: "· ei koskaan ennen",
+    min_time_title:
+      "Alaraja - ratkaistu alkamisaika ei ole koskaan tätä aikaisempi, vaikka auringon tapahtuma olisi. 00:00 = ei alarajaa.",
+    min_offset: "min siirtymä",
+    lx: "lx",
+    value_placeholder: "arvo",
+
+    source_schedule: "Aikataulu",
+    source_sun: "Auringon asema",
+    source_illuminance: "Valaistusanturi",
+    source_boolean: "Olemassa oleva totuusarvo",
+    source_sensor: "Olemassa oleva anturi",
+
+    sun_event_dawn: "Sarastus",
+    sun_event_sunrise: "Auringonnousu",
+    sun_event_noon: "Keskipäivä",
+    sun_event_sunset: "Auringonlasku",
+    sun_event_dusk: "Hämärä",
+    sun_event_midnight: "Aurinko-keskiyö",
+
+    periods_header: "Vuorokaudenajan jaksot",
+    periods_help:
+      'Tärkeysjärjestys (ylin voittaa) - ensimmäinen jakso, jonka jokin käytössä oleva lähde on juuri nyt "aktiivinen", on nykyinen jakso. Lisää, poista, nimeä uudelleen tai järjestä uudelleen vapaasti; valitse, mitä lähteitä kunkin jakson tulisi käyttää - jos useampi kuin yksi on valittu, jakso on aktiivinen, kun MIKÄ TAHANSA niistä sanoo niin.',
+    periods_help_weekend_yes: "Aikataulu-/aurinkolähteillä voi myös olla eri aika viikonloppuisin.",
+    periods_help_weekend_no: "Aseta Arki/viikonloppu-lähde alla ottaaksesi käyttöön viikonloppupoikkeuksen aikataulu-/aurinkolähteille.",
+    name_placeholder: "Nimi",
+    add_period: "+ Lisää jakso",
+
+    day_type_sensor_help: 'Tavalliselle päällä/pois-anturille (ei "weekend"-tyylistä tekstiä), valitse mitä "päällä" tarkoittaa:',
+    day_type_sensor_inverted_label:
+      '"Päällä" tarkoittaa arkea (esim. työpäivä-tyylinen anturi) - ei valittuna tarkoittaa "päällä" = viikonloppu',
+    weekend_days_help: 'Mitkä päivät lasketaan "viikonlopuksi":',
+    weekday_weekend_header: "Arki/viikonloppu",
+    option_not_used: "Ei käytössä",
+    option_existing_sensor: "Olemassa oleva anturi",
+    option_weekday_selection: "Viikonpäivävalinta",
+
+    weekday_mon: "Maanantai",
+    weekday_tue: "Tiistai",
+    weekday_wed: "Keskiviikko",
+    weekday_thu: "Torstai",
+    weekday_fri: "Perjantai",
+    weekday_sat: "Lauantai",
+    weekday_sun: "Sunnuntai",
+
+    home_away_header: "Koti/poissa",
+    option_person_entities: "Henkilöentiteetit",
+    add_person: "+ Lisää",
+
+    device_header: "Laite",
+    device_help: "Ryhmittelee RoomFlow'n omat anturit (nykyinen jakso, päivätyyppi, kotitila, jaksokohtaiset totuusarvot).",
+    no_area_option: "— Ei aluetta —",
+
+    buttons_header: "Fyysiset painikkeet",
+    buttons_help:
+      'Sido fyysinen painike/kaukosäädin (esim. Zigbee-painike, joka näkyy Home Assistantissa "event"- tai "sensor"-entiteettinä) toimintoon huoneessa.',
+    add_button_header: "Lisää painike",
+    new_button_entity_placeholder: "entity_id (esim. event.kitchen_button)",
+    choose_room_option: "Valitse huone…",
+    action_toggle: "Vaihda päällä/pois",
+    action_off: "Sammuta huone",
+    action_apply_now: "Aja ajastettu toiminta nyt",
+    action_force_period: "Pakota tietty jakso",
+    room_missing: "(huone puuttuu)",
+
+    motion_sensor_value_above: "Anturin arvo yli",
+    motion_label: "Liike",
+    motion_active_label: "Liikeohjaus käytössä tässä huoneessa",
+    motion_or_logic_help: 'Huone lasketaan "aktiiviseksi", jos MIKÄ TAHANSA alla oleva ehto on juuri nyt tosi (TAI-logiikka).',
+    add_motion_sensor: "+ Liikeanturi",
+    add_threshold: "+ Kynnysarvo (esim. ilmankosteus)",
+    turn_off_after: "Sammuta",
+    turn_off_after_suffix: "minuutin kuluttua, jos mikään ehto ei ole tosi (oletus laitteille, joilla ei ole omaa asetusta)",
+    dim_warning_label: "Himmennä varoituksena ennen sammutusta",
+    dim_to: "Himmennä tasolle",
+    brightness_for: "kirkkaus",
+    minutes_before_off: "minuutiksi ennen sammutusta - liike tänä aikana palauttaa täyden kirkkauden sen sijaan.",
+    motion_footer_help:
+      'Kun aktiivinen, huoneen ajastettu toiminta käynnistyy heti (kuten "Testaa nyt"). Valitse, mitkä laitteet reagoivat liikkeeseen, ja niiden oma sammutusviive, kunkin laitteen kohdalla alla.',
+
+    condition_is: "on",
+    custom_conditions_header: "Omat ehdot",
+    custom_conditions_help:
+      "Huonekohtaiset ohitukset, tarkistettu tärkeysjärjestyksessä (ylin voittaa) - poissa/viikonloppu/oletuksen yläpuolella. Jokainen ehto saa oman aamu/päivä/iltapäivä/ilta/yö-toimintavarianttinsa laitteittain alla, aivan kuten viikonloppu/poissa.",
+    add_condition: "+ Lisää ehto",
+
+    test_now: "Testaa nyt",
+    remove_room: "Poista huone",
+    add_device_option: "+ Lisää laite…",
+
+    default_variant_help:
+      "Anna aikataulun ohjata tätä jaksoa (poista valinta jättääksesi tämän laitteen rauhaan täällä - esim. painike-/manuaalitila)",
+    custom_setting_for: "Oma asetus kohteelle {label}",
+    on_label: "Päällä",
+    brightness_label: "Kirkkaus:",
+    color_temp_label: "Värilämpötila (K):",
+
+    variant_default: "Oletus",
+    variant_weekend: "Viikonloppu",
+    variant_away: "Poissa",
+    condition_fallback_name: "Ehto",
+
+    transition_time_label: "Siirtymäaika (s) — oletus on {s}s:",
+    device_motion_reacts: "Reagoi tämän huoneen liike-/kynnysarvolaukaisimiin",
+    device_off_after: "Pois",
+    device_off_after_suffix: "minuutin kuluttua (tyhjä = huoneen oletus)",
+
+    status_unavailable: "· ei saatavilla",
+    status_on: "· nyt: päällä",
+    status_on_pct: "· nyt: päällä ({pct}%)",
+    status_off: "· nyt: pois",
+
+    applying: "Otetaan käyttöön…",
+    done: "Valmis!",
+
+    new_condition_name: "Uusi ehto",
+    new_period_name: "Uusi jakso",
+    period_fallback_name: "Jakso",
+
+    loading: "Ladataan…",
+  },
+
+  de: {
+    tab_add_room: "+ Raum",
+    tab_buttons: "Tasten",
+    tab_settings: "Einstellungen",
+    test_all: "Alle testen",
+
+    add_room_header: "Raum hinzufügen",
+    custom_name_option: "— Eigener Name —",
+    room_name_placeholder: "Raumname",
+    add: "Hinzufügen",
+    add_room_help: "Die Auswahl eines Bereichs fügt dessen Lampen/Steckdosen automatisch zum Raum hinzu.",
+
+    seconds: "Sekunden",
+    day_type_condition_label: "Tagestyp-Bedingung (Wochenende):",
+    home_away_condition_label: "Zuhause/Abwesend-Bedingung:",
+    status_enabled: "aktiviert",
+    status_not_configured: "nicht konfiguriert",
+    enable_more_conditions_help:
+      "Stelle die entsprechende Quelle unten ein (Werktag/Wochenende und/oder Zuhause/Abwesend), um weitere Bedingungen zu aktivieren.",
+    default_transition_header: "Standard-Übergangszeit pro Zeitraum",
+    default_transition_help:
+      "Gilt für jede Lampe, sofern nicht ein einzelnes Gerät seine eigene Übergangszeit hat.",
+
+    weekend_override_time: "Andere Uhrzeit am Wochenende",
+    weekend_override_sun: "Anderes Sonnenereignis am Wochenende",
+
+    operator_above: "ist über",
+    operator_below: "ist unter",
+    operator_equals: "ist gleich",
+    and_condition_label: "Zusätzlich eine Sensorbedingung erfordern",
+
+    never_before: "· nie vor",
+    min_time_title:
+      "Untergrenze - die berechnete Startzeit liegt nie früher als diese, auch wenn das Sonnenereignis es ist. 00:00 = keine Untergrenze.",
+    min_offset: "Min. Versatz",
+    lx: "lx",
+    value_placeholder: "Wert",
+
+    source_schedule: "Zeitplan",
+    source_sun: "Sonnenposition",
+    source_illuminance: "Helligkeitssensor",
+    source_boolean: "Vorhandener Boolean",
+    source_sensor: "Vorhandener Sensor",
+
+    sun_event_dawn: "Morgendämmerung",
+    sun_event_sunrise: "Sonnenaufgang",
+    sun_event_noon: "Mittag",
+    sun_event_sunset: "Sonnenuntergang",
+    sun_event_dusk: "Abenddämmerung",
+    sun_event_midnight: "Solare Mitternacht",
+
+    periods_header: "Tageszeit-Zeiträume",
+    periods_help:
+      'Prioritätsreihenfolge (oben gewinnt) - der erste Zeitraum mit einer aktivierten Quelle, die gerade "aktiv" ist, ist der aktuelle Zeitraum. Füge frei hinzu, entferne, benenne um oder ordne neu an; kreuze an, welche Quellen jeder Zeitraum verwenden soll - wenn mehr als eine angekreuzt ist, ist der Zeitraum aktiv, wenn IRGENDEINE davon zutrifft.',
+    periods_help_weekend_yes: "Zeitplan-/Sonnen-Quellen können am Wochenende auch eine abweichende Uhrzeit haben.",
+    periods_help_weekend_no: "Stelle unten eine Werktag/Wochenende-Quelle ein, um eine Wochenend-Ausnahme für Zeitplan-/Sonnen-Quellen freizuschalten.",
+    name_placeholder: "Name",
+    add_period: "+ Zeitraum hinzufügen",
+
+    day_type_sensor_help: 'Für einen einfachen An/Aus-Sensor (kein "Wochenende"-artiger Text) wähle, was "an" bedeutet:',
+    day_type_sensor_inverted_label:
+      '"An" bedeutet Werktag (z. B. ein Werktag-artiger Sensor) - nicht angekreuzt bedeutet "an" = Wochenende',
+    weekend_days_help: 'Welche Tage als "Wochenende" zählen:',
+    weekday_weekend_header: "Werktag/Wochenende",
+    option_not_used: "Nicht verwendet",
+    option_existing_sensor: "Vorhandener Sensor",
+    option_weekday_selection: "Wochentagsauswahl",
+
+    weekday_mon: "Montag",
+    weekday_tue: "Dienstag",
+    weekday_wed: "Mittwoch",
+    weekday_thu: "Donnerstag",
+    weekday_fri: "Freitag",
+    weekday_sat: "Samstag",
+    weekday_sun: "Sonntag",
+
+    home_away_header: "Zuhause/Abwesend",
+    option_person_entities: "Personen-Entitäten",
+    add_person: "+ Hinzufügen",
+
+    device_header: "Gerät",
+    device_help: "Gruppiert RoomFlows eigene Sensoren (aktueller Zeitraum, Tagestyp, Zuhause-Status, Zeitraum-Booleans).",
+    no_area_option: "— Kein Bereich —",
+
+    buttons_header: "Physische Tasten",
+    buttons_help:
+      'Binde eine physische Taste/Fernbedienung (z. B. eine Zigbee-Taste, die als "event"- oder "sensor"-Entität erscheint) an eine Aktion in einem Raum.',
+    add_button_header: "Taste hinzufügen",
+    new_button_entity_placeholder: "entity_id (z. B. event.kitchen_button)",
+    choose_room_option: "Raum wählen…",
+    action_toggle: "An/Aus umschalten",
+    action_off: "Raum ausschalten",
+    action_apply_now: "Geplantes Verhalten jetzt ausführen",
+    action_force_period: "Bestimmten Zeitraum erzwingen",
+    room_missing: "(Raum fehlt)",
+
+    motion_sensor_value_above: "Sensorwert über",
+    motion_label: "Bewegung",
+    motion_active_label: "Bewegungssteuerung in diesem Raum aktiv",
+    motion_or_logic_help: 'Der Raum gilt als "aktiv", wenn IRGENDEINE Bedingung unten gerade wahr ist (ODER-Logik).',
+    add_motion_sensor: "+ Bewegungssensor",
+    add_threshold: "+ Schwellenwert (z. B. Luftfeuchtigkeit)",
+    turn_off_after: "Ausschalten nach",
+    turn_off_after_suffix: "Minuten ohne wahre Bedingung (Standard für Geräte unten ohne eigene Einstellung)",
+    dim_warning_label: "Als Warnung dimmen vor dem Ausschalten",
+    dim_to: "Dimmen auf",
+    brightness_for: "Helligkeit für",
+    minutes_before_off: "Minuten vor dem Ausschalten - Bewegung in diesem Fenster stellt stattdessen die volle Helligkeit wieder her.",
+    motion_footer_help:
+      'Wenn aktiv, wird das geplante Verhalten des Raums sofort ausgeführt (wie "Jetzt testen"). Wähle unten pro Gerät, welche Geräte auf Bewegung reagieren, und ihre eigene Ausschaltverzögerung.',
+
+    condition_is: "ist",
+    custom_conditions_header: "Benutzerdefinierte Bedingungen",
+    custom_conditions_help:
+      "Raumspezifische Ausnahmen, geprüft in Prioritätsreihenfolge (oben gewinnt) - über Abwesend/Wochenende/Standard. Jede Bedingung erhält ihre eigene Morgen/Tag/Nachmittag/Abend/Nacht-Verhaltensvariante pro Gerät unten, genau wie Wochenende/Abwesend.",
+    add_condition: "+ Bedingung hinzufügen",
+
+    test_now: "Jetzt testen",
+    remove_room: "Raum entfernen",
+    add_device_option: "+ Gerät hinzufügen…",
+
+    default_variant_help:
+      "Lass den Zeitplan diesen Zeitraum steuern (deaktivieren, um dieses Gerät hier in Ruhe zu lassen - z. B. Tasten-/manueller Modus)",
+    custom_setting_for: "Eigene Einstellung für {label}",
+    on_label: "An",
+    brightness_label: "Helligkeit:",
+    color_temp_label: "Farbtemp. (K):",
+
+    variant_default: "Standard",
+    variant_weekend: "Wochenende",
+    variant_away: "Abwesend",
+    condition_fallback_name: "Bedingung",
+
+    transition_time_label: "Übergangszeit (Sek.) — Standard ist {s}s:",
+    device_motion_reacts: "Reagiert auf die Bewegungs-/Schwellenwert-Trigger dieses Raums",
+    device_off_after: "Aus nach",
+    device_off_after_suffix: "Minuten (leer = Raumstandard)",
+
+    status_unavailable: "· nicht verfügbar",
+    status_on: "· jetzt: an",
+    status_on_pct: "· jetzt: an ({pct}%)",
+    status_off: "· jetzt: aus",
+
+    applying: "Wird angewendet…",
+    done: "Fertig!",
+
+    new_condition_name: "Neue Bedingung",
+    new_period_name: "Neuer Zeitraum",
+    period_fallback_name: "Zeitraum",
+
+    loading: "Lädt…",
+  },
+
+  fr: {
+    tab_add_room: "+ Pièce",
+    tab_buttons: "Boutons",
+    tab_settings: "Paramètres",
+    test_all: "Tout tester",
+
+    add_room_header: "Ajouter une pièce",
+    custom_name_option: "— Nom personnalisé —",
+    room_name_placeholder: "Nom de la pièce",
+    add: "Ajouter",
+    add_room_help: "Choisir une zone ajoute automatiquement ses lumières/prises à la pièce.",
+
+    seconds: "secondes",
+    day_type_condition_label: "Condition de type de jour (week-end) :",
+    home_away_condition_label: "Condition présent/absent :",
+    status_enabled: "activée",
+    status_not_configured: "non configurée",
+    enable_more_conditions_help:
+      "Configurez la source concernée ci-dessous (Semaine/week-end et/ou Présent/absent) pour activer plus de conditions.",
+    default_transition_header: "Temps de transition par défaut par période",
+    default_transition_help:
+      "S'applique à toutes les lumières, sauf si un appareil a son propre temps de transition défini.",
+
+    weekend_override_time: "Heure différente le week-end",
+    weekend_override_sun: "Événement solaire différent le week-end",
+
+    operator_above: "est supérieur à",
+    operator_below: "est inférieur à",
+    operator_equals: "est égal à",
+    and_condition_label: "Exiger aussi une condition de capteur",
+
+    never_before: "· jamais avant",
+    min_time_title:
+      "Plancher - l'heure de début calculée n'est jamais plus tôt que ceci, même si l'événement solaire l'est. 00:00 = pas de plancher.",
+    min_offset: "décalage (min)",
+    lx: "lx",
+    value_placeholder: "valeur",
+
+    source_schedule: "Horaire fixe",
+    source_sun: "Position du soleil",
+    source_illuminance: "Capteur de luminosité",
+    source_boolean: "Booléen existant",
+    source_sensor: "Capteur existant",
+
+    sun_event_dawn: "Aube",
+    sun_event_sunrise: "Lever du soleil",
+    sun_event_noon: "Midi solaire",
+    sun_event_sunset: "Coucher du soleil",
+    sun_event_dusk: "Crépuscule",
+    sun_event_midnight: "Minuit solaire",
+
+    periods_header: "Périodes de la journée",
+    periods_help:
+      "Ordre de priorité (le premier l'emporte) - la première période avec une source activée actuellement « active » est la période actuelle. Ajoutez, supprimez, renommez ou réorganisez librement ; cochez les sources que chaque période doit utiliser - si plusieurs sont cochées, la période est active quand N'IMPORTE LAQUELLE d'entre elles le dit.",
+    periods_help_weekend_yes: "Les sources horaire fixe/soleil peuvent aussi avoir une heure différente le week-end.",
+    periods_help_weekend_no: "Configurez une source Semaine/week-end ci-dessous pour débloquer une dérogation week-end sur les sources horaire fixe/soleil.",
+    name_placeholder: "Nom",
+    add_period: "+ Ajouter une période",
+
+    day_type_sensor_help: "Pour un simple capteur allumé/éteint (pas de texte type « week-end »), choisissez ce que « allumé » signifie :",
+    day_type_sensor_inverted_label:
+      "« Allumé » signifie semaine (par ex. un capteur de type jour ouvré) - non coché signifie « allumé » = week-end",
+    weekend_days_help: "Quels jours comptent comme « week-end » :",
+    weekday_weekend_header: "Semaine/week-end",
+    option_not_used: "Non utilisé",
+    option_existing_sensor: "Capteur existant",
+    option_weekday_selection: "Sélection des jours",
+
+    weekday_mon: "Lundi",
+    weekday_tue: "Mardi",
+    weekday_wed: "Mercredi",
+    weekday_thu: "Jeudi",
+    weekday_fri: "Vendredi",
+    weekday_sat: "Samedi",
+    weekday_sun: "Dimanche",
+
+    home_away_header: "Présent/absent",
+    option_person_entities: "Entités personne",
+    add_person: "+ Ajouter",
+
+    device_header: "Appareil",
+    device_help: "Regroupe les propres capteurs de RoomFlow (période actuelle, type de jour, état de présence, booléens par période).",
+    no_area_option: "— Aucune zone —",
+
+    buttons_header: "Boutons physiques",
+    buttons_help:
+      "Liez un bouton physique/une télécommande (par ex. un bouton Zigbee apparaissant comme une entité « event » ou « sensor ») à une action dans une pièce.",
+    add_button_header: "Ajouter un bouton",
+    new_button_entity_placeholder: "entity_id (par ex. event.kitchen_button)",
+    choose_room_option: "Choisir une pièce…",
+    action_toggle: "Basculer allumé/éteint",
+    action_off: "Éteindre la pièce",
+    action_apply_now: "Exécuter le comportement programmé maintenant",
+    action_force_period: "Forcer une période spécifique",
+    room_missing: "(pièce manquante)",
+
+    motion_sensor_value_above: "Valeur du capteur supérieure à",
+    motion_label: "Mouvement",
+    motion_active_label: "Contrôle par mouvement actif dans cette pièce",
+    motion_or_logic_help: "La pièce est considérée « active » si N'IMPORTE QUELLE condition ci-dessous est actuellement vraie (logique OU).",
+    add_motion_sensor: "+ Capteur de mouvement",
+    add_threshold: "+ Seuil (par ex. humidité)",
+    turn_off_after: "Éteindre après",
+    turn_off_after_suffix: "minutes sans qu'aucune condition ne soit vraie (par défaut pour les appareils ci-dessous sans réglage propre)",
+    dim_warning_label: "Tamiser comme avertissement avant extinction",
+    dim_to: "Tamiser à",
+    brightness_for: "de luminosité pendant",
+    minutes_before_off: "minutes avant extinction - un mouvement pendant cette fenêtre restaure la pleine luminosité à la place.",
+    motion_footer_help:
+      "Lorsqu'actif, le comportement programmé de la pièce s'exécute immédiatement (comme « Tester maintenant »). Choisissez quels appareils réagissent au mouvement, et leur propre délai d'extinction, sur chaque appareil ci-dessous.",
+
+    condition_is: "est",
+    custom_conditions_header: "Conditions personnalisées",
+    custom_conditions_help:
+      "Dérogations propres à la pièce, vérifiées par ordre de priorité (le premier l'emporte) - au-dessus de absence/week-end/par défaut. Chaque condition obtient sa propre variante de comportement matin/journée/après-midi/soir/nuit par appareil ci-dessous, exactement comme week-end/absence.",
+    add_condition: "+ Ajouter une condition",
+
+    test_now: "Tester maintenant",
+    remove_room: "Supprimer la pièce",
+    add_device_option: "+ Ajouter un appareil…",
+
+    default_variant_help:
+      "Laissez l'horaire fixe contrôler cette période (décochez pour laisser cet appareil tranquille ici - par ex. mode bouton/manuel)",
+    custom_setting_for: "Réglage personnalisé pour {label}",
+    on_label: "Allumé",
+    brightness_label: "Luminosité :",
+    color_temp_label: "Temp. de couleur (K) :",
+
+    variant_default: "Par défaut",
+    variant_weekend: "Week-end",
+    variant_away: "Absence",
+    condition_fallback_name: "Condition",
+
+    transition_time_label: "Temps de transition (s) — par défaut {s}s :",
+    device_motion_reacts: "Réagit aux déclencheurs de mouvement/seuil de cette pièce",
+    device_off_after: "Éteint après",
+    device_off_after_suffix: "minutes (vide = valeur par défaut de la pièce)",
+
+    status_unavailable: "· indisponible",
+    status_on: "· actuellement : allumé",
+    status_on_pct: "· actuellement : allumé ({pct}%)",
+    status_off: "· actuellement : éteint",
+
+    applying: "Application…",
+    done: "Terminé !",
+
+    new_condition_name: "Nouvelle condition",
+    new_period_name: "Nouvelle période",
+    period_fallback_name: "Période",
+
+    loading: "Chargement…",
+  },
+
+  nl: {
+    tab_add_room: "+ Kamer",
+    tab_buttons: "Knoppen",
+    tab_settings: "Instellingen",
+    test_all: "Alles testen",
+
+    add_room_header: "Kamer toevoegen",
+    custom_name_option: "— Eigen naam —",
+    room_name_placeholder: "Kamernaam",
+    add: "Toevoegen",
+    add_room_help: "Het kiezen van een gebied voegt automatisch de bijbehorende lampen/stopcontacten toe aan de kamer.",
+
+    seconds: "seconden",
+    day_type_condition_label: "Dagtype-voorwaarde (weekend):",
+    home_away_condition_label: "Thuis/afwezig-voorwaarde:",
+    status_enabled: "ingeschakeld",
+    status_not_configured: "niet geconfigureerd",
+    enable_more_conditions_help:
+      "Stel de relevante bron hieronder in (Doordeweeks/weekend en/of Thuis/afwezig) om meer voorwaarden in te schakelen.",
+    default_transition_header: "Standaard overgangstijd per periode",
+    default_transition_help:
+      "Geldt voor elke lamp, tenzij een specifiek apparaat een eigen overgangstijd heeft ingesteld.",
+
+    weekend_override_time: "Andere tijd in het weekend",
+    weekend_override_sun: "Andere zonnegebeurtenis in het weekend",
+
+    operator_above: "is hoger dan",
+    operator_below: "is lager dan",
+    operator_equals: "is gelijk aan",
+    and_condition_label: "Ook een sensorvoorwaarde vereisen",
+
+    never_before: "· nooit voor",
+    min_time_title:
+      "Bodemwaarde - de berekende starttijd is nooit eerder dan dit, zelfs als de zonnegebeurtenis dat wel is. 00:00 = geen bodemwaarde.",
+    min_offset: "min. verschuiving",
+    lx: "lx",
+    value_placeholder: "waarde",
+
+    source_schedule: "Schema",
+    source_sun: "Zonpositie",
+    source_illuminance: "Lichtsterktesensor",
+    source_boolean: "Bestaande boolean",
+    source_sensor: "Bestaande sensor",
+
+    sun_event_dawn: "Dageraad",
+    sun_event_sunrise: "Zonsopgang",
+    sun_event_noon: "Zonnemiddag",
+    sun_event_sunset: "Zonsondergang",
+    sun_event_dusk: "Schemering",
+    sun_event_midnight: "Zonnemiddernacht",
+
+    periods_header: "Tijdstip-van-de-dag-periodes",
+    periods_help:
+      'Prioriteitsvolgorde (bovenaan wint) - de eerste periode met een ingeschakelde bron die op dit moment "actief" is, is de huidige periode. Voeg vrij toe, verwijder, hernoem of herschik; vink aan welke bronnen elke periode moet gebruiken - als er meer dan één is aangevinkt, is de periode actief wanneer OM HET EVEN WELKE daarvan dat aangeeft.',
+    periods_help_weekend_yes: "Schema-/zonbronnen kunnen ook een afwijkende tijd hebben in het weekend.",
+    periods_help_weekend_no: "Stel hieronder een Doordeweeks/weekend-bron in om een weekendoverride voor schema-/zonbronnen te ontgrendelen.",
+    name_placeholder: "Naam",
+    add_period: "+ Periode toevoegen",
+
+    day_type_sensor_help: 'Voor een gewone aan/uit-sensor (geen "weekend"-achtige tekst), kies wat "aan" betekent:',
+    day_type_sensor_inverted_label:
+      '"Aan" betekent doordeweeks (bijv. een werkdag-achtige sensor) - niet aangevinkt betekent "aan" = weekend',
+    weekend_days_help: 'Welke dagen tellen als "weekend":',
+    weekday_weekend_header: "Doordeweeks/weekend",
+    option_not_used: "Niet gebruikt",
+    option_existing_sensor: "Bestaande sensor",
+    option_weekday_selection: "Weekdagselectie",
+
+    weekday_mon: "Maandag",
+    weekday_tue: "Dinsdag",
+    weekday_wed: "Woensdag",
+    weekday_thu: "Donderdag",
+    weekday_fri: "Vrijdag",
+    weekday_sat: "Zaterdag",
+    weekday_sun: "Zondag",
+
+    home_away_header: "Thuis/afwezig",
+    option_person_entities: "Persoon-entiteiten",
+    add_person: "+ Toevoegen",
+
+    device_header: "Apparaat",
+    device_help: "Groepeert RoomFlows eigen sensoren (huidige periode, dagtype, thuisstatus, periodeboolean).",
+    no_area_option: "— Geen gebied —",
+
+    buttons_header: "Fysieke knoppen",
+    buttons_help:
+      'Koppel een fysieke knop/afstandsbediening (bijv. een Zigbee-knop die verschijnt als een "event"- of "sensor"-entiteit) aan een actie in een kamer.',
+    add_button_header: "Knop toevoegen",
+    new_button_entity_placeholder: "entity_id (bijv. event.kitchen_button)",
+    choose_room_option: "Kies kamer…",
+    action_toggle: "Aan/uit omschakelen",
+    action_off: "Kamer uitschakelen",
+    action_apply_now: "Gepland gedrag nu uitvoeren",
+    action_force_period: "Specifieke periode forceren",
+    room_missing: "(kamer ontbreekt)",
+
+    motion_sensor_value_above: "Sensorwaarde boven",
+    motion_label: "Beweging",
+    motion_active_label: "Bewegingsbesturing actief in deze kamer",
+    motion_or_logic_help: 'De kamer wordt als "actief" beschouwd als OM HET EVEN WELKE voorwaarde hieronder op dit moment waar is (OF-logica).',
+    add_motion_sensor: "+ Bewegingssensor",
+    add_threshold: "+ Drempelwaarde (bijv. vochtigheid)",
+    turn_off_after: "Uitschakelen na",
+    turn_off_after_suffix: "minuten zonder dat een voorwaarde waar is (standaard voor apparaten hieronder zonder eigen instelling)",
+    dim_warning_label: "Dimmen als waarschuwing vóór uitschakelen",
+    dim_to: "Dimmen naar",
+    brightness_for: "helderheid gedurende",
+    minutes_before_off: "minuten vóór uitschakelen - beweging tijdens dat venster herstelt in plaats daarvan volledige helderheid.",
+    motion_footer_help:
+      'Indien actief wordt het geplande gedrag van de kamer onmiddellijk uitgevoerd (zoals "Nu testen"). Kies welke apparaten op beweging reageren, en hun eigen uitschakelvertraging, per apparaat hieronder.',
+
+    condition_is: "is",
+    custom_conditions_header: "Aangepaste voorwaarden",
+    custom_conditions_help:
+      "Kamerspecifieke overrides, gecontroleerd op volgorde van prioriteit (bovenaan wint) - boven afwezig/weekend/standaard. Elke voorwaarde krijgt zijn eigen ochtend/dag/middag/avond/nacht-gedragsvariant per apparaat hieronder, net als weekend/afwezig.",
+    add_condition: "+ Voorwaarde toevoegen",
+
+    test_now: "Nu testen",
+    remove_room: "Kamer verwijderen",
+    add_device_option: "+ Apparaat toevoegen…",
+
+    default_variant_help:
+      "Laat het schema deze periode besturen (vink uit om dit apparaat hier met rust te laten - bijv. knop-/handmatige modus)",
+    custom_setting_for: "Aangepaste instelling voor {label}",
+    on_label: "Aan",
+    brightness_label: "Helderheid:",
+    color_temp_label: "Kleurtemp. (K):",
+
+    variant_default: "Standaard",
+    variant_weekend: "Weekend",
+    variant_away: "Afwezig",
+    condition_fallback_name: "Voorwaarde",
+
+    transition_time_label: "Overgangstijd (sec) — standaard is {s}s:",
+    device_motion_reacts: "Reageert op de beweging-/drempelwaardetriggers van deze kamer",
+    device_off_after: "Uit na",
+    device_off_after_suffix: "minuten (leeg = kamerstandaard)",
+
+    status_unavailable: "· niet beschikbaar",
+    status_on: "· nu: aan",
+    status_on_pct: "· nu: aan ({pct}%)",
+    status_off: "· nu: uit",
+
+    applying: "Bezig met toepassen…",
+    done: "Klaar!",
+
+    new_condition_name: "Nieuwe voorwaarde",
+    new_period_name: "Nieuwe periode",
+    period_fallback_name: "Periode",
+
+    loading: "Bezig met laden…",
+  },
+};
+
+function t(lang, key, vars) {
+  let str = (STRINGS[lang] && STRINGS[lang][key]) ?? STRINGS.en[key] ?? key;
+  if (vars) {
+    Object.keys(vars).forEach((k) => {
+      str = str.replace(new RegExp(`\\{${k}\\}`, "g"), vars[k]);
+    });
+  }
+  return str;
+}
+
+function detectLang(hass) {
+  const code = ((hass && hass.language) || "en").slice(0, 2).toLowerCase();
+  return STRINGS[code] ? code : "en";
+}
+
 class RoomFlowCard extends HTMLElement {
   constructor() {
     super();
@@ -188,12 +1461,20 @@ class RoomFlowCard extends HTMLElement {
     this._areas = [];
     this._entities = [];
     this._activeTab = {}; // deviceKey -> period
+    this._activeRoomPeriod = {}; // room.id -> period, drives every device's tab in that room at once
     this._activeRoomId = null; // room.id | "__add__" | "__buttons__" | "__settings__"
     this._saveTimeout = null;
+    this._lang = "en";
 
     this.addEventListener("click", (e) => this._onClick(e));
     this.addEventListener("change", (e) => this._onChange(e));
     this.addEventListener("input", (e) => this._onInput(e));
+  }
+
+  // Card-wide translation lookup - see the STRINGS table and t()/detectLang()
+  // near the top of this file.
+  _t(key, vars) {
+    return t(this._lang, key, vars);
   }
 
   // Custom element constructors must not add child nodes (the spec
@@ -202,7 +1483,7 @@ class RoomFlowCard extends HTMLElement {
   // wait until here instead.
   connectedCallback() {
     if (!this.hasChildNodes()) {
-      this.innerHTML = "<ha-card><div style='padding:16px'>Loading…</div></ha-card>";
+      this.innerHTML = `<ha-card><div style='padding:16px'>${this._t("loading")}</div></ha-card>`;
     }
   }
 
@@ -215,6 +1496,7 @@ class RoomFlowCard extends HTMLElement {
   set hass(hass) {
     const firstRun = !this._hass;
     this._hass = hass;
+    this._lang = detectLang(hass);
     if (firstRun) {
       this._loadAll();
     } else if (this._activeRoomId) {
@@ -460,7 +1742,7 @@ class RoomFlowCard extends HTMLElement {
     const room = this._config_data.rooms.find((r) => r.id === roomId);
     if (!room) return;
     if (!room.custom_conditions) room.custom_conditions = [];
-    room.custom_conditions.push({ id: uid(), name: "New condition", entity_id: "", state: "on" });
+    room.custom_conditions.push({ id: uid(), name: this._t("new_condition_name"), entity_id: "", state: "on" });
     this._scheduleSave();
     this._render();
   }
@@ -504,7 +1786,7 @@ class RoomFlowCard extends HTMLElement {
   _addPeriod() {
     if (!this._config_data.periods) this._config_data.periods = [];
     this._config_data.periods.push(
-      normalizePeriod({ id: uid(), name: "New period", source: "schedule", config: { time: "00:00:00" } })
+      normalizePeriod({ id: uid(), name: this._t("new_period_name"), source: "schedule", config: { time: "00:00:00" } })
     );
     this._scheduleSave();
     this._render();
@@ -526,9 +1808,16 @@ class RoomFlowCard extends HTMLElement {
   _updatePeriodConfig(periodId, sourceType, field, value) {
     const period = (this._config_data.periods || []).find((p) => p.id === periodId);
     if (!period) return;
-    period.sources[sourceType][field] = value;
+    // field is either a top-level key ("time") or a dotted sub-path into a
+    // nested object ("and_condition.entity_id").
+    if (field.includes(".")) {
+      const [parent, child] = field.split(".");
+      period.sources[sourceType][parent][child] = value;
+    } else {
+      period.sources[sourceType][field] = value;
+    }
     this._scheduleSave();
-    if (field === "enabled" || field === "weekend_enabled") this._render();
+    if (field.endsWith("enabled")) this._render();
   }
 
   _movePeriod(periodId, direction) {
@@ -556,12 +1845,12 @@ class RoomFlowCard extends HTMLElement {
   _liveStatusText(device) {
     const st = this._hass && this._hass.states[device.entity_id];
     if (!st) return "";
-    if (st.state === "unavailable") return " · unavailable";
+    if (st.state === "unavailable") return ` ${this._t("status_unavailable")}`;
     if (st.state === "on") {
       const b = st.attributes ? st.attributes.brightness : null;
-      return ` · now: on${b ? ` (${Math.round((b / 255) * 100)}%)` : ""}`;
+      return ` ${b ? this._t("status_on_pct", { pct: Math.round((b / 255) * 100) }) : this._t("status_on")}`;
     }
-    return " · now: off";
+    return ` ${this._t("status_off")}`;
   }
 
   _updateLiveStatusTexts() {
@@ -599,6 +1888,22 @@ class RoomFlowCard extends HTMLElement {
     if (periodTab) {
       const [deviceKey, period] = periodTab.getAttribute("data-tab").split("|");
       this._activeTab[deviceKey] = period;
+      this._render();
+      return;
+    }
+
+    // Room-level period tab: switches every device in the room to the same
+    // period at once, so their Default/Weekend/Away/etc. boxes are all
+    // visible side by side for that one period without opening each device
+    // individually.
+    const roomPeriodTab = e.target.closest("[data-room-tab]");
+    if (roomPeriodTab) {
+      const [roomId, period] = roomPeriodTab.getAttribute("data-room-tab").split("|");
+      this._activeRoomPeriod[roomId] = period;
+      const room = (this._config_data.rooms || []).find((r) => r.id === roomId);
+      (room?.devices || []).forEach((d) => {
+        this._activeTab[`${roomId}:${d.entity_id}`] = period;
+      });
       this._render();
       return;
     }
@@ -704,10 +2009,10 @@ class RoomFlowCard extends HTMLElement {
     if (e.target.closest("#apply-all-btn")) {
       const btn = e.target.closest("#apply-all-btn");
       const original = btn.textContent;
-      btn.textContent = "Applying…";
+      btn.textContent = this._t("applying");
       btn.disabled = true;
       this._hass.callWS({ type: "roomflow/apply_now" }).finally(() => {
-        btn.textContent = "Done!";
+        btn.textContent = this._t("done");
         setTimeout(() => {
           btn.textContent = original;
           btn.disabled = false;
@@ -720,12 +2025,12 @@ class RoomFlowCard extends HTMLElement {
     if (applyRoomBtn) {
       const roomId = applyRoomBtn.getAttribute("data-apply-room");
       const original = applyRoomBtn.textContent;
-      applyRoomBtn.textContent = "Applying…";
+      applyRoomBtn.textContent = this._t("applying");
       applyRoomBtn.disabled = true;
       this._hass
         .callWS({ type: "roomflow/apply_room", room_id: roomId })
         .finally(() => {
-          applyRoomBtn.textContent = "Done!";
+          applyRoomBtn.textContent = this._t("done");
           setTimeout(() => {
             applyRoomBtn.textContent = original;
             applyRoomBtn.disabled = false;
@@ -804,7 +2109,7 @@ class RoomFlowCard extends HTMLElement {
     const conditionName = e.target.closest("[data-condition-name]");
     if (conditionName) {
       const [roomId, conditionId] = conditionName.getAttribute("data-condition-name").split("|");
-      this._updateCustomCondition(roomId, conditionId, "name", conditionName.value.trim() || "Condition");
+      this._updateCustomCondition(roomId, conditionId, "name", conditionName.value.trim() || this._t("condition_fallback_name"));
       return;
     }
 
@@ -935,7 +2240,7 @@ class RoomFlowCard extends HTMLElement {
       this._updatePeriod(
         periodNameInput.getAttribute("data-period-name"),
         "name",
-        periodNameInput.value.trim() || "Period"
+        periodNameInput.value.trim() || this._t("period_fallback_name")
       );
       return;
     }
@@ -956,7 +2261,7 @@ class RoomFlowCard extends HTMLElement {
       } else if (field === "threshold" || field === "offset_minutes" || field === "weekend_offset_minutes") {
         const val = parseFloat(periodConfigField.value);
         value = isNaN(val) ? 0 : val;
-      } else if (field === "time" || field === "weekend_time") {
+      } else if (field === "time" || field === "weekend_time" || field === "min_time") {
         const raw = periodConfigField.value; // "HH:MM" or "HH:MM:SS" depending on browser
         value = raw ? (raw.length === 5 ? `${raw}:00` : raw) : "00:00:00";
       } else {
@@ -1113,11 +2418,11 @@ class RoomFlowCard extends HTMLElement {
         <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--divider-color);padding:0 8px">
           <div style="display:flex;overflow-x:auto">
             ${roomTabsHtml}
-            ${tabBtn("__add__", "+ Room")}
-            ${tabBtn("__buttons__", "🔘 Buttons")}
-            ${tabBtn("__settings__", "⚙ Settings")}
+            ${tabBtn("__add__", this._t("tab_add_room"))}
+            ${tabBtn("__buttons__", `🔘 ${this._t("tab_buttons")}`)}
+            ${tabBtn("__settings__", `⚙ ${this._t("tab_settings")}`)}
           </div>
-          <button id="apply-all-btn" style="margin:6px;white-space:nowrap">Test all</button>
+          <button id="apply-all-btn" style="margin:6px;white-space:nowrap">${this._t("test_all")}</button>
         </div>
         <div style="padding:16px">
           ${contentHtml}
@@ -1133,15 +2438,15 @@ class RoomFlowCard extends HTMLElement {
       .join("");
     return `
       <div>
-        <b>Add room</b><br>
+        <b>${this._t("add_room_header")}</b><br>
         <select id="new-room-area" style="margin-top:6px">
-          <option value="">— Custom name —</option>
+          <option value="">${this._t("custom_name_option")}</option>
           ${areaOptions}
         </select>
-        <input id="new-room-name" placeholder="Room name" style="margin-left:6px" />
-        <button id="add-room-btn" style="margin-left:6px">Add</button>
+        <input id="new-room-name" placeholder="${this._t("room_name_placeholder")}" style="margin-left:6px" />
+        <button id="add-room-btn" style="margin-left:6px">${this._t("add")}</button>
         <div style="opacity:0.7;font-size:0.85em;margin-top:6px">
-          Picking an area adds its lights/outlets to the room automatically.
+          ${this._t("add_room_help")}
         </div>
       </div>
     `;
@@ -1155,7 +2460,7 @@ class RoomFlowCard extends HTMLElement {
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
         <span style="width:110px">${p.name}</span>
         <input type="number" min="0" step="0.5" value="${dt[p.id] ?? 0}"
-          data-default-transition="${p.id}" style="width:70px" /> seconds
+          data-default-transition="${p.id}" style="width:70px" /> ${this._t("seconds")}
       </div>`
     ).join("");
 
@@ -1163,21 +2468,17 @@ class RoomFlowCard extends HTMLElement {
     const hasHome = this._hasHome();
     const capsInfo = `
       <div style="margin-top:16px;font-size:0.9em;opacity:0.8">
-        Day-type condition (weekend): ${hasDayType ? "enabled" : "not configured"}<br>
-        Home/away condition: ${hasHome ? "enabled" : "not configured"}<br>
-        ${
-          !hasDayType || !hasHome
-            ? "Set the relevant source below (Weekday/weekend and/or Home/away) to enable more conditions."
-            : ""
-        }
+        ${this._t("day_type_condition_label")} ${hasDayType ? this._t("status_enabled") : this._t("status_not_configured")}<br>
+        ${this._t("home_away_condition_label")} ${hasHome ? this._t("status_enabled") : this._t("status_not_configured")}<br>
+        ${!hasDayType || !hasHome ? this._t("enable_more_conditions_help") : ""}
       </div>
     `;
 
     return `
       <div>
-        <b>Default transition time per period</b>
+        <b>${this._t("default_transition_header")}</b>
         <div style="opacity:0.7;font-size:0.9em;margin-top:4px">
-          Applies to every light, unless an individual device has its own transition time set.
+          ${this._t("default_transition_help")}
         </div>
         ${rows}
         ${capsInfo}
@@ -1207,12 +2508,12 @@ class RoomFlowCard extends HTMLElement {
           value="${cfg.weekend_time || "00:00:00"}" ${fieldsDisabled ? "disabled" : ""} style="width:110px" />`;
     } else {
       const weekendSunEventOptions = SUN_EVENTS.map(
-        (s) => `<option value="${s.key}" ${s.key === cfg.weekend_event ? "selected" : ""}>${s.label}</option>`
+        (s) => `<option value="${s.key}" ${s.key === cfg.weekend_event ? "selected" : ""}>${this._t(s.labelKey)}</option>`
       ).join("");
       weekendFieldsHtml = `
         <select data-period-config="${p.id}|sun|weekend_event" ${fieldsDisabled ? "disabled" : ""}>${weekendSunEventOptions}</select>
         <input type="number" step="1" data-period-config="${p.id}|sun|weekend_offset_minutes"
-          value="${cfg.weekend_offset_minutes ?? 0}" ${fieldsDisabled ? "disabled" : ""} style="width:70px" /> min offset`;
+          value="${cfg.weekend_offset_minutes ?? 0}" ${fieldsDisabled ? "disabled" : ""} style="width:70px" /> ${this._t("min_offset")}`;
     }
 
     return `
@@ -1222,12 +2523,50 @@ class RoomFlowCard extends HTMLElement {
         <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
           <input type="checkbox" data-period-config="${p.id}|${sourceKey}|weekend_enabled"
             ${weekendEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
-          Different ${sourceKey === "schedule" ? "time" : "sun event"} on weekend
+          ${sourceKey === "schedule" ? this._t("weekend_override_time") : this._t("weekend_override_sun")}
         </label>
         <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
           weekendEnabled ? "" : ";opacity:0.5"
         }">
           ${weekendFieldsHtml}
+        </div>
+      </div>`;
+  }
+
+  // Extra AND condition, on top of a source's own check - e.g. a
+  // sun-sourced period only counts as active at sunrise AND only if a lux
+  // sensor is also currently below some value. Available on all 5 source
+  // types (unlike the weekend override, which only makes sense on the two
+  // clock-based ones).
+  _renderPeriodAndCondition(p, sourceKey, cfg, sourceEnabled) {
+    const andCfg = cfg.and_condition || DEFAULT_AND_CONDITION;
+    const andEnabled = !!andCfg.enabled;
+    const fieldsDisabled = !sourceEnabled || !andEnabled;
+    const operatorOptions = [
+      { key: "above", labelKey: "operator_above" },
+      { key: "below", labelKey: "operator_below" },
+      { key: "equals", labelKey: "operator_equals" },
+    ]
+      .map((o) => `<option value="${o.key}" ${o.key === andCfg.operator ? "selected" : ""}>${this._t(o.labelKey)}</option>`)
+      .join("");
+
+    return `
+      <div style="margin:4px 0 0 24px;padding-left:8px;border-left:2px solid var(--divider-color)${
+        sourceEnabled ? "" : ";opacity:0.5"
+      }">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
+          <input type="checkbox" data-period-config="${p.id}|${sourceKey}|and_condition.enabled"
+            ${andEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
+          ${this._t("and_condition_label")}
+        </label>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
+          andEnabled ? "" : ";opacity:0.5"
+        }">
+          <input list="all-entities-list" data-period-config="${p.id}|${sourceKey}|and_condition.entity_id"
+            value="${andCfg.entity_id || ""}" placeholder="sensor...." ${fieldsDisabled ? "disabled" : ""} style="width:190px" />
+          <select data-period-config="${p.id}|${sourceKey}|and_condition.operator" ${fieldsDisabled ? "disabled" : ""}>${operatorOptions}</select>
+          <input data-period-config="${p.id}|${sourceKey}|and_condition.value"
+            value="${andCfg.value || ""}" placeholder="${this._t("value_placeholder")}" ${fieldsDisabled ? "disabled" : ""} style="width:90px" />
         </div>
       </div>`;
   }
@@ -1243,18 +2582,22 @@ class RoomFlowCard extends HTMLElement {
           value="${cfg.time || "00:00:00"}" ${enabled ? "" : "disabled"} style="width:110px" />`;
     } else if (sourceKey === "sun") {
       const sunEventOptions = SUN_EVENTS.map(
-        (s) => `<option value="${s.key}" ${s.key === cfg.event ? "selected" : ""}>${s.label}</option>`
+        (s) => `<option value="${s.key}" ${s.key === cfg.event ? "selected" : ""}>${this._t(s.labelKey)}</option>`
       ).join("");
       fieldsHtml = `
         <select data-period-config="${p.id}|sun|event" ${enabled ? "" : "disabled"}>${sunEventOptions}</select>
         <input type="number" step="1" data-period-config="${p.id}|sun|offset_minutes"
-          value="${cfg.offset_minutes ?? 0}" ${enabled ? "" : "disabled"} style="width:70px" /> min offset`;
+          value="${cfg.offset_minutes ?? 0}" ${enabled ? "" : "disabled"} style="width:70px" /> ${this._t("min_offset")}
+        <span style="opacity:0.7;font-size:0.85em">${this._t("never_before")}</span>
+        <input type="time" step="1" data-period-config="${p.id}|sun|min_time"
+          value="${cfg.min_time || "00:00:00"}" ${enabled ? "" : "disabled"} style="width:110px"
+          title="${this._t("min_time_title")}" />`;
     } else if (sourceKey === "illuminance") {
       fieldsHtml = `
         <input list="all-entities-list" data-period-config="${p.id}|illuminance|entity_id"
           value="${cfg.entity_id || ""}" placeholder="sensor.outdoor_illuminance" ${enabled ? "" : "disabled"} style="width:200px" />
         <input type="number" data-period-config="${p.id}|illuminance|threshold"
-          value="${cfg.threshold ?? 0}" ${enabled ? "" : "disabled"} style="width:80px" /> lx`;
+          value="${cfg.threshold ?? 0}" ${enabled ? "" : "disabled"} style="width:80px" /> ${this._t("lx")}`;
     } else if (sourceKey === "boolean") {
       fieldsHtml = `
         <input list="all-entities-list" data-period-config="${p.id}|boolean|entity_id"
@@ -1265,7 +2608,7 @@ class RoomFlowCard extends HTMLElement {
           value="${cfg.entity_id || ""}" placeholder="sensor.time_of_day" ${enabled ? "" : "disabled"} style="width:200px" />
         <span style="opacity:0.7;font-size:0.85em">=</span>
         <input data-period-config="${p.id}|sensor|value" value="${cfg.value || ""}"
-          placeholder="value" ${enabled ? "" : "disabled"} style="width:100px" />`;
+          placeholder="${this._t("value_placeholder")}" ${enabled ? "" : "disabled"} style="width:100px" />`;
     }
 
     const showWeekendOverride = hasDayType && (sourceKey === "schedule" || sourceKey === "sun");
@@ -1282,6 +2625,7 @@ class RoomFlowCard extends HTMLElement {
           </div>
         </div>
         ${showWeekendOverride ? this._renderPeriodWeekendOverride(p, sourceKey, cfg, enabled) : ""}
+        ${this._renderPeriodAndCondition(p, sourceKey, cfg, enabled)}
       </div>`;
   }
 
@@ -1294,34 +2638,26 @@ class RoomFlowCard extends HTMLElement {
         (p, i) => `
       <div style="margin-top:8px;padding:8px;border:1px dashed var(--divider-color);border-radius:6px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <input data-period-name="${p.id}" value="${p.name || ""}" placeholder="Name" style="width:110px" />
+          <input data-period-name="${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px" />
           <button data-move-period-up="${p.id}" ${i === 0 ? "disabled" : ""}>↑</button>
           <button data-move-period-down="${p.id}" ${i === periods.length - 1 ? "disabled" : ""}>↓</button>
           <button data-remove-period="${p.id}">✕</button>
         </div>
-        ${PERIOD_SOURCES.map((s) => this._renderPeriodSourceRow(p, s.key, s.label, hasDayType)).join("")}
+        ${PERIOD_SOURCES.map((s) => this._renderPeriodSourceRow(p, s.key, this._t(s.labelKey), hasDayType)).join("")}
       </div>`
       )
       .join("");
 
     return `
       <div>
-        <b>Time-of-day periods</b>
+        <b>${this._t("periods_header")}</b>
         <div style="opacity:0.7;font-size:0.85em;margin-top:4px">
-          Priority order (top wins) - the first period with any enabled source
-          currently resolving to "active" is the current period. Add, remove,
-          rename or reorder freely; check off whichever sources you want each
-          period to use - if more than one is checked, the period is active
-          when ANY of them says so.
-          ${
-            hasDayType
-              ? " Schedule/sun sources can also have a different time on weekends."
-              : " Set a Weekday/weekend source below to unlock a weekend override on schedule/sun sources."
-          }
+          ${this._t("periods_help")}
+          ${hasDayType ? this._t("periods_help_weekend_yes") : this._t("periods_help_weekend_no")}
         </div>
         ${rows}
         <div style="margin-top:8px">
-          <button data-add-period>+ Add period</button>
+          <button data-add-period>${this._t("add_period")}</button>
         </div>
       </div>
     `;
@@ -1339,11 +2675,11 @@ class RoomFlowCard extends HTMLElement {
             placeholder="sensor.day_type / binary_sensor.jobbdag" style="width:260px" />
         </div>
         <div style="margin-top:6px;font-size:0.85em;opacity:0.85">
-          For a plain on/off sensor (no "weekend"/"helg"-style text), pick what "on" means:
+          ${this._t("day_type_sensor_help")}
         </div>
         <label style="display:inline-flex;align-items:center;gap:4px;margin-top:4px">
           <input type="checkbox" data-day-type-sensor-inverted ${cd.day_type_sensor_inverted ? "checked" : ""} />
-          "On" means weekday (e.g. a workday/jobbdag-style sensor) - unchecked means "on" = weekend
+          ${this._t("day_type_sensor_inverted_label")}
         </label>`;
     } else if (mode === "weekday_selection") {
       const weekendDays = cd.weekend_days || [];
@@ -1351,24 +2687,24 @@ class RoomFlowCard extends HTMLElement {
         (w) => `
         <label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;margin-top:6px">
           <input type="checkbox" data-weekend-day="${w.key}" ${weekendDays.includes(w.key) ? "checked" : ""} />
-          ${w.label}
+          ${this._t(w.labelKey)}
         </label>`
       ).join("");
       detailsHtml = `
         <div style="margin-top:8px">
-          <div style="opacity:0.7;font-size:0.85em">Which days count as "weekend":</div>
+          <div style="opacity:0.7;font-size:0.85em">${this._t("weekend_days_help")}</div>
           ${checkboxes}
         </div>`;
     }
 
     return `
       <div style="margin-top:20px">
-        <b>Weekday/weekend</b>
+        <b>${this._t("weekday_weekend_header")}</b>
         <div style="margin-top:6px">
           <select data-day-type-mode>
-            <option value="none" ${mode === "none" ? "selected" : ""}>Not used</option>
-            <option value="sensor" ${mode === "sensor" ? "selected" : ""}>Existing sensor</option>
-            <option value="weekday_selection" ${mode === "weekday_selection" ? "selected" : ""}>Weekday selection</option>
+            <option value="none" ${mode === "none" ? "selected" : ""}>${this._t("option_not_used")}</option>
+            <option value="sensor" ${mode === "sensor" ? "selected" : ""}>${this._t("option_existing_sensor")}</option>
+            <option value="weekday_selection" ${mode === "weekday_selection" ? "selected" : ""}>${this._t("option_weekday_selection")}</option>
           </select>
         </div>
         ${detailsHtml}
@@ -1403,19 +2739,19 @@ class RoomFlowCard extends HTMLElement {
           ${rows}
           <div style="margin-top:6px">
             <input list="all-entities-list" id="new-person-entity" placeholder="person.alice" style="width:180px" />
-            <button id="add-person-btn" style="margin-left:6px">+ Add</button>
+            <button id="add-person-btn" style="margin-left:6px">${this._t("add_person")}</button>
           </div>
         </div>`;
     }
 
     return `
       <div style="margin-top:20px">
-        <b>Home/away</b>
+        <b>${this._t("home_away_header")}</b>
         <div style="margin-top:6px">
           <select data-home-mode>
-            <option value="none" ${mode === "none" ? "selected" : ""}>Not used</option>
-            <option value="sensor" ${mode === "sensor" ? "selected" : ""}>Existing sensor</option>
-            <option value="persons" ${mode === "persons" ? "selected" : ""}>Person entities</option>
+            <option value="none" ${mode === "none" ? "selected" : ""}>${this._t("option_not_used")}</option>
+            <option value="sensor" ${mode === "sensor" ? "selected" : ""}>${this._t("option_existing_sensor")}</option>
+            <option value="persons" ${mode === "persons" ? "selected" : ""}>${this._t("option_person_entities")}</option>
           </select>
         </div>
         ${detailsHtml}
@@ -1431,14 +2767,14 @@ class RoomFlowCard extends HTMLElement {
 
     return `
       <div style="margin-top:20px">
-        <b>Device</b>
+        <b>${this._t("device_header")}</b>
         <div style="opacity:0.7;font-size:0.85em;margin-top:4px">
-          Groups RoomFlow's own sensors (current period, day type, home state, per-period booleans).
+          ${this._t("device_help")}
         </div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
           <input data-device-name value="${cd.device_name || "RoomFlow"}" style="width:200px" />
           <select data-area-id>
-            <option value="">— No area —</option>
+            <option value="">${this._t("no_area_option")}</option>
             ${areaOptions}
           </select>
         </div>
@@ -1450,10 +2786,10 @@ class RoomFlowCard extends HTMLElement {
     const rooms = this._config_data.rooms;
     const periods = this._config_data.periods || [];
     const actionLabels = {
-      toggle: "Toggle on/off",
-      off: "Turn off room",
-      apply_now: "Run scheduled behavior now",
-      force_period: "Force a specific period",
+      toggle: this._t("action_toggle"),
+      off: this._t("action_off"),
+      apply_now: this._t("action_apply_now"),
+      force_period: this._t("action_force_period"),
     };
 
     const buttonsHtml = (this._config_data.buttons || [])
@@ -1466,7 +2802,7 @@ class RoomFlowCard extends HTMLElement {
             : "");
         return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--secondary-background-color);border-radius:6px;margin-bottom:8px">
-          <span><b>${b.entity_id}</b> → ${room ? room.name : "(room missing)"}: ${actionText}</span>
+          <span><b>${b.entity_id}</b> → ${room ? room.name : this._t("room_missing")}: ${actionText}</span>
           <button data-remove-button="${b.id}">✕</button>
         </div>`;
       })
@@ -1477,30 +2813,29 @@ class RoomFlowCard extends HTMLElement {
 
     return `
       <div>
-        <b>Physical buttons</b>
+        <b>${this._t("buttons_header")}</b>
         <div style="opacity:0.7;font-size:0.9em;margin-top:4px">
-          Bind a physical button/remote (e.g. a Zigbee button that shows up as an
-          "event" or "sensor" entity in Home Assistant) to an action in a room.
+          ${this._t("buttons_help")}
         </div>
         <div style="margin-top:12px">${buttonsHtml}</div>
         <div style="margin-top:16px;border-top:1px solid var(--divider-color);padding-top:12px">
-          <b>Add button</b><br>
-          <input id="new-button-entity" list="all-entities-list" placeholder="entity_id (e.g. event.kitchen_button)"
+          <b>${this._t("add_button_header")}</b><br>
+          <input id="new-button-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
             style="margin-top:6px;width:220px" />
           <select id="new-button-room" style="margin-left:6px">
-            <option value="">Choose room…</option>
+            <option value="">${this._t("choose_room_option")}</option>
             ${roomOptions}
           </select>
           <select id="new-button-action" style="margin-left:6px">
-            <option value="toggle">Toggle on/off</option>
-            <option value="off">Turn off room</option>
-            <option value="apply_now">Run scheduled behavior now</option>
-            <option value="force_period">Force a specific period</option>
+            <option value="toggle">${this._t("action_toggle")}</option>
+            <option value="off">${this._t("action_off")}</option>
+            <option value="apply_now">${this._t("action_apply_now")}</option>
+            <option value="force_period">${this._t("action_force_period")}</option>
           </select>
           <span id="new-button-period-wrap" style="display:none">
             <select id="new-button-period">${periodOptions}</select>
           </span>
-          <button id="add-button-btn" style="margin-left:6px">Add</button>
+          <button id="add-button-btn" style="margin-left:6px">${this._t("add")}</button>
         </div>
       </div>
     `;
@@ -1515,7 +2850,7 @@ class RoomFlowCard extends HTMLElement {
         if (t.type === "threshold_above") {
           return `
           <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-            <span style="opacity:0.7;font-size:0.9em;width:130px">Sensor value above</span>
+            <span style="opacity:0.7;font-size:0.9em;width:130px">${this._t("motion_sensor_value_above")}</span>
             <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
               value="${t.entity_id || ""}" placeholder="sensor.humidity_..." style="width:180px" />
             <input type="number" step="1" data-motion-trigger-threshold="${room.id}|${t.id}"
@@ -1525,7 +2860,7 @@ class RoomFlowCard extends HTMLElement {
         }
         return `
         <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-          <span style="opacity:0.7;font-size:0.9em;width:130px">Motion</span>
+          <span style="opacity:0.7;font-size:0.9em;width:130px">${this._t("motion_label")}</span>
           <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
             value="${t.entity_id || ""}" placeholder="binary_sensor.motion_..." style="width:220px" />
           <button data-remove-motion-trigger="${room.id}|${t.id}">✕</button>
@@ -1537,43 +2872,40 @@ class RoomFlowCard extends HTMLElement {
       <div style="margin-bottom:14px;padding:8px;border:1px dashed var(--divider-color);border-radius:6px">
         <label>
           <input type="checkbox" data-motion-enabled="${room.id}" ${motion.enabled ? "checked" : ""} />
-          Motion control active in this room
+          ${this._t("motion_active_label")}
         </label>
         <div style="margin-top:6px${motion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
           <div style="font-size:0.85em;opacity:0.7">
-            The room counts as "active" if ANY condition below is currently true (OR logic).
+            ${this._t("motion_or_logic_help")}
           </div>
           ${triggerRows}
           <div style="margin-top:8px">
-            <button data-add-motion-trigger="${room.id}|motion">+ Motion sensor</button>
-            <button data-add-motion-trigger="${room.id}|threshold_above" style="margin-left:6px">+ Threshold (e.g. humidity)</button>
+            <button data-add-motion-trigger="${room.id}|motion">${this._t("add_motion_sensor")}</button>
+            <button data-add-motion-trigger="${room.id}|threshold_above" style="margin-left:6px">${this._t("add_threshold")}</button>
           </div>
           <div style="margin-top:8px">
-            Turn off after
+            ${this._t("turn_off_after")}
             <input type="number" min="1" data-motion-timeout="${room.id}"
               value="${motion.timeout_minutes || 10}" style="width:55px" />
-            minutes with no condition true (default for devices below with no
-            override of their own)
+            ${this._t("turn_off_after_suffix")}
           </div>
           <div style="margin-top:8px">
             <label>
               <input type="checkbox" data-motion-warn-enabled="${room.id}" ${
                 motion.warn_enabled ? "checked" : ""
               } />
-              Dim as a warning before turning off
+              ${this._t("dim_warning_label")}
             </label>
             <div style="margin-top:4px${motion.warn_enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-              Dim to <input type="number" min="1" max="255" data-motion-warn-brightness="${room.id}"
-                value="${motion.warn_brightness ?? 25}" style="width:55px" /> brightness for
+              ${this._t("dim_to")} <input type="number" min="1" max="255" data-motion-warn-brightness="${room.id}"
+                value="${motion.warn_brightness ?? 25}" style="width:55px" /> ${this._t("brightness_for")}
               <input type="number" min="1" data-motion-warn-minutes="${room.id}"
-                value="${motion.warn_minutes ?? 3}" style="width:55px" /> minutes before turning off -
-              motion during this window restores full brightness instead.
+                value="${motion.warn_minutes ?? 3}" style="width:55px" /> ${this._t("minutes_before_off")}
             </div>
           </div>
         </div>
         <div style="opacity:0.7;font-size:0.85em;margin-top:6px">
-          When active, the room's scheduled behavior runs immediately (like "Test now"). Pick
-          which devices react to motion, and their own off-delay, on each device below.
+          ${this._t("motion_footer_help")}
         </div>
       </div>
     `;
@@ -1587,10 +2919,10 @@ class RoomFlowCard extends HTMLElement {
         (c, i) => `
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
         <input data-condition-name="${room.id}|${c.id}" value="${c.name || ""}"
-          placeholder="Name" style="width:120px" />
+          placeholder="${this._t("name_placeholder")}" style="width:120px" />
         <input list="all-entities-list" data-condition-entity="${room.id}|${c.id}"
           value="${c.entity_id || ""}" placeholder="binary_sensor...." style="width:200px" />
-        <span style="opacity:0.7;font-size:0.85em">is</span>
+        <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
         <input data-condition-state="${room.id}|${c.id}" value="${c.state || ""}"
           placeholder="on" style="width:70px" />
         <button data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>↑</button>
@@ -1604,16 +2936,44 @@ class RoomFlowCard extends HTMLElement {
 
     return `
       <div style="margin-bottom:14px;padding:8px;border:1px dashed var(--divider-color);border-radius:6px">
-        <b>Custom conditions</b>
+        <b>${this._t("custom_conditions_header")}</b>
         <div style="opacity:0.7;font-size:0.85em;margin-top:4px">
-          Room-specific overrides, checked in priority order (top wins) - above
-          away/weekend/default. Each gets its own morning/day/afternoon/evening/night
-          behavior per device below, same as away/weekend.
+          ${this._t("custom_conditions_help")}
         </div>
         ${rows}
         <div style="margin-top:8px">
-          <button data-add-custom-condition="${room.id}">+ Add condition</button>
+          <button data-add-custom-condition="${room.id}">${this._t("add_condition")}</button>
         </div>
+      </div>
+    `;
+  }
+
+  // One row of period tabs for the whole room: clicking a period here
+  // switches every device below to that same period at once (see the
+  // data-room-tab handler in _onClick), so you can compare what all of the
+  // room's devices are set to do for one period side by side, instead of
+  // opening each device and clicking through its own tabs individually.
+  // Devices can still be flipped to a different period on their own below
+  // afterward for a closer look at just that one.
+  _renderRoomPeriodTabs(room) {
+    const periods = this._config_data.periods || [];
+    if (!periods.length) return "";
+    const activePeriod = this._activeRoomPeriod[room.id] || periods[0].id;
+
+    const tabsHtml = periods
+      .map(
+        (p) => `
+      <button data-room-tab="${room.id}|${p.id}" style="${
+        p.id === activePeriod
+          ? "font-weight:bold;border-bottom:2px solid var(--primary-color)"
+          : ""
+      };margin-right:4px;background:none;border:none;padding:4px 6px;cursor:pointer">${p.name}</button>`
+      )
+      .join("");
+
+    return `
+      <div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--divider-color)">
+        ${tabsHtml}
       </div>
     `;
   }
@@ -1630,16 +2990,17 @@ class RoomFlowCard extends HTMLElement {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <b style="font-size:1.1em">${room.name}</b>
           <div>
-            <button data-apply-room="${room.id}" style="margin-right:6px">Test now</button>
-            <button data-remove-room="${room.id}">Remove room</button>
+            <button data-apply-room="${room.id}" style="margin-right:6px">${this._t("test_now")}</button>
+            <button data-remove-room="${room.id}">${this._t("remove_room")}</button>
           </div>
         </div>
         ${this._renderMotionBox(room)}
         ${this._renderCustomConditionsBox(room)}
+        ${this._renderRoomPeriodTabs(room)}
         <div>${devicesHtml}</div>
         <div style="margin-top:10px">
           <select data-new-device="${room.id}">
-            <option value="">+ Add device…</option>
+            <option value="">${this._t("add_device_option")}</option>
             ${entityOptions}
           </select>
         </div>
@@ -1662,7 +3023,7 @@ class RoomFlowCard extends HTMLElement {
     const toggleHtml = hasToggle
       ? `<label><input type="checkbox" data-variant-toggle="${fieldPrefix}" ${
           enabled ? "checked" : ""
-        } /> ${toggleText || `Custom setting for ${label.toLowerCase()}`}</label>`
+        } /> ${toggleText || this._t("custom_setting_for", { label: label.toLowerCase() })}</label>`
       : `<b>${label}</b>`;
 
     return `
@@ -1675,12 +3036,12 @@ class RoomFlowCard extends HTMLElement {
             <input type="checkbox" data-field="${fieldPrefix}|state" ${
               variant.state === "on" ? "checked" : ""
             } ${disabled ? "disabled" : ""} />
-            On
+            ${this._t("on_label")}
           </label>
           ${
             supportsBrightness
               ? `<div style="margin-top:4px">
-                  Brightness: <span data-brightness-val="${fieldPrefix}">${variant.brightness ?? 255}</span><br>
+                  ${this._t("brightness_label")} <span data-brightness-val="${fieldPrefix}">${variant.brightness ?? 255}</span><br>
                   <input type="range" min="1" max="255" value="${variant.brightness ?? 255}"
                     data-field="${fieldPrefix}|brightness" ${disabled ? "disabled" : ""} style="width:100%" />
                 </div>`
@@ -1689,7 +3050,7 @@ class RoomFlowCard extends HTMLElement {
           ${
             supportsColorTemp
               ? `<div style="margin-top:4px">
-                  Color temp (K): <span data-kelvin-val="${fieldPrefix}">${variant.color_temp_kelvin ?? 3000}</span><br>
+                  ${this._t("color_temp_label")} <span data-kelvin-val="${fieldPrefix}">${variant.color_temp_kelvin ?? 3000}</span><br>
                   <input type="range" min="2000" max="6500" step="100" value="${variant.color_temp_kelvin ?? 3000}"
                     data-field="${fieldPrefix}|color_temp_kelvin" ${disabled ? "disabled" : ""} style="width:100%" />
                 </div>`
@@ -1715,14 +3076,14 @@ class RoomFlowCard extends HTMLElement {
     ).join("");
 
     let controlsHtml = this._renderVariantControls(
-      deviceKey, device, activePeriod, "default", "Default", true,
-      "Let the schedule control this period (uncheck to leave this device alone here - e.g. button/manual only)"
+      deviceKey, device, activePeriod, "default", this._t("variant_default"), true,
+      this._t("default_variant_help")
     );
     if (this._hasDayType()) {
-      controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "weekend", "Weekend", true);
+      controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "weekend", this._t("variant_weekend"), true);
     }
     if (this._hasHome()) {
-      controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "away", "Away", true);
+      controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "away", this._t("variant_away"), true);
     }
     (room.custom_conditions || []).forEach((cond) => {
       // Lazily initialize this condition's variant so conditions added
@@ -1731,7 +3092,7 @@ class RoomFlowCard extends HTMLElement {
         device.behaviors[activePeriod][cond.id] = emptyVariant(device.behaviors[activePeriod].default, true);
       }
       controlsHtml += this._renderVariantControls(
-        deviceKey, device, activePeriod, cond.id, cond.name || "Condition", true
+        deviceKey, device, activePeriod, cond.id, cond.name || this._t("condition_fallback_name"), true
       );
     });
 
@@ -1742,7 +3103,7 @@ class RoomFlowCard extends HTMLElement {
         : 0;
       controlsHtml += `
         <div style="margin-top:10px;font-size:0.9em">
-          Transition time (sec) — default is ${globalDefault}s:
+          ${this._t("transition_time_label", { s: globalDefault })}
           <input type="number" min="0" step="0.5" placeholder="${globalDefault}"
             value="${deviceTransition !== null && deviceTransition !== undefined ? deviceTransition : ""}"
             data-transition="${deviceKey}|${activePeriod}" style="width:70px" />
@@ -1758,10 +3119,10 @@ class RoomFlowCard extends HTMLElement {
             <input type="checkbox" data-device-motion-enabled="${deviceKey}" ${
               deviceMotion.enabled ? "checked" : ""
             } />
-            Reacts to this room's motion/threshold triggers
+            ${this._t("device_motion_reacts")}
           </label>
           <div style="margin-top:4px${deviceMotion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-            Off after
+            ${this._t("device_off_after")}
             <input type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}"
               value="${
                 deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
@@ -1769,7 +3130,7 @@ class RoomFlowCard extends HTMLElement {
                   : ""
               }"
               data-device-motion-delay="${deviceKey}" style="width:55px" />
-            minutes (blank = room default)
+            ${this._t("device_off_after_suffix")}
           </div>
         </div>
       `;

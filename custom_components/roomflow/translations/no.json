@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RoomFlow",
+        "description": "Det er alt - ingenting å konfigurere her. Tid-på-døgnet-kilder, hverdag/helg, hjemme/borte, rom, enheter, knapper og bevegelse konfigureres alt sammen etterpå fra RoomFlow-kortet (sidepanelet) → Innstillinger-fanen, og gjelder umiddelbart."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "RoomFlow er allerede konfigurert."
+    }
+  }
+}

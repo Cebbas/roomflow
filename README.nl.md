@@ -46,7 +46,10 @@ fysieke knoppen en beweging-/sensortriggers.
   actieve periode in de lijst (bovenaan = hoogste prioriteit) wint — je
   kunt dus vrij brontypes mengen (bijv. een op lichtsterkte gebaseerde
   periode boven een op schema gebaseerde, zodat duisternis de klok kan
-  overrulen).
+  overrulen). Zodra doordeweeks/weekend is ingesteld (zie hieronder), kunnen
+  de schema- en zonbronnen elk een afwijkende tijd/zonnegebeurtenis voor het
+  weekend instellen — bijv. de ochtend kan op zaterdag en zondag later
+  beginnen — zonder dat daar een hele aparte periode voor nodig is.
 - **Weekend- en afwezigheidsoverrides** (optioneel) — voor elk kies je een
   bestaande sensor (een gewone aan/uit-`binary_sensor` werkt ook — vertel
   RoomFlow gewoon welke polariteit "aan" betekent voor doordeweeks/weekend),
@@ -158,7 +161,9 @@ fysieke knoppen en beweging-/sensortriggers.
        deze periode actief is (werkt met elke tijdstip-van-de-dag-sensor,
        in elke taal).
      De huidige periode is degene die het hoogst in de lijst staat en op
-     dit moment actief is.
+     dit moment actief is. Zodra Doordeweeks/weekend hieronder is ingesteld,
+     krijgen Schema en Zonpositie elk een optionele weekend-override — een
+     aparte starttijd of zonnegebeurtenis, alleen voor weekenddagen.
    - **Doordeweeks/weekend** en **Thuis/afwezig** — elk ofwel "niet
      gebruikt", een bestaande sensor, of een ingebouwde optie
      (weekdagselectie; een of meer `person.*`-entiteiten), onafhankelijk
@@ -196,7 +201,10 @@ media_player enz. zijn voor de hand liggende volgende stappen).
 
 ## Ondersteunde talen
 
-English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl) —
+deze README, de eigen interface van de kaart en de config flow volgen
+allemaal dezelfde 8 talen. De kaart kiest automatisch zijn taal op basis
+van de taalinstelling van Home Assistant.
 
 ## Licentie
 

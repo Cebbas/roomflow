@@ -46,7 +46,11 @@ physische Tasten und Bewegungs-/Sensor-Trigger.
   Priorität entschieden: der erste aktive Zeitraum in der Liste (oben =
   höchste Priorität) gewinnt — so kannst du Quelltypen frei mischen (z. B.
   einen helligkeitsbasierten Zeitraum über einem zeitplanbasierten, damit
-  Dunkelheit die Uhr außer Kraft setzen kann).
+  Dunkelheit die Uhr außer Kraft setzen kann). Sobald Werktag/Wochenende
+  konfiguriert ist (siehe unten), können die Zeitplan- und Sonnen-Quellen
+  jeweils eine abweichende Uhrzeit/ein abweichendes Sonnenereignis für
+  Wochenenden festlegen — z. B. dass der Morgen samstags und sonntags später
+  beginnt — ganz ohne einen eigenen separaten Zeitraum dafür.
 - **Wochenend- und Abwesenheits-Ausnahmen** (optional) — für jede wählst du
   einen vorhandenen Sensor (ein einfacher an/aus-`binary_sensor`
   funktioniert auch — sag RoomFlow einfach, welche Polarität "an" für
@@ -162,7 +166,10 @@ physische Tasten und Bewegungs-/Sensor-Trigger.
        dass dieser Zeitraum aktiv ist (funktioniert mit jedem
        Tageszeit-Sensor, in jeder Sprache).
      Der aktuelle Zeitraum ist derjenige, der in der Liste am höchsten
-     steht und gerade aktiv ist.
+     steht und gerade aktiv ist. Sobald Werktag/Wochenende weiter unten
+     konfiguriert ist, erhalten Zeitplan und Sonnenposition jeweils eine
+     optionale Wochenend-Ausnahme — eine eigene Startzeit oder ein eigenes
+     Sonnenereignis nur für Wochenendtage.
    - **Werktag/Wochenende** und **Zu Hause/Abwesend** — jeweils entweder
      "nicht verwendet", ein vorhandener Sensor, oder eine eingebaute Option
      (Wochentagsauswahl; eine oder mehrere `person.*`-Entitäten),
@@ -200,7 +207,10 @@ media_player usw. sind naheliegende nächste Schritte).
 
 ## Unterstützte Sprachen
 
-English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl) —
+diese README, die eigene Oberfläche der Karte und der Config Flow folgen
+alle denselben 8 Sprachen. Die Karte wählt ihre Sprache automatisch anhand
+von Home Assistants Spracheinstellung.
 
 ## Lizenz
 

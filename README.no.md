@@ -44,7 +44,10 @@ triggere på toppen av det.
   "gjeldende" avgjøres av prioritet: den første aktive perioden i listen
   (øverst = høyest prioritet) vinner — så du kan fritt blande kildetyper
   (f.eks. en luks-basert periode over en tidsplan-basert for å la mørke
-  overstyre klokken).
+  overstyre klokken). Når hverdag/helg er konfigurert (se nedenfor), kan
+  tidsplan- og sol-kildene hver for seg sette et annet tidspunkt/en annen
+  solhendelse for helger — f.eks. at morgenen starter senere på lørdager og
+  søndager — uten å trenge en helt egen periode for det.
 - **Helg- og borte-unntak** (valgfritt) — for hver velger du en eksisterende
   sensor (en vanlig på/av-`binary_sensor` fungerer også — bare fortell
   RoomFlow hvilken polaritet "på" betyr for hverdag/helg), et innebygd
@@ -147,7 +150,9 @@ triggere på toppen av det.
        denne perioden er aktiv (fungerer med hvilken som helst
        tid-på-døgnet-sensor, på hvilket som helst språk).
      Gjeldende periode er den som ligger høyest i listen og som er aktiv
-     akkurat nå.
+     akkurat nå. Når Hverdag/helg nedenfor er konfigurert, får Tidsplan og
+     Solens posisjon hvert sitt valgfrie helgeunntak — et eget starttidspunkt
+     eller en egen solhendelse bare for helgedager.
    - **Hverdag/helg** og **Hjemme/borte** — hver enten "ikke i bruk", en
      eksisterende sensor, eller et innebygd alternativ (ukedagsavkrysning;
      én eller flere `person.*`-entiteter), uavhengig av alt annet.
@@ -182,7 +187,10 @@ er naturlige neste steg).
 
 ## Støttede språk
 
-English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl) —
+denne READMEen, kortets eget grensesnitt og config flow følger alle de
+samme 8 språkene. Kortet velger språk automatisk ut fra Home Assistants
+språkinnstilling.
 
 ## Lisens
 

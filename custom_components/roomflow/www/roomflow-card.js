@@ -1896,9 +1896,9 @@ class RoomFlowCard extends HTMLElement {
     // period at once, so their Default/Weekend/Away/etc. boxes are all
     // visible side by side for that one period without opening each device
     // individually.
-    const roomPeriodTab = e.target.closest("[data-room-tab]");
+    const roomPeriodTab = e.target.closest("[data-room-period-tab]");
     if (roomPeriodTab) {
-      const [roomId, period] = roomPeriodTab.getAttribute("data-room-tab").split("|");
+      const [roomId, period] = roomPeriodTab.getAttribute("data-room-period-tab").split("|");
       this._activeRoomPeriod[roomId] = period;
       const room = (this._config_data.rooms || []).find((r) => r.id === roomId);
       (room?.devices || []).forEach((d) => {
@@ -2963,7 +2963,7 @@ class RoomFlowCard extends HTMLElement {
     const tabsHtml = periods
       .map(
         (p) => `
-      <button data-room-tab="${room.id}|${p.id}" style="${
+      <button data-room-period-tab="${room.id}|${p.id}" style="${
         p.id === activePeriod
           ? "font-weight:bold;border-bottom:2px solid var(--primary-color)"
           : ""

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Fixed: a room's period tabs didn't work.** They shared the same
+  `data-room-tab` attribute as the unrelated room-switcher tabs (Living
+  Room/Kitchen/+ Room/etc.), so clicking a period tab was silently
+  swallowed by the room-switcher's click handler instead. Renamed to
+  `data-room-period-tab` to fix it.
+- **Room-level period overview tabs.** Each room now has its own row of
+  period tabs (Morning/Day/Afternoon/Evening/Night) above its device list.
+  Clicking one switches every device in the room to that period at once, so
+  you can compare what all of a room's devices are set to do for a given
+  period side by side, instead of opening each device and clicking through
+  its own tabs individually. Devices can still be flipped to a different
+  period on their own afterward for a closer look at just that one.
 - **The card and the config flow are now fully multi-language**, matching
   the README's 7 languages (sv/no/da/fi/de/fr/nl) plus English. The card
   (`www/roomflow-card.js`) picks its language from Home Assistant's own

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RoomFlow",
+        "description": "That's it - nothing to configure here. Time-of-day sources, weekday/weekend, home/away, rooms, devices, buttons and motion are all configured afterward from the RoomFlow card (sidebar) → Settings tab, and apply instantly."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "RoomFlow is already configured."
+    }
+  }
+}

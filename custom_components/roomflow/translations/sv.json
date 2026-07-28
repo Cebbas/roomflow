@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RoomFlow",
+        "description": "Klart - inget att konfigurera här. Källor för tid-på-dygnet, vardag/helg, hemma/borta, rum, enheter, knappar och rörelse konfigureras allihop efteråt från RoomFlow-kortet (sidopanelen) → Inställningar-fliken, och börjar gälla direkt."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "RoomFlow är redan konfigurerat."
+    }
+  }
+}

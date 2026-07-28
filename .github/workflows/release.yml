@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # Triggers on tags like v1.0.0, v1.2.3 etc.
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 🚀 Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag: $TAG"
+          echo "Version: $VERSION"
+
+      - name: Verify manifest version matches tag
+        run: |
+          python3 << 'EOF'
+          import json, sys, os
+
+          manifest = json.load(open("custom_components/roomflow/manifest.json"))
+          manifest_version = manifest.get("version", "")
+          tag_version = os.environ.get("VERSION", "")
+
+          print(f"Tag version     : {tag_version}")
+          print(f"Manifest version: {manifest_version}")
+
+          if manifest_version != tag_version:
+              print(f"\n❌ Version mismatch!")
+              print(f"   manifest.json says {manifest_version} but tag says {tag_version}")
+              print(f"   Update manifest.json before tagging.")
+              sys.exit(1)
+          else:
+              print(f"\n✅ Versions match – proceeding with release!")
+          EOF
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Create release zip (HACS format)
+        run: |
+          cd custom_components
+          zip -r ../roomflow.zip roomflow/
+          echo "✅ Release zip created"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "RoomFlow ${{ steps.version.outputs.tag }}"
+          body: |
+            ## RoomFlow ${{ steps.version.outputs.tag }}
+
+            ### Installation via HACS
+            1. Open HACS → Integrations → Custom repositories
+            2. Add this repo as Integration
+            3. Search for **RoomFlow** and install
+            4. Restart Home Assistant
+
+            ### Manual installation
+            Download `roomflow.zip` below and extract to your `custom_components/` folder.
+          files: roomflow.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

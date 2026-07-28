@@ -1,5 +1,5 @@
 DOMAIN = "roomflow"
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -130,10 +130,26 @@ CLOCK_BASED_PERIOD_SOURCES = (PERIOD_SOURCE_SCHEDULE, PERIOD_SOURCE_SUN)
 
 # Each source type's own fields (besides "enabled"), with their defaults -
 # every period gets an entry for every type in `sources`, most left
-# disabled, so the card can always show all 5 side by side.
+# disabled, so the card can always show all 5 side by side. The two
+# clock-based types also carry an optional weekend override
+# (weekend_enabled + their own weekend_* fields) - e.g. a period whose
+# schedule normally starts at 06:00 can start at 08:00 on weekend_days
+# instead, without needing a whole separate period. Only meaningful once a
+# weekend/weekday day-type source is configured (see infer_day_type_mode) -
+# otherwise every day resolves "weekday" and the override never applies.
 DEFAULT_SOURCE_FIELDS = {
-    PERIOD_SOURCE_SCHEDULE: {"time": "00:00:00"},
-    PERIOD_SOURCE_SUN: {"event": "sunrise", "offset_minutes": 0},
+    PERIOD_SOURCE_SCHEDULE: {
+        "time": "00:00:00",
+        "weekend_enabled": False,
+        "weekend_time": "00:00:00",
+    },
+    PERIOD_SOURCE_SUN: {
+        "event": "sunrise",
+        "offset_minutes": 0,
+        "weekend_enabled": False,
+        "weekend_event": "sunrise",
+        "weekend_offset_minutes": 0,
+    },
     PERIOD_SOURCE_ILLUMINANCE: {"entity_id": None, "threshold": 0},
     PERIOD_SOURCE_BOOLEAN: {"entity_id": None},
     PERIOD_SOURCE_SENSOR: {"entity_id": None, "value": ""},
@@ -182,6 +198,7 @@ def _default_sources(period_id: str) -> dict:
         for source_type in PERIOD_SOURCES
     }
     sources[PERIOD_SOURCE_SCHEDULE] = {
+        **sources[PERIOD_SOURCE_SCHEDULE],
         "enabled": True,
         "time": DEFAULT_SCHEDULE[period_id],
     }

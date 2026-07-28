@@ -20,8 +20,8 @@ const PERIOD_SOURCES = [
 ];
 
 const DEFAULT_SOURCE_FIELDS = {
-  schedule: { time: "00:00:00" },
-  sun: { event: "sunrise", offset_minutes: 0 },
+  schedule: { time: "00:00:00", weekend_enabled: false, weekend_time: "00:00:00" },
+  sun: { event: "sunrise", offset_minutes: 0, weekend_enabled: false, weekend_event: "sunrise", weekend_offset_minutes: 0 },
   illuminance: { entity_id: null, threshold: 0 },
   boolean: { entity_id: null },
   sensor: { entity_id: null, value: "" },
@@ -528,7 +528,7 @@ class RoomFlowCard extends HTMLElement {
     if (!period) return;
     period.sources[sourceType][field] = value;
     this._scheduleSave();
-    if (field === "enabled") this._render();
+    if (field === "enabled" || field === "weekend_enabled") this._render();
   }
 
   _movePeriod(periodId, direction) {
@@ -951,10 +951,12 @@ class RoomFlowCard extends HTMLElement {
     if (periodConfigField) {
       const [periodId, sourceType, field] = periodConfigField.getAttribute("data-period-config").split("|");
       let value;
-      if (field === "threshold" || field === "offset_minutes") {
+      if (periodConfigField.type === "checkbox") {
+        value = periodConfigField.checked;
+      } else if (field === "threshold" || field === "offset_minutes" || field === "weekend_offset_minutes") {
         const val = parseFloat(periodConfigField.value);
         value = isNaN(val) ? 0 : val;
-      } else if (field === "time") {
+      } else if (field === "time" || field === "weekend_time") {
         const raw = periodConfigField.value; // "HH:MM" or "HH:MM:SS" depending on browser
         value = raw ? (raw.length === 5 ? `${raw}:00` : raw) : "00:00:00";
       } else {
@@ -1189,7 +1191,48 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
-  _renderPeriodSourceRow(p, sourceKey, label) {
+  // Weekend override: only schedule/sun (the two clock-based sources) get
+  // one - a period's start time/sun event can differ on weekend_days
+  // without needing a whole separate period. Only useful (and only shown)
+  // once a weekend/weekday day-type source is configured, mirroring how
+  // the device Weekend variant box is itself gated on _hasDayType().
+  _renderPeriodWeekendOverride(p, sourceKey, cfg, sourceEnabled) {
+    const weekendEnabled = !!cfg.weekend_enabled;
+    const fieldsDisabled = !sourceEnabled || !weekendEnabled;
+
+    let weekendFieldsHtml = "";
+    if (sourceKey === "schedule") {
+      weekendFieldsHtml = `
+        <input type="time" step="1" data-period-config="${p.id}|schedule|weekend_time"
+          value="${cfg.weekend_time || "00:00:00"}" ${fieldsDisabled ? "disabled" : ""} style="width:110px" />`;
+    } else {
+      const weekendSunEventOptions = SUN_EVENTS.map(
+        (s) => `<option value="${s.key}" ${s.key === cfg.weekend_event ? "selected" : ""}>${s.label}</option>`
+      ).join("");
+      weekendFieldsHtml = `
+        <select data-period-config="${p.id}|sun|weekend_event" ${fieldsDisabled ? "disabled" : ""}>${weekendSunEventOptions}</select>
+        <input type="number" step="1" data-period-config="${p.id}|sun|weekend_offset_minutes"
+          value="${cfg.weekend_offset_minutes ?? 0}" ${fieldsDisabled ? "disabled" : ""} style="width:70px" /> min offset`;
+    }
+
+    return `
+      <div style="margin:4px 0 0 24px;padding-left:8px;border-left:2px solid var(--divider-color)${
+        sourceEnabled ? "" : ";opacity:0.5"
+      }">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
+          <input type="checkbox" data-period-config="${p.id}|${sourceKey}|weekend_enabled"
+            ${weekendEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
+          Different ${sourceKey === "schedule" ? "time" : "sun event"} on weekend
+        </label>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
+          weekendEnabled ? "" : ";opacity:0.5"
+        }">
+          ${weekendFieldsHtml}
+        </div>
+      </div>`;
+  }
+
+  _renderPeriodSourceRow(p, sourceKey, label, hasDayType) {
     const cfg = p.sources[sourceKey];
     const enabled = !!cfg.enabled;
 
@@ -1225,20 +1268,26 @@ class RoomFlowCard extends HTMLElement {
           placeholder="value" ${enabled ? "" : "disabled"} style="width:100px" />`;
     }
 
+    const showWeekendOverride = hasDayType && (sourceKey === "schedule" || sourceKey === "sun");
+
     return `
-      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:4px;width:170px">
-          <input type="checkbox" data-period-source-enabled="${p.id}|${sourceKey}" ${enabled ? "checked" : ""} />
-          ${label}
-        </label>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap${enabled ? "" : ";opacity:0.5"}">
-          ${fieldsHtml}
+      <div style="margin-top:6px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:4px;width:170px">
+            <input type="checkbox" data-period-source-enabled="${p.id}|${sourceKey}" ${enabled ? "checked" : ""} />
+            ${label}
+          </label>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap${enabled ? "" : ";opacity:0.5"}">
+            ${fieldsHtml}
+          </div>
         </div>
+        ${showWeekendOverride ? this._renderPeriodWeekendOverride(p, sourceKey, cfg, enabled) : ""}
       </div>`;
   }
 
   _renderPeriodsSection() {
     const periods = this._config_data.periods || [];
+    const hasDayType = this._hasDayType();
 
     const rows = periods
       .map(
@@ -1250,7 +1299,7 @@ class RoomFlowCard extends HTMLElement {
           <button data-move-period-down="${p.id}" ${i === periods.length - 1 ? "disabled" : ""}>↓</button>
           <button data-remove-period="${p.id}">✕</button>
         </div>
-        ${PERIOD_SOURCES.map((s) => this._renderPeriodSourceRow(p, s.key, s.label)).join("")}
+        ${PERIOD_SOURCES.map((s) => this._renderPeriodSourceRow(p, s.key, s.label, hasDayType)).join("")}
       </div>`
       )
       .join("");
@@ -1264,6 +1313,11 @@ class RoomFlowCard extends HTMLElement {
           rename or reorder freely; check off whichever sources you want each
           period to use - if more than one is checked, the period is active
           when ANY of them says so.
+          ${
+            hasDayType
+              ? " Schedule/sun sources can also have a different time on weekends."
+              : " Set a Weekday/weekend source below to unlock a weekend override on schedule/sun sources."
+          }
         </div>
         ${rows}
         <div style="margin-top:8px">

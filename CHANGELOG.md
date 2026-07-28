@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Schedule/sun period sources can have a different time on weekends.**
+  Once a Weekday/weekend source is configured, a schedule-sourced period
+  can optionally set a separate start time for weekend days, and a
+  sun-sourced period can optionally set a separate solar event/offset —
+  without needing a whole separate period just for weekends.
 - **The card now lives inside the integration itself**
   (`custom_components/roomflow/www/roomflow-card.js`) instead of a separate
   top-level `www/` folder. Installing (HACS or manual) is now a single

@@ -265,6 +265,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     def _get_period() -> str | None:
         cfg = hass.data[DOMAIN]["config"]
         periods = infer_periods(cfg)  # already priority-ordered (top = highest)
+        is_weekend = _get_day_type() == "weekend"
 
         # A period can have several of its 5 sources enabled at once and is
         # "active" if ANY of them currently resolves true (OR logic). Its
@@ -276,18 +277,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # illuminance/boolean/sensor sources are independent, self-contained
         # true/false checks. Priority order (not sorting) is what resolves
         # any conflict between a period's own sources and/or other periods.
+        # Each clock-based source can also carry its own weekend override -
+        # swap in its weekend_* fields instead when today is a weekend day.
         clock_boundaries: list[tuple[str, str]] = []
         for period in periods:
             sources = period["sources"]
             period_id = period["id"]
+
             schedule_cfg = sources[PERIOD_SOURCE_SCHEDULE]
-            if schedule_cfg["enabled"] and schedule_cfg.get("time"):
-                clock_boundaries.append((period_id, schedule_cfg["time"]))
+            if schedule_cfg["enabled"]:
+                time_str = (
+                    schedule_cfg.get("weekend_time")
+                    if is_weekend and schedule_cfg.get("weekend_enabled")
+                    else schedule_cfg.get("time")
+                )
+                if time_str:
+                    clock_boundaries.append((period_id, time_str))
+
             sun_cfg = sources[PERIOD_SOURCE_SUN]
             if sun_cfg["enabled"]:
-                boundary = _sun_boundary(
-                    hass, period_id, sun_cfg.get("event"), sun_cfg.get("offset_minutes", 0)
-                )
+                use_weekend = is_weekend and sun_cfg.get("weekend_enabled")
+                event = sun_cfg.get("weekend_event") if use_weekend else sun_cfg.get("event")
+                offset = sun_cfg.get("weekend_offset_minutes", 0) if use_weekend else sun_cfg.get("offset_minutes", 0)
+                boundary = _sun_boundary(hass, period_id, event, offset)
                 if boundary:
                     clock_boundaries.append((period_id, boundary))
 
@@ -794,19 +806,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 schedule_cfg = period["sources"][PERIOD_SOURCE_SCHEDULE]
                 if not schedule_cfg["enabled"]:
                     continue
-                time_str = schedule_cfg.get("time")
-                if not time_str:
-                    continue
-                boundary = _parse_hms(time_str)
-                unsubs.append(
-                    async_track_time_change(
-                        hass,
-                        _handle_relevant_change,
-                        hour=boundary.hour,
-                        minute=boundary.minute,
-                        second=boundary.second,
+                # Register both the normal and (if any) weekend-override
+                # boundary - which one currently applies can flip at
+                # midnight, so both need a listener regardless of today's
+                # day type.
+                time_strs = [schedule_cfg.get("time")]
+                if schedule_cfg.get("weekend_enabled"):
+                    time_strs.append(schedule_cfg.get("weekend_time"))
+                for time_str in time_strs:
+                    if not time_str:
+                        continue
+                    boundary = _parse_hms(time_str)
+                    unsubs.append(
+                        async_track_time_change(
+                            hass,
+                            _handle_relevant_change,
+                            hour=boundary.hour,
+                            minute=boundary.minute,
+                            second=boundary.second,
+                        )
                     )
-                )
 
         if has_sun_period:
             # Solar event times shift by a minute or two each day, so exact

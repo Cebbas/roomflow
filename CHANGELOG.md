@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Checkboxes and text/number fields now use Home Assistant's native
+  `ha-switch`/`ha-textfield` components** instead of plain browser
+  `<input>`, so they match the rest of Home Assistant's own UI. Fields
+  that rely on entity-id autocomplete (`list=` suggestions) and the
+  `<select>` dropdowns were intentionally left as-is, since converting
+  them risked losing autocomplete or needed a larger markup rework.
 - **Visual redesign of the card.** Icons throughout (device type, period,
   Default/Weekend/Away/condition variant, source type, and every action
   button), a shared stylesheet replacing most of the scattered inline

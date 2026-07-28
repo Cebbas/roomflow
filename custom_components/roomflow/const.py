@@ -1,5 +1,5 @@
 DOMAIN = "roomflow"
-VERSION = "0.0.6"
+VERSION = "0.0.7"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 

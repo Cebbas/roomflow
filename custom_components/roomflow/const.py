@@ -1,5 +1,7 @@
+import uuid
+
 DOMAIN = "roomflow"
-VERSION = "0.0.8"
+VERSION = "0.0.9"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -101,80 +103,53 @@ DEFAULT_WEEKEND_DAYS = ["sat", "sun"]
 
 # ---------------------------------------------------------------------------
 # Periods: a user-editable, priority-ordered list (add/remove/rename/reorder,
-# like a room's devices). Each period can combine several sources at once -
-# it's "active" if ANY of its own enabled sources currently resolves true
-# (OR logic, same pattern as a room's motion triggers/custom conditions).
-# This replaces the old model above (CONF_TIME_SOURCES etc.) where sources
-# were chosen globally and applied uniformly to a fixed 5-period set - those
-# constants are kept only so infer_periods() can migrate old stored data.
-CONF_PERIODS = "periods"  # ordered list of {id, name, sources}
+# like a room's devices). Each period holds a list of *condition groups*
+# that are OR'd together (the period is active if ANY group is true), where
+# each group is a list of *conditions* that are AND'd together (the group is
+# only true if ALL of its conditions hold) - i.e. arbitrary "OR of AND
+# groups" logic, built from a flat pick-a-condition-type list instead of a
+# fixed set of always-visible source rows. First period (list order, top =
+# highest) with a true group wins - see _get_period in __init__.py.
+CONF_PERIODS = "periods"  # ordered list of {id, name, condition_groups}
 
-PERIOD_SOURCE_SCHEDULE = "schedule"        # fields: {"time": "HH:MM:SS"}
-PERIOD_SOURCE_SUN = "sun"                  # fields: {"event": ..., "offset_minutes": int}
-PERIOD_SOURCE_ILLUMINANCE = "illuminance"  # fields: {"entity_id": ..., "threshold": number}
-PERIOD_SOURCE_BOOLEAN = "boolean"          # fields: {"entity_id": ...}
-PERIOD_SOURCE_SENSOR = "sensor"            # fields: {"entity_id": ..., "value": "..."}
-PERIOD_SOURCES = [
-    PERIOD_SOURCE_SCHEDULE,
-    PERIOD_SOURCE_SUN,
-    PERIOD_SOURCE_ILLUMINANCE,
-    PERIOD_SOURCE_BOOLEAN,
-    PERIOD_SOURCE_SENSOR,
+CONDITION_TYPE_TIME = "time"          # operator: after/before; value: "HH:MM:SS"
+CONDITION_TYPE_SUN = "sun"            # operator: after/before; event, offset_minutes, earliest, latest
+CONDITION_TYPE_NUMERIC = "numeric"    # operator: above/below/equals; entity_id, value
+CONDITION_TYPE_STATE = "state"        # operator: is/is_not; entity_id, value
+CONDITION_TYPE_DAY_TYPE = "day_type"  # operator: is; value: "weekday" | "weekend"
+CONDITION_TYPE_HOME = "home"          # operator: is; value: "home" | "away"
+CONDITION_TYPES = [
+    CONDITION_TYPE_TIME,
+    CONDITION_TYPE_SUN,
+    CONDITION_TYPE_NUMERIC,
+    CONDITION_TYPE_STATE,
+    CONDITION_TYPE_DAY_TYPE,
+    CONDITION_TYPE_HOME,
 ]
 
-# Source types whose "is this period active" check is a clock-time boundary
-# comparison against other periods' clock-based sources (see _get_period in
-# __init__.py), as opposed to an independent true/false check of their own
-# (illuminance/boolean/sensor).
-CLOCK_BASED_PERIOD_SOURCES = (PERIOD_SOURCE_SCHEDULE, PERIOD_SOURCE_SUN)
-
-# Every source can also require an extra AND condition on top of its own
-# check - e.g. a sun-sourced period only counts as active at sunrise AND
-# only if a lux sensor is currently below some value too. This is separate
-# from (and stacks with) the OR relationship between a period's different
-# *sources* - "value" is a plain string here and parsed as a number for
-# above/below (blank/invalid = condition not met) or compared case-
-# insensitively as text for equals, mirroring the existing "sensor" source.
-DEFAULT_AND_CONDITION = {
-    "enabled": False,
-    "entity_id": None,
-    "operator": "above",  # "above" | "below" | "equals"
-    "value": "",
-}
-
-# Each source type's own fields (besides "enabled" and "and_condition",
-# added to every type below), with their defaults - every period gets an
-# entry for every type in `sources`, most left disabled, so the card can
-# always show all 5 side by side. The two clock-based types also carry an
-# optional weekend override (weekend_enabled + their own weekend_* fields)
-# - e.g. a period whose schedule normally starts at 06:00 can start at
-# 08:00 on weekend_days instead, without needing a whole separate period.
-# Only meaningful once a weekend/weekday day-type source is configured (see
-# infer_day_type_mode) - otherwise every day resolves "weekday" and the
-# override never applies. The sun source also has "min_time": a floor -
-# its resolved boundary is never earlier than this on any day - e.g. sunrise
-# but never before 08:00. "00:00:00" (midnight) is a no-op floor (nothing
-# resolves earlier than that within a day), so it's a safe inert default.
-DEFAULT_SOURCE_FIELDS = {
-    PERIOD_SOURCE_SCHEDULE: {
-        "time": "00:00:00",
-        "weekend_enabled": False,
-        "weekend_time": "00:00:00",
-    },
-    PERIOD_SOURCE_SUN: {
+# Every condition type's own fields (besides "id"/"type", added to every
+# condition) with their defaults - used both to backfill an entry saved
+# before a field existed and to seed a freshly added condition of that type.
+# "earliest"/"latest" on a sun condition clamp its resolved boundary to
+# never be earlier/later than that fixed time on any day (e.g. sunset, but
+# never before 18:00 and never after 22:00); blank means no clamp on that
+# side. "value" is reused across several types for whatever that type's
+# single comparison value is (a time-of-day, a sensor value, or a fixed
+# weekday/weekend | home/away choice).
+DEFAULT_CONDITION_FIELDS = {
+    CONDITION_TYPE_TIME: {"operator": "after", "value": "00:00:00"},
+    CONDITION_TYPE_SUN: {
+        "operator": "after",
         "event": "sunrise",
         "offset_minutes": 0,
-        "min_time": "00:00:00",
-        "weekend_enabled": False,
-        "weekend_event": "sunrise",
-        "weekend_offset_minutes": 0,
+        "earliest": "",
+        "latest": "",
     },
-    PERIOD_SOURCE_ILLUMINANCE: {"entity_id": None, "threshold": 0},
-    PERIOD_SOURCE_BOOLEAN: {"entity_id": None},
-    PERIOD_SOURCE_SENSOR: {"entity_id": None, "value": ""},
+    CONDITION_TYPE_NUMERIC: {"operator": "above", "entity_id": None, "value": ""},
+    CONDITION_TYPE_STATE: {"operator": "is", "entity_id": None, "value": "on"},
+    CONDITION_TYPE_DAY_TYPE: {"operator": "is", "value": "weekend"},
+    CONDITION_TYPE_HOME: {"operator": "is", "value": "away"},
 }
-for _fields in DEFAULT_SOURCE_FIELDS.values():
-    _fields["and_condition"] = dict(DEFAULT_AND_CONDITION)
 
 DEFAULT_PERIOD_LABELS = {
     "morning": "Morning",
@@ -210,27 +185,43 @@ DEFAULT_PERIOD_MAP = {
     "night": "night",
 }
 
-# The starting `periods` list for a fresh install: schedule-sourced (only
-# "schedule" enabled, same clock times as the old DEFAULT_SCHEDULE), all
-# other source types present but disabled, in canonical order.
-def _default_sources(period_id: str) -> dict:
-    sources = {
-        source_type: {"enabled": False, **DEFAULT_SOURCE_FIELDS[source_type]}
-        for source_type in PERIOD_SOURCES
-    }
-    sources[PERIOD_SOURCE_SCHEDULE] = {
-        **sources[PERIOD_SOURCE_SCHEDULE],
-        "enabled": True,
-        "time": DEFAULT_SCHEDULE[period_id],
-    }
-    return sources
+
+def _new_condition_id() -> str:
+    return uuid.uuid4().hex[:8]
+
+
+def _time_condition(operator: str, value: str) -> dict:
+    return {"id": _new_condition_id(), "type": CONDITION_TYPE_TIME, "operator": operator, "value": value}
+
+
+def _default_condition_groups(period_id: str) -> list[dict]:
+    """One bounded [after own start, before next period's start] group per
+    default period, except the last (night) which wraps past midnight and
+    so needs two OR'd groups instead - see the migration helpers below for
+    the general form of this same shape."""
+    ids = TIME_PERIODS
+    idx = ids.index(period_id)
+    own_time = DEFAULT_SCHEDULE[period_id]
+    if idx == len(ids) - 1:
+        next_time = DEFAULT_SCHEDULE[ids[0]]
+        return [
+            {"id": _new_condition_id(), "conditions": [_time_condition("after", own_time)]},
+            {"id": _new_condition_id(), "conditions": [_time_condition("before", next_time)]},
+        ]
+    next_time = DEFAULT_SCHEDULE[ids[idx + 1]]
+    return [
+        {
+            "id": _new_condition_id(),
+            "conditions": [_time_condition("after", own_time), _time_condition("before", next_time)],
+        }
+    ]
 
 
 DEFAULT_PERIODS = [
     {
         "id": period_id,
         "name": DEFAULT_PERIOD_LABELS[period_id],
-        "sources": _default_sources(period_id),
+        "condition_groups": _default_condition_groups(period_id),
     }
     for period_id in TIME_PERIODS
 ]
@@ -245,6 +236,243 @@ LEGACY_PERIOD_KEY_MAP = {
     "kvall": "evening",
     "natt": "night",
 }
+
+# ---------------------------------------------------------------------------
+# Migration: entries saved before periods used condition_groups have either
+# a `sources` dict (5 fixed source types, each optionally enabled, one round
+# of "combine several sources with OR" already added) or - oldest of all - a
+# single `source`/`config` pair. Both migrate into the current shape below,
+# on every load (see infer_periods) since the migrated shape is never
+# written back to storage until the user next edits periods from the card.
+_LEGACY_SOURCE_SCHEDULE = "schedule"
+_LEGACY_SOURCE_SUN = "sun"
+_LEGACY_SOURCE_ILLUMINANCE = "illuminance"
+_LEGACY_SOURCE_BOOLEAN = "boolean"
+_LEGACY_SOURCE_SENSOR = "sensor"
+_LEGACY_SOURCE_TYPES = [
+    _LEGACY_SOURCE_SCHEDULE,
+    _LEGACY_SOURCE_SUN,
+    _LEGACY_SOURCE_ILLUMINANCE,
+    _LEGACY_SOURCE_BOOLEAN,
+    _LEGACY_SOURCE_SENSOR,
+]
+
+_LEGACY_DEFAULT_AND_CONDITION = {"enabled": False, "entity_id": None, "operator": "above", "value": ""}
+
+_LEGACY_DEFAULT_SOURCE_FIELDS = {
+    _LEGACY_SOURCE_SCHEDULE: {"time": "00:00:00", "weekend_enabled": False, "weekend_time": "00:00:00"},
+    _LEGACY_SOURCE_SUN: {
+        "event": "sunrise",
+        "offset_minutes": 0,
+        "min_time": "00:00:00",
+        "weekend_enabled": False,
+        "weekend_event": "sunrise",
+        "weekend_offset_minutes": 0,
+    },
+    _LEGACY_SOURCE_ILLUMINANCE: {"entity_id": None, "threshold": 0},
+    _LEGACY_SOURCE_BOOLEAN: {"entity_id": None},
+    _LEGACY_SOURCE_SENSOR: {"entity_id": None, "value": ""},
+}
+for _fields in _LEGACY_DEFAULT_SOURCE_FIELDS.values():
+    _fields["and_condition"] = dict(_LEGACY_DEFAULT_AND_CONDITION)
+
+# A legacy source's approximate time-of-day, in minutes since midnight, used
+# only to sort/chain legacy clock sources during migration (see
+# _migrate_sources_periods) - real sun-event resolution needs `hass` (not
+# available in this pure module), but the *relative order* of solar events
+# within a day is fixed everywhere, so a rough fixed table is enough to
+# reproduce the old boundary-race priority correctly.
+_SUN_EVENT_APPROX_MINUTES = {
+    "midnight": 0,
+    "dawn": 5 * 60 + 30,
+    "sunrise": 6 * 60,
+    "noon": 12 * 60,
+    "sunset": 18 * 60,
+    "dusk": 18 * 60 + 30,
+}
+
+
+def _hms_to_minutes(value: str) -> int:
+    hour, minute, *_rest = (int(part) for part in value.split(":"))
+    return hour * 60 + minute
+
+
+def _and_condition_to_extra(and_cfg: dict | None) -> dict | None:
+    """Convert a legacy source's extra AND condition (see
+    _LEGACY_DEFAULT_AND_CONDITION) into an equivalent condition dict, or
+    None if it was disabled/unconfigured."""
+    if not and_cfg or not and_cfg.get("enabled") or not and_cfg.get("entity_id"):
+        return None
+    operator = and_cfg.get("operator", "above")
+    if operator == "equals":
+        return {
+            "id": _new_condition_id(),
+            "type": CONDITION_TYPE_STATE,
+            "operator": "is",
+            "entity_id": and_cfg["entity_id"],
+            "value": and_cfg.get("value", ""),
+        }
+    return {
+        "id": _new_condition_id(),
+        "type": CONDITION_TYPE_NUMERIC,
+        "operator": operator,
+        "entity_id": and_cfg["entity_id"],
+        "value": and_cfg.get("value", ""),
+    }
+
+
+def _legacy_clock_condition(kind: str, cfg: dict, weekend: bool) -> dict:
+    """The primary 'after' condition for one legacy clock source (schedule
+    or sun), using its weekend_* fields instead if `weekend`."""
+    if kind == CONDITION_TYPE_TIME:
+        value = (cfg.get("weekend_time") if weekend else cfg.get("time")) or "00:00:00"
+        return _time_condition("after", value)
+    event = (cfg.get("weekend_event") if weekend else cfg.get("event")) or "sunrise"
+    offset = (cfg.get("weekend_offset_minutes") if weekend else cfg.get("offset_minutes")) or 0
+    earliest = "" if weekend else (cfg.get("min_time") or "")
+    if earliest == "00:00:00":
+        earliest = ""
+    return {
+        "id": _new_condition_id(),
+        "type": CONDITION_TYPE_SUN,
+        "operator": "after",
+        "event": event,
+        "offset_minutes": offset,
+        "earliest": earliest,
+        "latest": "",
+    }
+
+
+def _legacy_clock_minutes(condition: dict) -> int:
+    if condition["type"] == CONDITION_TYPE_TIME:
+        return _hms_to_minutes(condition["value"])
+    minutes = _SUN_EVENT_APPROX_MINUTES.get(condition.get("event"), 0) + (condition.get("offset_minutes") or 0)
+    return minutes % 1440
+
+
+def _migrate_sources_periods(entries: list[tuple[str, dict]]) -> dict[str, list[dict]]:
+    """Convert a batch of legacy-shape periods (id, normalized `sources`
+    dict) into {period_id: condition_groups}, resolving their *shared*
+    implicit clock-boundary chain together so the result keeps behaving
+    exactly like the old boundary-race algorithm did (see _get_period's
+    previous implementation) - each enabled schedule/sun source becomes an
+    explicit [after its own boundary, before the next one in the combined
+    chain] group, wrapping the latest one past midnight into two OR'd
+    groups instead of one bounded range. Independent (non-clock)
+    illuminance/boolean/sensor sources don't participate in the chain -
+    they become their own single-condition group each, same as their old
+    independent OR'd check.
+
+    Known limitation: a weekend override splits its own source's chain
+    entry into two day-type-tagged variants, but a *neighboring* period
+    with no override of its own only bounds against the weekday variant -
+    on a weekend day, that can leave a brief gap (equal to the override's
+    delta) where neither period's group matches. Narrow edge case (needs a
+    weekend-overridden source directly adjacent to a non-split one); not
+    worth the added complexity of chaining a separate weekday/weekend
+    boundary sequence to close it."""
+    chain: list[tuple[int, str, dict, str | None, dict | None]] = []
+    result: dict[str, list[dict]] = {period_id: [] for period_id, _ in entries}
+
+    for period_id, sources in entries:
+        for kind, source_key in ((CONDITION_TYPE_TIME, _LEGACY_SOURCE_SCHEDULE), (CONDITION_TYPE_SUN, _LEGACY_SOURCE_SUN)):
+            cfg = sources.get(source_key)
+            if not cfg or not cfg.get("enabled"):
+                continue
+            and_extra = _and_condition_to_extra(cfg.get("and_condition"))
+            cond = _legacy_clock_condition(kind, cfg, weekend=False)
+            # A weekend override makes the two variants mutually exclusive
+            # by day (the old algorithm substituted one time_str for the
+            # other rather than considering both at once) - tag the normal
+            # variant "weekday" too in that case, not just the override
+            # "weekend", or it would also apply on weekend days.
+            day_type_value = "weekday" if cfg.get("weekend_enabled") else None
+            chain.append((_legacy_clock_minutes(cond), period_id, cond, day_type_value, and_extra))
+            if cfg.get("weekend_enabled"):
+                weekend_cond = _legacy_clock_condition(kind, cfg, weekend=True)
+                chain.append((_legacy_clock_minutes(weekend_cond), period_id, weekend_cond, "weekend", and_extra))
+
+    chain.sort(key=lambda entry: entry[0])
+    count = len(chain)
+
+    def _extra_conditions(day_type_value: str | None, and_extra: dict | None) -> list[dict]:
+        extra = []
+        if day_type_value:
+            extra.append({"id": _new_condition_id(), "type": CONDITION_TYPE_DAY_TYPE, "operator": "is", "value": day_type_value})
+        if and_extra:
+            extra.append({**and_extra, "id": _new_condition_id()})
+        return extra
+
+    for i, (_, period_id, cond, day_type_value, and_extra) in enumerate(chain):
+        extra = _extra_conditions(day_type_value, and_extra)
+
+        if count == 1:
+            # The only clock condition in this whole batch - the old
+            # algorithm always resolved to it regardless of the time of day
+            # (see _period_from_schedule's wraparound fallback), so it must
+            # match all 24h: "after X" OR "before X".
+            before = {**cond, "id": _new_condition_id(), "operator": "before"}
+            result[period_id].append({"id": _new_condition_id(), "conditions": [dict(cond)] + extra})
+            result[period_id].append({"id": _new_condition_id(), "conditions": [before] + extra})
+            continue
+
+        next_cond = chain[(i + 1) % count][2]
+        before = {**next_cond, "id": _new_condition_id(), "operator": "before"}
+        if i == count - 1:
+            # Latest boundary of the chain - wraps past midnight into the
+            # first one, so it needs two OR'd groups instead of one range.
+            result[period_id].append({"id": _new_condition_id(), "conditions": [dict(cond)] + extra})
+            result[period_id].append({"id": _new_condition_id(), "conditions": [before] + extra})
+        else:
+            result[period_id].append({"id": _new_condition_id(), "conditions": [dict(cond), before] + extra})
+
+    _independent_sources = (
+        (_LEGACY_SOURCE_ILLUMINANCE, CONDITION_TYPE_NUMERIC, "above", lambda cfg: str(cfg.get("threshold", 0))),
+        (_LEGACY_SOURCE_BOOLEAN, CONDITION_TYPE_STATE, "is", lambda _cfg: "on"),
+        (_LEGACY_SOURCE_SENSOR, CONDITION_TYPE_STATE, "is", lambda cfg: cfg.get("value", "")),
+    )
+    for period_id, sources in entries:
+        for source_key, ctype, operator, value_fn in _independent_sources:
+            cfg = sources.get(source_key)
+            if not cfg or not cfg.get("enabled") or not cfg.get("entity_id"):
+                continue
+            conditions = [
+                {
+                    "id": _new_condition_id(),
+                    "type": ctype,
+                    "operator": operator,
+                    "entity_id": cfg["entity_id"],
+                    "value": value_fn(cfg),
+                }
+            ]
+            and_extra = _and_condition_to_extra(cfg.get("and_condition"))
+            if and_extra:
+                conditions.append(and_extra)
+            result[period_id].append({"id": _new_condition_id(), "conditions": conditions})
+
+    return result
+
+
+def _normalize_legacy_sources(existing: dict) -> dict:
+    sources = {}
+    for source_type in _LEGACY_SOURCE_TYPES:
+        defaults = _LEGACY_DEFAULT_SOURCE_FIELDS[source_type]
+        saved = existing.get(source_type) or {}
+        merged = {"enabled": False, **defaults, **saved}
+        merged["and_condition"] = {**defaults["and_condition"], **(saved.get("and_condition") or {})}
+        sources[source_type] = merged
+    return sources
+
+
+def _legacy_sources_from_single(old_source: str, old_config: dict) -> dict:
+    sources = {}
+    for source_type in _LEGACY_SOURCE_TYPES:
+        sources[source_type] = (
+            {"enabled": True, **_LEGACY_DEFAULT_SOURCE_FIELDS[source_type], **old_config}
+            if source_type == old_source
+            else {"enabled": False, **_LEGACY_DEFAULT_SOURCE_FIELDS[source_type]}
+        )
+    return sources
 
 DEVICE_TYPE_LIGHT = "light"
 DEVICE_TYPE_OUTLET = "outlet"
@@ -297,41 +525,57 @@ def infer_time_sources(data: dict) -> list[str]:
     return [infer_time_mode(data)]
 
 
-def _normalize_period(period: dict) -> dict:
-    """Normalize one period entry to the current multi-source shape ({id,
-    name, sources: {type: {enabled, and_condition, ...fields}}}), where a
-    period can have several of its 5 sources enabled at once (OR logic -
-    see _get_period in __init__.py). Entries saved before that (single
-    `source`/`config` pair) migrate that one active source in as enabled;
-    every other type is present but disabled with blank defaults so the
-    card can always show all 5 side by side. Also backfills any type - or
-    any field within a type, e.g. `and_condition`/`min_time` added after a
-    period was already multi-source - missing from an already-saved entry,
-    so upgrading never crashes on a field that didn't exist yet when it was
-    saved."""
-    if "sources" in period:
-        existing = period["sources"]
-        sources = {}
-        for source_type in PERIOD_SOURCES:
-            defaults = DEFAULT_SOURCE_FIELDS[source_type]
-            saved = existing.get(source_type) or {}
-            merged = {"enabled": False, **defaults, **saved}
-            merged["and_condition"] = {
-                **defaults["and_condition"],
-                **(saved.get("and_condition") or {}),
-            }
-            sources[source_type] = merged
-        return {"id": period["id"], "name": period.get("name", ""), "sources": sources}
+def _normalize_condition(condition: dict) -> dict:
+    """Backfill defaults for one condition, keyed by its type, so a
+    condition saved before a field existed (or a whole new field added to
+    its type later) never crashes evaluation."""
+    ctype = condition.get("type")
+    defaults = DEFAULT_CONDITION_FIELDS.get(ctype, DEFAULT_CONDITION_FIELDS[CONDITION_TYPE_TIME])
+    ctype = ctype if ctype in DEFAULT_CONDITION_FIELDS else CONDITION_TYPE_TIME
+    merged = {**defaults, **{k: v for k, v in condition.items() if k not in ("id", "type")}}
+    return {"id": condition.get("id") or _new_condition_id(), "type": ctype, **merged}
 
-    old_source = period.get("source", PERIOD_SOURCE_SCHEDULE)
-    old_config = period.get("config") or {}
-    sources = {}
-    for source_type in PERIOD_SOURCES:
-        if source_type == old_source:
-            sources[source_type] = {"enabled": True, **DEFAULT_SOURCE_FIELDS[source_type], **old_config}
+
+def _normalize_condition_groups(groups: list) -> list[dict]:
+    normalized = []
+    for group in groups or []:
+        conditions = [_normalize_condition(c) for c in (group.get("conditions") or [])]
+        if conditions:
+            normalized.append({"id": group.get("id") or _new_condition_id(), "conditions": conditions})
+    return normalized
+
+
+def _normalize_periods_list(raw_periods: list[dict]) -> list[dict]:
+    """The single source of truth for turning stored period entries (in
+    whichever shape they were saved in) into the current {id, name,
+    condition_groups} shape. Entries already in that shape are just
+    backfilled/validated; entries saved before condition_groups existed
+    (a `sources` dict, or oldest of all a single `source`/`config` pair)
+    are migrated together as one batch, since the old boundary-race
+    algorithm they came from resolved a period's clock sources against
+    *every other period's* clock sources at once - see
+    _migrate_sources_periods for how that's reproduced."""
+    entries = []
+    for period in raw_periods:
+        if "condition_groups" in period:
+            entries.append(("new", period["id"], period.get("name", ""), period["condition_groups"]))
+        elif "sources" in period:
+            entries.append(("legacy", period["id"], period.get("name", ""), _normalize_legacy_sources(period["sources"])))
         else:
-            sources[source_type] = {"enabled": False, **DEFAULT_SOURCE_FIELDS[source_type]}
-    return {"id": period["id"], "name": period.get("name", ""), "sources": sources}
+            old_source = period.get("source", _LEGACY_SOURCE_SCHEDULE)
+            old_config = period.get("config") or {}
+            entries.append(
+                ("legacy", period["id"], period.get("name", ""), _legacy_sources_from_single(old_source, old_config))
+            )
+
+    legacy_sources = [(period_id, payload) for kind, period_id, _name, payload in entries if kind == "legacy"]
+    migrated = _migrate_sources_periods(legacy_sources) if legacy_sources else {}
+
+    result = []
+    for kind, period_id, name, payload in entries:
+        groups = _normalize_condition_groups(payload) if kind == "new" else migrated.get(period_id, [])
+        result.append({"id": period_id, "name": name, "condition_groups": groups})
+    return result
 
 
 def infer_periods(data: dict) -> list[dict]:
@@ -344,7 +588,7 @@ def infer_periods(data: dict) -> list[dict]:
     under the old fixed fallback-chain precedence (TIME_SOURCE_PRECEDENCE),
     since that one combination applied uniformly to every period before."""
     if CONF_PERIODS in data:
-        return [_normalize_period(period) for period in data[CONF_PERIODS]]
+        return _normalize_periods_list(data[CONF_PERIODS])
 
     legacy_keys = (
         CONF_TIME_MODE,
@@ -360,7 +604,7 @@ def infer_periods(data: dict) -> list[dict]:
         # Genuinely fresh install - nothing to migrate, just start from the
         # sensible defaults rather than infer_time_mode's "sensor" default
         # (which only made sense back when CONF_TIME_SENSOR was required).
-        return [_normalize_period(period) for period in DEFAULT_PERIODS]
+        return _normalize_periods_list(DEFAULT_PERIODS)
 
     time_sources = infer_time_sources(data)
     chosen_source = next(
@@ -380,25 +624,25 @@ def infer_periods(data: dict) -> list[dict]:
     for period_id in TIME_PERIODS:
         name = DEFAULT_PERIOD_LABELS[period_id]
         if chosen_source == TIME_SOURCE_SENSOR:
-            source = PERIOD_SOURCE_SENSOR
+            source = _LEGACY_SOURCE_SENSOR
             config = {"entity_id": time_sensor, "value": period_map.get(period_id, period_id)}
         elif chosen_source == TIME_SOURCE_BOOLEAN:
-            source = PERIOD_SOURCE_BOOLEAN
+            source = _LEGACY_SOURCE_BOOLEAN
             config = {"entity_id": period_booleans.get(period_id)}
         elif chosen_source == TIME_SOURCE_ILLUMINANCE:
-            source = PERIOD_SOURCE_ILLUMINANCE
+            source = _LEGACY_SOURCE_ILLUMINANCE
             config = {
                 "entity_id": illuminance_sensor,
                 "threshold": illuminance_thresholds.get(period_id, 0),
             }
         elif chosen_source == TIME_SOURCE_SUN:
-            source = PERIOD_SOURCE_SUN
+            source = _LEGACY_SOURCE_SUN
             config = dict(sun_events.get(period_id, DEFAULT_SUN_EVENTS[period_id]))
         else:  # schedule, or nothing ever configured at all
-            source = PERIOD_SOURCE_SCHEDULE
+            source = _LEGACY_SOURCE_SCHEDULE
             config = {"time": schedule.get(period_id, DEFAULT_SCHEDULE[period_id])}
         periods.append({"id": period_id, "name": name, "source": source, "config": config})
-    return [_normalize_period(period) for period in periods]
+    return _normalize_periods_list(periods)
 
 
 def infer_day_type_mode(data: dict) -> str:

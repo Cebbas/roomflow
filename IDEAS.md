@@ -97,6 +97,16 @@ triggers, buttons, and transitions would need to decide which of these make
 sense per device type (a transition time is meaningful for a light or cover,
 less so for a climate mode switch).
 
+Each type also needs a plain "off" alternative per period, not just a
+target-value state - mirroring how light/switch already toggle between a
+target state and `state: "off"` (`target.state = field.checked ? "on" :
+"off"`, handled in the card's field-change handler and applied via
+`light.turn_off`/`switch.turn_off` in `_apply_behavior`). E.g. a climate
+device's period behavior should be choosable as either a target
+temperature/hvac_mode *or* fully off (`hvac_mode: "off"`), and same for
+media_player (a target source/volume *or* `media_player.turn_off`) -
+not every period necessarily wants the device actively doing something.
+
 ## Presence simulation while away
 
 Today's away override (see weekend/away overrides above) sets one fixed
@@ -197,6 +207,55 @@ through the same resolution logic `_apply_to_rooms` already uses to pick a
 behavior per device, and displays the result - without calling any
 `light`/`switch` service.
 
+## Walk-through test button (cycle every period on real devices)
+
+Today's per-room "Test now" button (`test_now` in the card, `ws_apply_now`/
+`apply_room` in websocket_api.py/`__init__.py`) only re-applies whatever
+period is currently active - it's a "run scheduled behavior now" action,
+not a way to actually *see* every period's behavior on the real devices.
+Same for the "Force a specific period" button action (`force_period`,
+`_apply_to_rooms(..., forced_period=...)` in `__init__.py`) - it forces one
+period and stays there, not a walkthrough. Unlike the read-only simulate
+idea above, the goal here is to actually see it happen on the physical
+devices, one period at a time.
+
+Possible approach: a second room-level button (next to "Test now") that
+steps through every configured period in order, holding each one for a
+short fixed duration (e.g. 10s) via `_apply_to_rooms([room],
+forced_period=period.id)`, then moving to the next - and clearly surfaces
+which period is currently being demoed (e.g. a highlighted/pulsing period
+label on the room card, or a toast), so it's obvious which lighting
+belongs to which period while watching. Needs a new websocket command
+(e.g. `roomflow/preview_day`) that runs the loop server-side with
+`async_call_later`/`async_track_point_in_time` and pushes the current
+period back to the card (event or subscribed state) rather than the card
+itself trying to time it client-side. Should restore the room's real
+current-period behavior when the walkthrough finishes or is cancelled
+early.
+
+## Finish moving the card's UI to native HA components
+
+v0.0.7 switched form fields to native `<ha-textfield>`/`<ha-switch>` (see
+the `textField`/`switchEl` helpers and the `.rf-root ha-textfield`/
+`ha-switch` CSS rules in `roomflow-card.js`), but that only covered
+text/number inputs and toggles. Buttons (`class="rf-btn"`), dropdowns
+(plain `<select>`), and the period tabs (`rf-tab`) are still hand-rolled
+HTML elements styled with the card's own CSS instead of Home Assistant's
+native components (`ha-button`/`mwc-button`, `ha-icon-button`, `ha-select`,
+`ha-tab`/`mwc-tab-bar` or similar) - meaning the card mostly matches HA's
+look today, but drifts from it whenever HA's own theme/design system
+changes (spacing, ripple effects, color tokens), and won't automatically
+pick up an HA visual refresh the way a card built entirely on native
+components would.
+
+Possible approach: continue the v0.0.7 work by replacing the remaining
+`rf-btn`/`<select>`/`rf-tab` elements with their `ha-*` equivalents one
+category at a time (buttons first, then selects, then tabs), the same way
+switches/textfields were done - checking `customElements.get(...)` with a
+plain-HTML fallback where a given HA frontend version might not have the
+element registered, and trimming the corresponding hand-written CSS rules
+once each category is fully native.
+
 ## Decision / audit log
 
 Today "a failing device logs a warning instead of blocking the rest of
@@ -211,3 +270,151 @@ Possible approach: an in-memory ring buffer (surfaced in the card, e.g. a
 room, period, which override tier applied, and which condition/source
 triggered it - independent of Home Assistant's own logbook/history, which
 only shows the resulting entity state changes, not RoomFlow's reasoning.
+
+## Standalone schedules for individual devices (e.g. outdoor lighting)
+
+Periods are configured once, globally (`CONF_PERIODS` in `const.py`, read
+via `infer_periods` and shared by every room through `_apply_to_rooms` in
+`__init__.py`) - every room picks behavior against the *same*
+morning/day/afternoon/evening/night list. That fits indoor rooms that
+broadly follow the same day well, but not something like outdoor lighting,
+which usually just needs its own simple on/off window (e.g. "on from
+sunset to 23:00", or "on from dusk to dawn") unrelated to the indoor
+period breakdown. Today the only way to express that is either reusing
+existing periods loosely, or adding a new global period just for one
+device - which then also shows up as an option for every other room,
+cluttering everyone else's period list for something only relevant to one
+device.
+
+Possible approach: let a device (or a whole room) opt out of the shared
+period list and instead define its own simple standalone on/off
+schedule - one or more sun/clock/sensor-driven windows, similar in shape
+to a period's existing sources, but scoped to that single device/room
+rather than added to the global list. Could double as a plain exposed
+binary_sensor (like today's per-period ones) so it's also directly usable
+in other automations, not just within RoomFlow.
+
+## Active vs. passive motion control, and per-period motion behavior
+
+A device's `motion.enabled` flag (`device_motion_reacts` in the card, read
+by `_motion_devices` in `__init__.py`) is all-or-nothing: whenever the
+room's motion trigger fires, `_apply_motion_device_on` turns the device on
+to whatever the *current period's* behavior is, and `_schedule_motion_off`
+turns it back off after the configured delay - the same for every period,
+every time. There's no way to say a device should only be **actively**
+turned on/off by motion during some periods (e.g. evening/night) while
+staying **passive** (untouched by motion, e.g. because daylight already
+covers it, or because it's a device that shouldn't auto-toggle at that time
+of day) during others, e.g. day.
+
+Possible approach: extend each device's `motion` config with a per-period
+enabled/disabled override (mirroring how per-period behavior is already
+keyed by period name), checked in `_apply_motion_device_on` and
+`_handle_motion_change` before acting on that device for the current
+period - so motion control can be scoped to specific periods per device
+instead of only toggled globally on/off. The card's device motion section
+would need a period-by-period toggle alongside the existing single
+"reacts to motion" checkbox.
+
+A related but distinct gap: `motion.enabled` also couples the *on* and
+*off* reaction into a single flag - a device either reacts to both
+motion-on and motion-off, or neither. There's no "manual on, motion off"
+mode: a device you only ever turn on yourself (e.g. via a bound button)
+but still want `_schedule_motion_off`/`_handle_motion_change` to switch
+off automatically once the room's motion trigger times out, so it doesn't
+stay on forever after you leave. Possible approach: split the single
+`motion.enabled` flag into separate `reacts_to_on` / `reacts_to_off` flags
+(or an on/off/both choice) per device, with `_handle_motion_change`'s two
+branches - turning devices on when motion starts, scheduling them off when
+it stops - each checking the relevant flag independently instead of the
+one shared `enabled` gate.
+
+## Entity health as a real notification, not just a log warning
+
+When a bound entity's service call fails (`_apply_single_device` in
+`__init__.py`, `except Exception as err: _LOGGER.warning("RoomFlow: could
+not apply behavior to %s: %s", ...)`), and similarly for the turn-off/
+toggle/motion-warning call sites that follow the same pattern, the only
+trace is a warning line in Home Assistant's log - nothing surfaces in the
+UI. A device that's been unavailable or misconfigured for weeks (e.g. an
+entity_id that no longer exists after a Zigbee re-pair) can go unnoticed
+indefinitely unless someone happens to be reading the log.
+
+Possible approach: register these as Home Assistant "repair" issues
+(`homeassistant.helpers.issue_registry.async_create_issue`) keyed by
+room/device, created on first failure and cleared automatically once a
+call for that device succeeds again - so a broken binding shows up in HA's
+own Settings > System > Repairs list instead of only the log, without
+RoomFlow needing its own notification/alerting system.
+
+## Linked/synced rooms (shared open-plan spaces)
+
+Every room in the config store (`cfg.get("rooms", [])`, each with its own
+`devices`/`motion`/period behavior) is independent - there's no way to say
+two rooms are really one physical space, e.g. an open-plan kitchen +
+living room where you want both to always be in the same period and react
+to either room's motion sensors together, rather than configuring the
+same schedule twice and hoping they stay in sync.
+
+Possible approach: an optional "linked room" reference so one room follows
+another's resolved period/motion-active state instead of computing its
+own from its own custom conditions and triggers (while still keeping its
+own device list, since the two spaces likely have different lights) -
+checked in `_apply_to_rooms`/`_handle_motion_change` by resolving the
+period/motion state from the room it's linked to before applying behavior
+to its own devices.
+
+## Continuous adaptive curve (sun-elevation-based), not just discrete periods
+
+Periods are always a fixed list of named blocks (`CONF_PERIODS`, resolved
+by `infer_periods`) - a device's target brightness/color_temp jumps (or,
+per the scheduled-ramping idea above, ramps over a fixed window) between
+whatever two adjacent periods define, not a smooth curve driven directly
+by where the sun actually is. That's a different, more continuous
+alternative to periods entirely, closer to how the popular Adaptive
+Lighting integration works: brightness/color temperature computed straight
+from sun elevation at every moment, with no period boundaries at all -
+useful for a room where someone doesn't want to think in named periods,
+just "warmer and dimmer as the sun goes down, brighter and cooler at
+midday."
+
+Possible approach: an opt-in per-room (or per-device) mode that replaces
+period-based resolution with a formula driven by `sun.sun`'s elevation
+attribute, interpolating between configured min/max brightness and
+color_temp - likely sharing the same recompute/timer-tick machinery the
+scheduled-ramping idea would need, but replacing "which period" with "what
+elevation" as the input.
+
+## Per-user permissions on the card
+
+Every websocket command RoomFlow registers (`ws_get_config`,
+`ws_save_config`, `ws_apply_now`, `ws_apply_room`, in websocket_api.py)
+is reachable by any authenticated Home Assistant user - there's no
+distinction today between someone allowed to reconfigure rooms/periods/
+devices and someone who should only get the quick actions (the card's
+"Test now" button, or a dashboard tile). In a multi-person household,
+anyone with card access can currently rewrite anyone else's room
+config.
+
+Possible approach: gate `ws_save_config` (and the config-editing parts of
+the card UI) behind `connection.user.is_admin` or a configurable allowlist,
+while leaving `ws_apply_now`/`ws_apply_room` open to any user - mirroring
+how Home Assistant itself treats admin-only settings vs. general
+dashboard interaction.
+
+## Undo last automatic change
+
+There's no quick way to revert just the *last* thing RoomFlow did to a
+room - e.g. a period boundary was crossed at an awkward moment, or a
+custom condition briefly flickered and changed behavior, and the fix
+today is only to wait for the next recompute or manually readjust the
+device by hand. This is a lighter-weight ask than the manual override/
+pause idea above (which is about taking a room out of RoomFlow's control
+for a while) - just a single-step "put it back to what it was a moment
+ago" action.
+
+Possible approach: keep a small per-room record of the device states
+immediately before the last `_apply_to_rooms` call actually changed
+anything, and add an "Undo" button (card action + maybe a bound-button
+action) that replays those prior states via the same `light`/`switch`
+services, clearing the record once used so it can't be replayed twice.

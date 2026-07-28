@@ -45,11 +45,12 @@ from .const import (
     CONF_PERIOD_BOOLEANS,
     CONF_DEVICE_NAME,
     CONF_AREA_ID,
-    PERIOD_SOURCE_SCHEDULE,
-    PERIOD_SOURCE_SUN,
-    PERIOD_SOURCE_ILLUMINANCE,
-    PERIOD_SOURCE_BOOLEAN,
-    PERIOD_SOURCE_SENSOR,
+    CONDITION_TYPE_TIME,
+    CONDITION_TYPE_SUN,
+    CONDITION_TYPE_NUMERIC,
+    CONDITION_TYPE_STATE,
+    CONDITION_TYPE_DAY_TYPE,
+    CONDITION_TYPE_HOME,
     DAY_TYPE_MODE_SENSOR,
     DAY_TYPE_MODE_WEEKDAY_SELECTION,
     HOME_MODE_SENSOR,
@@ -139,62 +140,64 @@ def _parse_hms(raw: str) -> dt_time:
     return dt_time(hour, minute, rest[0] if rest else 0)
 
 
-def _period_from_schedule(boundaries: list[tuple[str, str]], now_time: dt_time) -> str | None:
-    """Pick the period whose boundary is the latest one at or before now,
-    wrapping around midnight if now is before every boundary. `boundaries`
-    is a list rather than a dict since a single period can contribute more
-    than one entry (e.g. both its schedule time and its sun-event time, if
-    it has both of those sources enabled at once). None if empty (e.g. no
-    schedule/sun-sourced periods configured at all)."""
-    entries = sorted(
-        (_parse_hms(raw), period) for period, raw in boundaries if raw
-    )
-    if not entries:
-        return None
-    candidates = [period for start, period in entries if start <= now_time]
-    return candidates[-1] if candidates else entries[-1][1]
-
-
 def _weekday_key(now_date) -> str:
     return WEEKDAY_KEYS[now_date.weekday()]
 
 
-def _sun_boundary(hass: HomeAssistant, period_id: str, event: str, offset_minutes: int) -> str | None:
-    """Today's concrete local time-of-day (HH:MM:SS) for one period's solar
-    event + offset, in the shape _period_from_schedule expects. None if the
+def _sun_boundary(hass: HomeAssistant, event: str, offset_minutes: int) -> dt_time | None:
+    """Today's local time-of-day for one solar event + offset. None if the
     event doesn't occur today (polar day/night) or isn't a real astral.sun
-    attribute (e.g. stale/invalid data) - never let one bad period take
-    down the rest."""
+    attribute (e.g. stale/invalid data) - a condition using it simply fails
+    to match rather than crashing the rest of the room."""
     try:
         event_dt = get_astral_event_date(hass, event, dt_util.now())
     except AttributeError:
-        _LOGGER.warning(
-            "RoomFlow: unrecognized sun event '%s' for period '%s', skipping", event, period_id
-        )
+        _LOGGER.warning("RoomFlow: unrecognized sun event '%s'", event)
         return None
     if event_dt is None:
         return None
     local_dt = dt_util.as_local(event_dt) + timedelta(minutes=offset_minutes)
-    return local_dt.strftime("%H:%M:%S")
+    return local_dt.time()
 
 
-def _and_condition_ok(hass: HomeAssistant, and_condition: dict | None) -> bool:
-    """Extra AND condition a period source can require on top of its own
-    check (see DEFAULT_AND_CONDITION in const.py) - e.g. a sun-sourced
-    period only counts as active at sunrise AND only if a lux sensor is
-    currently below some value too. True (i.e. doesn't block anything) when
-    disabled or unconfigured; a missing/unavailable entity fails closed
-    (doesn't count as met) rather than silently ignoring the condition."""
-    if not and_condition or not and_condition.get("enabled"):
-        return True
-    entity_id = and_condition.get("entity_id")
+def _clamp_time(value: dt_time, earliest: str | None, latest: str | None) -> dt_time:
+    """Clamp a resolved sun boundary to never be earlier/later than a fixed
+    time on any day (a condition's "earliest"/"latest" fields) - e.g.
+    sunset, but never before 18:00 and never after 22:00. Blank/unset means
+    no clamp on that side."""
+    if earliest:
+        floor = _parse_hms(earliest)
+        if value < floor:
+            value = floor
+    if latest:
+        ceiling = _parse_hms(latest)
+        if value > ceiling:
+            value = ceiling
+    return value
+
+
+def _condition_boundary(hass: HomeAssistant, condition: dict) -> dt_time | None:
+    """The dt_time a time/sun condition compares 'now' against, or None if
+    it can't currently be resolved (e.g. a sun event that doesn't occur
+    today)."""
+    if condition.get("type") == CONDITION_TYPE_TIME:
+        value = condition.get("value")
+        return _parse_hms(value) if value else None
+    boundary = _sun_boundary(hass, condition.get("event") or "sunrise", condition.get("offset_minutes") or 0)
+    if boundary is None:
+        return None
+    return _clamp_time(boundary, condition.get("earliest"), condition.get("latest"))
+
+
+def _numeric_condition_ok(hass: HomeAssistant, condition: dict) -> bool:
+    entity_id = condition.get("entity_id")
     if not entity_id:
-        return True
+        return False
     state = hass.states.get(entity_id)
     if state is None:
         return False
-    operator = and_condition.get("operator", "above")
-    raw_value = and_condition.get("value")
+    operator = condition.get("operator", "above")
+    raw_value = condition.get("value")
     if operator == "equals":
         return bool(raw_value) and state.state.lower() == str(raw_value).lower()
     try:
@@ -202,9 +205,56 @@ def _and_condition_ok(hass: HomeAssistant, and_condition: dict | None) -> bool:
         threshold = float(raw_value)
     except (TypeError, ValueError):
         return False
-    if operator == "below":
-        return current <= threshold
-    return current >= threshold
+    return current <= threshold if operator == "below" else current >= threshold
+
+
+def _state_condition_ok(hass: HomeAssistant, condition: dict) -> bool:
+    entity_id = condition.get("entity_id")
+    expected = condition.get("value")
+    if not entity_id or not expected:
+        return False
+    state = hass.states.get(entity_id)
+    if state is None:
+        return False
+    matches = state.state.lower() == str(expected).lower()
+    return matches if condition.get("operator", "is") == "is" else not matches
+
+
+def _condition_ok(
+    hass: HomeAssistant, condition: dict, now_time: dt_time, is_weekend: bool, home_state: str
+) -> bool:
+    """True if one condition currently holds. Unknown/malformed condition
+    types fail closed (never match) rather than raising, so one bad entry
+    can't take down the rest of the room's period resolution."""
+    ctype = condition.get("type")
+    if ctype in (CONDITION_TYPE_TIME, CONDITION_TYPE_SUN):
+        boundary = _condition_boundary(hass, condition)
+        if boundary is None:
+            return False
+        return now_time >= boundary if condition.get("operator") == "after" else now_time < boundary
+    if ctype == CONDITION_TYPE_NUMERIC:
+        return _numeric_condition_ok(hass, condition)
+    if ctype == CONDITION_TYPE_STATE:
+        return _state_condition_ok(hass, condition)
+    if ctype == CONDITION_TYPE_DAY_TYPE:
+        return (condition.get("value") == "weekend") == is_weekend
+    if ctype == CONDITION_TYPE_HOME:
+        return condition.get("value") == home_state
+    return False
+
+
+def _period_condition_groups_match(
+    hass: HomeAssistant, groups: list[dict], now_time: dt_time, is_weekend: bool, home_state: str
+) -> bool:
+    """A period is active if ANY of its condition groups is fully true -
+    OR across groups, AND within a group (see const.py's period docs). An
+    empty group (no conditions configured yet) never matches, so a freshly
+    added group can't accidentally make its period always active."""
+    for group in groups:
+        conditions = group.get("conditions") or []
+        if conditions and all(_condition_ok(hass, c, now_time, is_weekend, home_state) for c in conditions):
+            return True
+    return False
 
 
 def _migrate_period_keys(cfg: dict) -> dict:
@@ -295,89 +345,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cfg = hass.data[DOMAIN]["config"]
         periods = infer_periods(cfg)  # already priority-ordered (top = highest)
         is_weekend = _get_day_type() == "weekend"
+        home_state = _get_home_state()
+        now_time = dt_util.now().time()
 
-        # A period can have several of its 5 sources enabled at once and is
-        # "active" if ANY of them currently resolves true (OR logic). Its
-        # enabled schedule/sun sources are clock boundaries, resolved by the
-        # same chronological-boundary algorithm as before (now scoped to all
-        # enabled clock sources across all periods, keyed by period id - a
-        # period with both a schedule time and a sun time enabled
-        # contributes two separate boundary entries for the same id).
-        # illuminance/boolean/sensor sources are independent, self-contained
-        # true/false checks. Priority order (not sorting) is what resolves
-        # any conflict between a period's own sources and/or other periods.
-        # Each clock-based source can also carry its own weekend override -
-        # swap in its weekend_* fields instead when today is a weekend day -
-        # plus an optional extra AND condition (see _and_condition_ok) that
-        # must also currently hold for its boundary to count at all; a
-        # source whose AND condition fails simply contributes no boundary,
-        # so it can't win the period below either.
-        clock_boundaries: list[tuple[str, str]] = []
+        # First period (list order, top = highest) with a true condition
+        # group wins - see _period_condition_groups_match/_condition_ok
+        # above and const.py's period docs for the OR-of-AND-groups shape.
         for period in periods:
-            sources = period["sources"]
-            period_id = period["id"]
-
-            schedule_cfg = sources[PERIOD_SOURCE_SCHEDULE]
-            if schedule_cfg["enabled"] and _and_condition_ok(hass, schedule_cfg.get("and_condition")):
-                time_str = (
-                    schedule_cfg.get("weekend_time")
-                    if is_weekend and schedule_cfg.get("weekend_enabled")
-                    else schedule_cfg.get("time")
-                )
-                if time_str:
-                    clock_boundaries.append((period_id, time_str))
-
-            sun_cfg = sources[PERIOD_SOURCE_SUN]
-            if sun_cfg["enabled"] and _and_condition_ok(hass, sun_cfg.get("and_condition")):
-                use_weekend = is_weekend and sun_cfg.get("weekend_enabled")
-                event = sun_cfg.get("weekend_event") if use_weekend else sun_cfg.get("event")
-                offset = sun_cfg.get("weekend_offset_minutes", 0) if use_weekend else sun_cfg.get("offset_minutes", 0)
-                boundary = _sun_boundary(hass, period_id, event, offset)
-                min_time = sun_cfg.get("min_time")
-                if boundary and min_time and _parse_hms(boundary) < _parse_hms(min_time):
-                    boundary = min_time
-                if boundary:
-                    clock_boundaries.append((period_id, boundary))
-
-        clock_winner_id = (
-            _period_from_schedule(clock_boundaries, dt_util.now().time()) if clock_boundaries else None
-        )
-
-        for period in periods:
-            sources = period["sources"]
-            period_id = period["id"]
-
-            if clock_winner_id == period_id and (
-                sources[PERIOD_SOURCE_SCHEDULE]["enabled"] or sources[PERIOD_SOURCE_SUN]["enabled"]
+            if _period_condition_groups_match(
+                hass, period.get("condition_groups", []), now_time, is_weekend, home_state
             ):
-                return period_id
-
-            illuminance_cfg = sources[PERIOD_SOURCE_ILLUMINANCE]
-            if illuminance_cfg["enabled"] and _and_condition_ok(hass, illuminance_cfg.get("and_condition")):
-                entity_id = illuminance_cfg.get("entity_id")
-                state = hass.states.get(entity_id) if entity_id else None
-                if state is not None:
-                    try:
-                        value = float(state.state)
-                    except (TypeError, ValueError):
-                        value = None
-                    if value is not None and value >= illuminance_cfg.get("threshold", 0):
-                        return period_id
-
-            boolean_cfg = sources[PERIOD_SOURCE_BOOLEAN]
-            if boolean_cfg["enabled"] and _and_condition_ok(hass, boolean_cfg.get("and_condition")):
-                entity_id = boolean_cfg.get("entity_id")
-                state = hass.states.get(entity_id) if entity_id else None
-                if state is not None and state.state == "on":
-                    return period_id
-
-            sensor_cfg = sources[PERIOD_SOURCE_SENSOR]
-            if sensor_cfg["enabled"] and _and_condition_ok(hass, sensor_cfg.get("and_condition")):
-                entity_id = sensor_cfg.get("entity_id")
-                expected = sensor_cfg.get("value")
-                state = hass.states.get(entity_id) if entity_id and expected else None
-                if state is not None and state.state.lower() == expected.lower():
-                    return period_id
+                return period["id"]
         return None
 
     def _get_day_type() -> str:
@@ -806,28 +784,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         unsubs: list = []
 
         tracked_entities: list[str] = []
-        has_schedule_period = False
-        has_sun_period = False
+        time_boundary_values: set[str] = set()
+        has_sun_condition = False
         for period in periods:
-            sources = period["sources"]
-            for source_type in (PERIOD_SOURCE_ILLUMINANCE, PERIOD_SOURCE_BOOLEAN, PERIOD_SOURCE_SENSOR):
-                source_cfg = sources[source_type]
-                entity_id = source_cfg.get("entity_id")
-                if source_cfg["enabled"] and entity_id:
-                    tracked_entities.append(entity_id)
-            if sources[PERIOD_SOURCE_SCHEDULE]["enabled"]:
-                has_schedule_period = True
-            if sources[PERIOD_SOURCE_SUN]["enabled"]:
-                has_sun_period = True
-            # Any source's extra AND condition (see _and_condition_ok) also
-            # needs its entity tracked, so an unrelated sensor flipping
-            # still reacts immediately instead of waiting for the next
-            # schedule boundary/sun poll.
-            for source_cfg in sources.values():
-                and_condition = source_cfg.get("and_condition") or {}
-                and_entity_id = and_condition.get("entity_id")
-                if and_condition.get("enabled") and and_entity_id:
-                    tracked_entities.append(and_entity_id)
+            for group in period.get("condition_groups", []):
+                for condition in group.get("conditions", []):
+                    ctype = condition.get("type")
+                    if ctype in (CONDITION_TYPE_NUMERIC, CONDITION_TYPE_STATE):
+                        entity_id = condition.get("entity_id")
+                        if entity_id:
+                            tracked_entities.append(entity_id)
+                    elif ctype == CONDITION_TYPE_TIME:
+                        value = condition.get("value")
+                        if value:
+                            time_boundary_values.add(value)
+                    elif ctype == CONDITION_TYPE_SUN:
+                        has_sun_condition = True
 
         if day_type_mode == DAY_TYPE_MODE_SENSOR and day_type_sensor:
             tracked_entities.append(day_type_sensor)
@@ -846,33 +818,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 async_track_state_change_event(hass, tracked_entities, _handle_relevant_change)
             )
 
-        if has_schedule_period:
-            for period in periods:
-                schedule_cfg = period["sources"][PERIOD_SOURCE_SCHEDULE]
-                if not schedule_cfg["enabled"]:
-                    continue
-                # Register both the normal and (if any) weekend-override
-                # boundary - which one currently applies can flip at
-                # midnight, so both need a listener regardless of today's
-                # day type.
-                time_strs = [schedule_cfg.get("time")]
-                if schedule_cfg.get("weekend_enabled"):
-                    time_strs.append(schedule_cfg.get("weekend_time"))
-                for time_str in time_strs:
-                    if not time_str:
-                        continue
-                    boundary = _parse_hms(time_str)
-                    unsubs.append(
-                        async_track_time_change(
-                            hass,
-                            _handle_relevant_change,
-                            hour=boundary.hour,
-                            minute=boundary.minute,
-                            second=boundary.second,
-                        )
-                    )
+        for time_str in time_boundary_values:
+            boundary = _parse_hms(time_str)
+            unsubs.append(
+                async_track_time_change(
+                    hass,
+                    _handle_relevant_change,
+                    hour=boundary.hour,
+                    minute=boundary.minute,
+                    second=boundary.second,
+                )
+            )
 
-        if has_sun_period:
+        if has_sun_condition:
             # Solar event times shift by a minute or two each day, so exact
             # per-boundary scheduling would need dynamic rescheduling. A
             # coarse 1-minute poll is far simpler and the resulting lag is

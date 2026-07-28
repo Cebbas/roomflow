@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Periods are now built from a condition list instead of 5 fixed source
+  rows.** Each period previously always showed all 5 source types
+  (schedule/sun/illuminance/boolean/sensor) at once, each with its own
+  enable toggle, plus a hidden weekend-override sub-row and an "extra AND
+  condition" sub-row. That's replaced by an explicit condition-list
+  builder: pick a condition type (time, sun position, numeric sensor,
+  sensor state, weekday/weekend, home/away) from a list to add it, group
+  conditions with AND within a group and OR between groups, and use
+  before/after (time/sun) or above/below/equals (numeric) or is/is not
+  (state) operators - plus new earliest/latest clamps on sun conditions
+  (the old "never before" floor now also has a ceiling). The backend
+  resolution algorithm is simplified to match: the first period (priority
+  order) with a true condition group wins, replacing the old special-cased
+  clock-boundary race. Existing saved periods migrate automatically to the
+  new shape with equivalent behavior.
 - **Fixed: `ha-switch`/`ha-textfield` fields could end up unreadable/
   uneditable (v0.0.7).** Unlike `ha-icon`, which is always part of Home
   Assistant's core frontend bundle, `ha-textfield`/`ha-switch` are only

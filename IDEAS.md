@@ -46,6 +46,32 @@ triggering entity's new-state (or `event_type` attribute for `event.*`
 entities) before running the action, alongside the existing `entity_id` +
 `action` fields.
 
+## Floors
+
+Rooms aren't grouped under anything larger today - there's no notion of a
+floor. Adding floors would let the card organize/filter rooms by floor, and
+would be a prerequisite for floor-level scenes (see below) and any future
+floor-level settings.
+
+## Scenes (house / floor / room level)
+
+No concept of a reusable "scene" exists yet - only per-period device
+behavior. Add scenes that can be triggered at three scopes: the whole
+house, a single floor (once floors exist, see above), or an individual
+room. A scene would capture a target state per device (similar to what a
+period already defines) and be triggerable on demand (button binding, card
+action, or exposed as a service) independent of the current time-of-day
+period.
+
+## Per-period overview tabs per room
+
+Today a room's card view doesn't have a place to see, at a glance, what
+every device is configured to do across all periods. Add an extra row of
+tabs per room - one per time-of-day period - showing all of that room's
+devices and their configured settings (on/off, brightness, color
+temperature, overrides) for that period side by side, instead of having to
+open each device's settings individually.
+
 ## Holidays / specific dates and seasons
 
 Today's overrides are limited to away/weekend and per-room custom
@@ -62,3 +88,22 @@ event" as entity state) or a built-in date-range/recurring-date picker in
 the card, so it works without requiring a separate calendar integration.
 Each period's behavior would need its own holiday variant, mirroring how
 weekend/away overrides are defined per device/period today.
+
+## Full multi-language support (config flow + card UI)
+
+The README is now translated into 7 languages (sv/no/da/fi/de/fr/nl), but
+the actual integration isn't - this is docs-only, not UI localization. Two
+separate gaps, very different sizes:
+
+- `custom_components/roomflow/translations/` only has `en.json` and
+  `sv.json`, covering the single config-flow confirmation step/abort
+  message. Small - just needs the same two keys translated into
+  no/da/fi/de/fr/nl to match `en.json`'s shape.
+- `www/roomflow-card.js` has no i18n mechanism at all - every label,
+  button, and help text (~1750 lines) is a hardcoded English string
+  literal, not run through Home Assistant's own translation system or any
+  string-lookup table of its own. Making the card itself multi-language
+  would mean building a string dictionary (keyed by `hass.language` or
+  similar), replacing every hardcoded string with a lookup, and then
+  translating the full UI text into all 7 languages - a much bigger
+  project than the README translation was.

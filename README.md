@@ -1,5 +1,13 @@
 <p align="center"><img src="logo.png" alt="RoomFlow" width="420"></p>
 
+🌍 **English** | [Svenska](README.sv.md) | [Norsk](README.no.md) | [Suomi](README.fi.md) | [Dansk](README.da.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Nederlands](README.nl.md)
+
+<p align="center">
+  <a href="https://buymeacoffee.com/h7jyzdywm9s"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
+</p>
+
+---
+
 # RoomFlow
 
 Control lights and outlets per room based on time of day — with optional
@@ -164,6 +172,10 @@ Issues and pull requests are welcome. This is a relatively young project —
 expect some rough edges, especially around more advanced condition
 combinations and additional device types (climate, media_player, etc. are
 natural next steps).
+
+## Supported languages
+
+English (en), Svenska (sv), Norsk (no), Suomi (fi), Dansk (da), Deutsch (de), Français (fr), Nederlands (nl)
 
 ## License
 

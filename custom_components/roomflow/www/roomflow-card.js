@@ -2196,13 +2196,15 @@ class RoomFlowCard extends HTMLElement {
 
     if (e.target.closest("#apply-all-btn")) {
       const btn = e.target.closest("#apply-all-btn");
-      const original = btn.textContent;
+      // Save/restore innerHTML (not textContent) so the button's icon
+      // isn't permanently wiped out by the transient text-only feedback.
+      const original = btn.innerHTML;
       btn.textContent = this._t("applying");
       btn.disabled = true;
       this._hass.callWS({ type: "roomflow/apply_now" }).finally(() => {
         btn.textContent = this._t("done");
         setTimeout(() => {
-          btn.textContent = original;
+          btn.innerHTML = original;
           btn.disabled = false;
         }, 1200);
       });
@@ -2212,7 +2214,7 @@ class RoomFlowCard extends HTMLElement {
     const applyRoomBtn = e.target.closest("[data-apply-room]");
     if (applyRoomBtn) {
       const roomId = applyRoomBtn.getAttribute("data-apply-room");
-      const original = applyRoomBtn.textContent;
+      const original = applyRoomBtn.innerHTML;
       applyRoomBtn.textContent = this._t("applying");
       applyRoomBtn.disabled = true;
       this._hass
@@ -2220,7 +2222,7 @@ class RoomFlowCard extends HTMLElement {
         .finally(() => {
           applyRoomBtn.textContent = this._t("done");
           setTimeout(() => {
-            applyRoomBtn.textContent = original;
+            applyRoomBtn.innerHTML = original;
             applyRoomBtn.disabled = false;
           }, 1200);
         });

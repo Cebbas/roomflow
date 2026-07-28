@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fixed: "Test now" (room and all-rooms) lost its icon after the first
+  click.** The button's transient "Applying…"/"Done!" text was set via
+  `textContent`, which wiped out the icon element inside it instead of
+  just swapping the visible label. Now saves/restores `innerHTML` so the
+  icon survives.
 - **Checkboxes and text/number fields now use Home Assistant's native
   `ha-switch`/`ha-textfield` components** instead of plain browser
   `<input>`, so they match the rest of Home Assistant's own UI. Fields

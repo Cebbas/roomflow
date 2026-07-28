@@ -64,8 +64,11 @@ from .const import (
     WEEKEND_STATES,
     HOME_STATES,
     DEFAULT_TRANSITIONS,
+    DEFAULT_SCHEDULE_ID,
     SIGNAL_RECOMPUTE,
-    infer_periods,
+    infer_schedules,
+    periods_for_schedule,
+    transitions_for_schedule,
     infer_day_type_mode,
     infer_home_mode,
 )
@@ -281,6 +284,23 @@ def _migrate_period_keys(cfg: dict) -> dict:
     return cfg
 
 
+def _migrate_default_transitions_nesting(cfg: dict) -> dict:
+    """One-time migration: default_transitions used to be a flat
+    {period_id: seconds} map, shared by every room via the single old
+    global periods list. Now that periods live inside per-schedule lists
+    (see CONF_SCHEDULES in const.py), it nests one level deeper by
+    schedule id - wrap the old flat shape under DEFAULT_SCHEDULE_ID so
+    every existing room (still pointed at that schedule by default) keeps
+    its exact transition timings. Detected by value type (the old shape's
+    values are plain numbers, the new shape's are dicts) rather than a
+    stored version flag, so it's safe to run unconditionally on every
+    load."""
+    transitions = cfg.get("default_transitions")
+    if transitions and not any(isinstance(v, dict) for v in transitions.values()):
+        cfg["default_transitions"] = {DEFAULT_SCHEDULE_ID: transitions}
+    return cfg
+
+
 # Every settings key any previous config-flow generation ever wrote to
 # entry.data, now that all of it lives in the card-editable JSON config
 # store instead. Copied over once per key so existing installs keep working
@@ -316,10 +336,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     stored = await store.async_load()
     config = _migrate_period_keys(stored or {})
+    config = _migrate_default_transitions_nesting(config)
     _migrate_entry_data_to_config(entry, config)
     config.setdefault("rooms", [])
     config.setdefault("buttons", [])
-    config.setdefault("default_transitions", dict(DEFAULT_TRANSITIONS))
+    config.setdefault("default_transitions", {DEFAULT_SCHEDULE_ID: dict(DEFAULT_TRANSITIONS)})
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["store"] = store
@@ -341,9 +362,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # card's Settings tab take effect immediately - no reload needed, same
     # as how _apply_to_rooms already re-reads "default_transitions" below.
 
-    def _get_period() -> str | None:
+    def _get_period(schedule_id: str | None = None) -> str | None:
         cfg = hass.data[DOMAIN]["config"]
-        periods = infer_periods(cfg)  # already priority-ordered (top = highest)
+        periods = periods_for_schedule(cfg, schedule_id)  # already priority-ordered (top = highest)
         is_weekend = _get_day_type() == "weekend"
         home_state = _get_home_state()
         now_time = dt_util.now().time()
@@ -444,20 +465,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _apply_to_rooms(
         rooms: list, forced_period: str | None = None, respect_motion_control: bool = False
     ) -> None:
-        if forced_period is not None:
-            period = forced_period
-        else:
-            period = _get_period()
-            if period is None:
-                _LOGGER.debug("RoomFlow: could not resolve current period, skipping")
-                return
-
         day_type = _get_day_type()
         home_state = _get_home_state()
         cfg = hass.data[DOMAIN]["config"]
-        default_transitions = cfg.get("default_transitions", {})
 
         for room in rooms:
+            schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+            if forced_period is not None:
+                period = forced_period
+            else:
+                # Resolved per-room (not once for the whole batch) since
+                # each room can follow a different schedule (room["schedule_id"])
+                # - see const.py's CONF_SCHEDULES docs.
+                period = _get_period(schedule_id)
+                if period is None:
+                    _LOGGER.debug(
+                        "RoomFlow: could not resolve current period for room '%s', skipping", room.get("id")
+                    )
+                    continue
+
+            default_transitions = transitions_for_schedule(cfg, schedule_id)
             active_condition_ids = _active_room_conditions(hass, room)
             for device in room.get("devices", []):
                 # Motion-enabled devices are exclusively controlled by the
@@ -636,14 +663,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
     async def _apply_motion_device_on(room: dict, device: dict) -> None:
-        period = _get_period()
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        period = _get_period(schedule_id)
         if period is None:
             return
         day_type = _get_day_type()
         home_state = _get_home_state()
         active_condition_ids = _active_room_conditions(hass, room)
         cfg = hass.data[DOMAIN]["config"]
-        default_transitions = cfg.get("default_transitions", {})
+        default_transitions = transitions_for_schedule(cfg, schedule_id)
         await _apply_single_device(
             device, period, day_type, home_state, active_condition_ids, default_transitions
         )
@@ -774,7 +802,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             unsub()
 
         cfg = hass.data[DOMAIN]["config"]
-        periods = infer_periods(cfg)
+        # Every schedule's periods need listeners, regardless of which
+        # rooms currently follow which schedule - a room can be pointed at
+        # a different schedule at any time from the card, with no reload.
+        periods = [period for schedule in infer_schedules(cfg) for period in schedule["periods"]]
         day_type_mode = infer_day_type_mode(cfg)
         home_mode = infer_home_mode(cfg)
         day_type_sensor = cfg.get(CONF_DAY_TYPE_SENSOR)

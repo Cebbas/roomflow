@@ -3,14 +3,17 @@
 // resource: Settings -> Dashboards -> Resources -> /local/roomflow-card.js
 // (JavaScript module)
 
-// Periods are a user-editable, priority-ordered list stored in
-// this._config_data.periods (mirrors const.py's `periods`/infer_periods -
-// each {id, name, condition_groups}). A period is active if ANY of its
-// condition groups is true (OR across groups); a group is true only if
-// ALL of its conditions hold (AND within a group) - i.e. "OR of AND
-// groups", built by picking a condition type from a flat list instead of a
-// fixed set of always-visible source rows. First period (list order, top
-// = highest) with a true group wins - see _get_period in __init__.py.
+// Schedules are a user-editable list stored in this._config_data.schedules
+// (mirrors const.py's `schedules`/infer_schedules - each {id, name,
+// periods}), each an independently named, priority-ordered `periods` list.
+// A room follows one schedule at a time (room.schedule_id), so e.g.
+// outdoor lighting can have its own simple on/off window instead of the
+// shared indoor one. A period is active if ANY of its condition groups is
+// true (OR across groups); a group is true only if ALL of its conditions
+// hold (AND within a group) - i.e. "OR of AND groups", built by picking a
+// condition type from a flat list instead of a fixed set of always-visible
+// source rows. First period (list order, top = highest) with a true group
+// wins - see _get_period in __init__.py.
 
 const CONDITION_TYPES = [
   { key: "time", labelKey: "condition_type_time" },
@@ -271,6 +274,23 @@ function normalizePeriodsList(rawPeriods) {
   }));
 }
 
+// Schedules: a named, independent `periods` list of its own - a room picks
+// which schedule governs it (room.schedule_id), so e.g. outdoor lighting can
+// follow its own simple dusk-to-dawn window instead of the shared indoor
+// morning/day/afternoon/evening/night one. Mirrors const.py's
+// CONF_SCHEDULES/infer_schedules; every install has at least one schedule
+// (DEFAULT_SCHEDULE_ID).
+const DEFAULT_SCHEDULE_ID = "main";
+const DEFAULT_SCHEDULE_NAME = "Main";
+
+function normalizeSchedule(schedule) {
+  return {
+    id: schedule.id || uid(),
+    name: schedule.name || "",
+    periods: normalizePeriodsList(schedule.periods || []),
+  };
+}
+
 // Keys must match actual astral.sun attribute names (what Home Assistant's
 // get_astral_event_date looks up) - "noon"/"midnight", not "solar_noon"/
 // "solar_midnight".
@@ -419,9 +439,8 @@ const STRINGS = {
     status_not_configured: "not configured",
     enable_more_conditions_help:
       "Set the relevant source below (Weekday/weekend and/or Home/away) to enable more conditions.",
-    default_transition_header: "Default transition time per period",
-    default_transition_help:
-      "Applies to every light, unless an individual device has its own transition time set.",
+    default_transition_header: "Default transition time",
+    room_schedule_label: "Schedule",
 
     operator_above: "is above",
     operator_below: "is below",
@@ -455,15 +474,19 @@ const STRINGS = {
     sun_event_dusk: "Dusk",
     sun_event_midnight: "Solar midnight",
 
-    periods_header: "Time-of-day periods",
-    periods_help:
-      "Priority order (top wins) - the first period with a true condition group is the current period. Each period is a list of OR'd groups (any group being true makes the period active); each group is a list of AND'd conditions (all of them must hold). Pick a condition type to add one.",
+    schedules_header: "Schedules",
+    schedules_help:
+      "Each schedule is its own independent, priority-ordered list of periods (top wins) - the first period with a true condition group is the current one for that schedule. A room follows one schedule at a time (set when adding it), so e.g. outdoor lighting can have its own simple on/off window instead of the shared indoor one. Each period is a list of OR'd groups (any group being true makes the period active); each group is a list of AND'd conditions (all of them must hold). Pick a condition type to add one.",
     and_within_group_help: "All conditions below must hold (AND)",
     or_between_groups_label: "or",
     add_condition_placeholder: "+ Add condition...",
     add_condition_group: "+ Add OR group",
     name_placeholder: "Name",
     add_period: "+ Add period",
+    add_schedule: "+ Add schedule",
+    schedule_name_placeholder: "Schedule name",
+    schedule_fallback_name: "Schedule",
+    new_schedule_name: "New schedule",
 
     day_type_sensor_help: 'For a plain on/off sensor (no "weekend"/"helg"-style text), pick what "on" means:',
     day_type_sensor_inverted_label:
@@ -578,9 +601,8 @@ const STRINGS = {
     status_not_configured: "inte konfigurerat",
     enable_more_conditions_help:
       "Ställ in relevant källa nedan (Vardag/helg och/eller Hemma/borta) för att aktivera fler villkor.",
-    default_transition_header: "Standard transitionstid per period",
-    default_transition_help:
-      "Gäller alla lampor, om inte en specifik enhet har en egen transitionstid inställd.",
+    default_transition_header: "Standard transitionstid",
+    room_schedule_label: "Schema",
 
     operator_above: "är över",
     operator_below: "är under",
@@ -614,15 +636,19 @@ const STRINGS = {
     sun_event_dusk: "Skymning",
     sun_event_midnight: "Solmidnatt",
 
-    periods_header: "Tid-på-dygnet-perioder",
-    periods_help:
-      "Prioritetsordning (överst vinner) - den första perioden med en sann villkorsgrupp är den aktuella perioden. Varje period är en lista av ELLER-ihopkopplade grupper (perioden är aktiv om NÅGON grupp är sann); varje grupp är en lista av OCH-ihopkopplade villkor (alla måste stämma). Välj en villkorstyp för att lägga till ett.",
+    schedules_header: "Scheman",
+    schedules_help:
+      "Varje schema är sin egen oberoende, prioritetsordnade lista av perioder (överst vinner) - den första perioden med en sann villkorsgrupp är den aktuella för det schemat. Ett rum följer ett schema åt gången (valt när det läggs till), så t.ex. ytterbelysning kan ha sitt eget enkla på/av-fönster istället för det delade inomhusschemat. Varje period är en lista av ELLER-ihopkopplade grupper (perioden är aktiv om NÅGON grupp är sann); varje grupp är en lista av OCH-ihopkopplade villkor (alla måste stämma). Välj en villkorstyp för att lägga till ett.",
     and_within_group_help: "Alla villkor nedan måste stämma (OCH)",
     or_between_groups_label: "eller",
     add_condition_placeholder: "+ Lägg till villkor...",
     add_condition_group: "+ Lägg till ELLER-grupp",
     name_placeholder: "Namn",
     add_period: "+ Lägg till period",
+    add_schedule: "+ Lägg till schema",
+    schedule_name_placeholder: "Schemanamn",
+    schedule_fallback_name: "Schema",
+    new_schedule_name: "Nytt schema",
 
     day_type_sensor_help: 'För en vanlig på/av-sensor (ingen "weekend"/"helg"-liknande text), välj vad "på" betyder:',
     day_type_sensor_inverted_label:
@@ -1926,23 +1952,69 @@ class RoomFlowCard extends HTMLElement {
     return (this._config_data.home_mode || "none") !== "none";
   }
 
+  // A room's icon follows the HA Area it's linked to (set via Settings ->
+  // Areas -> pick icon), same as the rest of the HA UI - falls back to a
+  // generic room icon for a manually-named room with no area, or an area
+  // that hasn't had a custom icon set.
+  _roomIcon(room) {
+    const area = room.area_id && this._areas.find((a) => a.area_id === room.area_id);
+    return (area && area.icon) || "mdi:sofa-outline";
+  }
+
+  _schedule(scheduleId) {
+    const schedules = this._config_data.schedules || [];
+    return schedules.find((s) => s.id === scheduleId) || schedules[0];
+  }
+
+  _roomSchedule(room) {
+    return this._schedule(room.schedule_id);
+  }
+
+  _roomPeriods(room) {
+    const schedule = this._roomSchedule(room);
+    return (schedule && schedule.periods) || [];
+  }
+
   _migrateConfig() {
     const cd = this._config_data;
     if (!cd.rooms) cd.rooms = [];
     if (!cd.buttons) cd.buttons = [];
-    if (!cd.default_transitions) cd.default_transitions = { ...DEFAULT_TRANSITIONS };
 
-    // Periods: a user-editable, priority-ordered list (add/remove/rename/
-    // reorder), each holding a list of OR'd condition groups (AND within a
-    // group). Older installs have either the pre-existing global
-    // time_sources/time_mode plus parallel per-period dicts instead of a
-    // `periods` list, or a `periods` list from before condition_groups
-    // existed - normalizePeriodsList migrates all of those into the
-    // current shape (mirrors const.py's infer_periods on the backend).
-    if (!cd.periods) {
-      cd.periods = buildPeriodsFromLegacy(cd);
+    // Schedules: a named, independent periods list of its own (see
+    // DEFAULT_SCHEDULE_ID docs above) - a room follows one via its
+    // schedule_id. Older installs have either the pre-existing global
+    // time_sources/time_mode plus parallel per-period dicts, or a flat
+    // top-level `periods` list from before schedules existed (both
+    // predate condition_groups too, in which case normalizePeriodsList
+    // handles that layer) - migrate either into a single "Main" schedule
+    // so every room without an explicit schedule_id keeps following
+    // exactly the same periods as before.
+    if (!cd.schedules) {
+      const periods = cd.periods || buildPeriodsFromLegacy(cd);
+      cd.schedules = [{ id: DEFAULT_SCHEDULE_ID, name: DEFAULT_SCHEDULE_NAME, periods }];
     }
-    cd.periods = normalizePeriodsList(cd.periods);
+    delete cd.periods;
+    cd.schedules = cd.schedules.map(normalizeSchedule);
+    if (!cd.schedules.length) {
+      cd.schedules = [{ id: DEFAULT_SCHEDULE_ID, name: DEFAULT_SCHEDULE_NAME, periods: [] }];
+    }
+
+    // default_transitions used to be a flat {period_id: seconds} map,
+    // shared by every room via the single old global periods list. Now
+    // that periods live inside per-schedule lists, it nests one level
+    // deeper by schedule id - detected by value type (old shape's values
+    // are plain numbers, new shape's are objects), mirroring __init__.py's
+    // _migrate_default_transitions_nesting.
+    if (!cd.default_transitions) {
+      cd.default_transitions = { [DEFAULT_SCHEDULE_ID]: { ...DEFAULT_TRANSITIONS } };
+    } else {
+      const values = Object.values(cd.default_transitions);
+      const looksFlat = values.length > 0 && typeof values[0] === "number";
+      if (looksFlat) cd.default_transitions = { [DEFAULT_SCHEDULE_ID]: cd.default_transitions };
+    }
+    cd.schedules.forEach((s) => {
+      if (!cd.default_transitions[s.id]) cd.default_transitions[s.id] = {};
+    });
 
     // Day-type/home-away: infer "sensor" if an older bare sensor field is
     // already set and no explicit mode was ever saved.
@@ -1955,6 +2027,12 @@ class RoomFlowCard extends HTMLElement {
     if (cd.area_id === undefined) cd.area_id = null;
 
     cd.rooms.forEach((room) => {
+      // A room follows one schedule (schedule_id) - fall back to the
+      // first schedule if unset or dangling (its schedule was deleted),
+      // same graceful-degradation as const.py's periods_for_schedule.
+      if (!room.schedule_id || !cd.schedules.some((s) => s.id === room.schedule_id)) {
+        room.schedule_id = cd.schedules[0].id;
+      }
       if (!room.motion) {
         room.motion = { enabled: false, timeout_minutes: 10, triggers: [] };
       } else if (!room.motion.triggers) {
@@ -1968,11 +2046,12 @@ class RoomFlowCard extends HTMLElement {
       if (room.motion.warn_minutes === undefined) room.motion.warn_minutes = 3;
       if (room.motion.warn_brightness === undefined) room.motion.warn_brightness = 25;
       if (!room.custom_conditions) room.custom_conditions = [];
+      const roomPeriods = this._roomPeriods(room);
       (room.devices || []).forEach((device) => {
         if (!device.transitions) device.transitions = {};
         if (!device.motion) device.motion = { enabled: false, off_delay_minutes: null };
         const behaviors = device.behaviors || {};
-        cd.periods.forEach((p) => {
+        roomPeriods.forEach((p) => {
           const raw = behaviors[p.id];
           const base = { state: "off" };
           if (device.supports_brightness) base.brightness = 255;
@@ -2013,7 +2092,7 @@ class RoomFlowCard extends HTMLElement {
     }, 400);
   }
 
-  _buildDevice(entity) {
+  _buildDevice(entity, scheduleId) {
     const type = entity.domain === "light" ? "light" : "outlet";
     const supportsBrightness = !!entity.supports_brightness;
     const supportsColorTemp = !!entity.supports_color_temp;
@@ -2023,7 +2102,8 @@ class RoomFlowCard extends HTMLElement {
     if (supportsColorTemp) base.color_temp_kelvin = 3000;
 
     const behaviors = {};
-    (this._config_data.periods || []).forEach((p) => {
+    const periods = (this._schedule(scheduleId) || {}).periods || [];
+    periods.forEach((p) => {
       behaviors[p.id] = {
         default: { ...base },
         weekend: emptyVariant(base, true),
@@ -2042,14 +2122,15 @@ class RoomFlowCard extends HTMLElement {
     };
   }
 
-  _addRoom(name, areaId) {
+  _addRoom(name, areaId, scheduleId) {
+    const schedule = this._schedule(scheduleId);
     // Lights/outlets already assigned to this area in Home Assistant are
     // added automatically, so a room tied to an area starts pre-populated
     // instead of empty.
     const devices = areaId
-      ? this._entities.filter((e) => e.area_id === areaId).map((e) => this._buildDevice(e))
+      ? this._entities.filter((e) => e.area_id === areaId).map((e) => this._buildDevice(e, schedule.id))
       : [];
-    const room = { id: uid(), name: name, area_id: areaId || null, devices: devices };
+    const room = { id: uid(), name: name, area_id: areaId || null, schedule_id: schedule.id, devices: devices };
     this._config_data.rooms.push(room);
     this._activeRoomId = room.id;
     this._scheduleSave();
@@ -2070,7 +2151,7 @@ class RoomFlowCard extends HTMLElement {
     const entity = this._entities.find((e) => e.entity_id === entityId);
     if (!entity) return;
     const room = this._config_data.rooms.find((r) => r.id === roomId);
-    room.devices.push(this._buildDevice(entity));
+    room.devices.push(this._buildDevice(entity, room.schedule_id));
     this._scheduleSave();
     this._render();
   }
@@ -2184,21 +2265,59 @@ class RoomFlowCard extends HTMLElement {
   // const.py's DEFAULT_PERIODS/infer_periods on the backend. Unlike custom
   // conditions above, groups/conditions don't need move-up/down: AND and
   // OR are both commutative, so only add/remove are needed.
-  _addPeriod() {
-    if (!this._config_data.periods) this._config_data.periods = [];
-    this._config_data.periods.push({ id: uid(), name: this._t("new_period_name"), condition_groups: [] });
+
+  // Schedules: a named, independent periods list of its own (see
+  // DEFAULT_SCHEDULE_ID docs) - like schedules themselves, no move-up/down
+  // (order has no effect, only room.schedule_id picks which one applies).
+  _addSchedule() {
+    if (!this._config_data.schedules) this._config_data.schedules = [];
+    this._config_data.schedules.push({ id: uid(), name: this._t("new_schedule_name"), periods: [] });
     this._scheduleSave();
     this._render();
   }
 
-  _removePeriod(periodId) {
-    this._config_data.periods = (this._config_data.periods || []).filter((p) => p.id !== periodId);
+  // Refuses to remove the last remaining schedule (every room needs one to
+  // fall back on) and reassigns any room pointed at the removed schedule
+  // to the first remaining one, mirroring const.py's periods_for_schedule
+  // fallback so nothing is left dangling.
+  _removeSchedule(scheduleId) {
+    const schedules = this._config_data.schedules || [];
+    if (schedules.length <= 1) return;
+    this._config_data.schedules = schedules.filter((s) => s.id !== scheduleId);
+    const fallbackId = this._config_data.schedules[0].id;
+    (this._config_data.rooms || []).forEach((room) => {
+      if (room.schedule_id === scheduleId) room.schedule_id = fallbackId;
+    });
     this._scheduleSave();
     this._render();
   }
 
-  _updatePeriod(periodId, field, value) {
-    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+  _updateScheduleName(scheduleId, name) {
+    const schedule = (this._config_data.schedules || []).find((s) => s.id === scheduleId);
+    if (!schedule) return;
+    schedule.name = name;
+    this._scheduleSave();
+  }
+
+  _addPeriod(scheduleId) {
+    const schedule = this._schedule(scheduleId);
+    if (!schedule) return;
+    schedule.periods.push({ id: uid(), name: this._t("new_period_name"), condition_groups: [] });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removePeriod(scheduleId, periodId) {
+    const schedule = this._schedule(scheduleId);
+    if (!schedule) return;
+    schedule.periods = schedule.periods.filter((p) => p.id !== periodId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  _updatePeriod(scheduleId, periodId, field, value) {
+    const schedule = this._schedule(scheduleId);
+    const period = schedule && schedule.periods.find((p) => p.id === periodId);
     if (!period) return;
     period[field] = value;
     this._scheduleSave();
@@ -2208,16 +2327,18 @@ class RoomFlowCard extends HTMLElement {
   // condition - an empty group would never match anything (see
   // _period_condition_groups_match in __init__.py) so there's no point
   // showing one with nothing in it.
-  _addConditionGroup(periodId) {
-    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+  _addConditionGroup(scheduleId, periodId) {
+    const schedule = this._schedule(scheduleId);
+    const period = schedule && schedule.periods.find((p) => p.id === periodId);
     if (!period) return;
     period.condition_groups.push({ id: uid(), conditions: [normalizeCondition({ type: "time" })] });
     this._scheduleSave();
     this._render();
   }
 
-  _removeConditionGroup(periodId, groupId) {
-    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+  _removeConditionGroup(scheduleId, periodId, groupId) {
+    const schedule = this._schedule(scheduleId);
+    const period = schedule && schedule.periods.find((p) => p.id === periodId);
     if (!period) return;
     period.condition_groups = period.condition_groups.filter((g) => g.id !== groupId);
     this._scheduleSave();
@@ -2225,8 +2346,9 @@ class RoomFlowCard extends HTMLElement {
   }
 
   // Adds a new AND'd condition to an existing group.
-  _addCondition(periodId, groupId, type) {
-    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+  _addCondition(scheduleId, periodId, groupId, type) {
+    const schedule = this._schedule(scheduleId);
+    const period = schedule && schedule.periods.find((p) => p.id === periodId);
     const group = period && period.condition_groups.find((g) => g.id === groupId);
     if (!group) return;
     group.conditions.push(normalizeCondition({ type }));
@@ -2236,8 +2358,9 @@ class RoomFlowCard extends HTMLElement {
 
   // Removes one condition from a group; a group left with none is dropped
   // too rather than lingering as a dead, never-matching group in the UI.
-  _removeCondition(periodId, groupId, conditionId) {
-    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+  _removeCondition(scheduleId, periodId, groupId, conditionId) {
+    const schedule = this._schedule(scheduleId);
+    const period = schedule && schedule.periods.find((p) => p.id === periodId);
     const group = period && period.condition_groups.find((g) => g.id === groupId);
     if (!group) return;
     group.conditions = group.conditions.filter((c) => c.id !== conditionId);
@@ -2250,8 +2373,9 @@ class RoomFlowCard extends HTMLElement {
 
   // Switching a condition's type resets its fields to that type's
   // defaults (the old type's fields don't apply), keeping only its id.
-  _updateConditionType(periodId, groupId, conditionId, newType) {
-    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+  _updateConditionType(scheduleId, periodId, groupId, conditionId, newType) {
+    const schedule = this._schedule(scheduleId);
+    const period = schedule && schedule.periods.find((p) => p.id === periodId);
     const group = period && period.condition_groups.find((g) => g.id === groupId);
     const index = group ? group.conditions.findIndex((c) => c.id === conditionId) : -1;
     if (index === -1) return;
@@ -2260,8 +2384,9 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
-  _updateCondition(periodId, groupId, conditionId, field, value) {
-    const period = (this._config_data.periods || []).find((p) => p.id === periodId);
+  _updateCondition(scheduleId, periodId, groupId, conditionId, field, value) {
+    const schedule = this._schedule(scheduleId);
+    const period = schedule && schedule.periods.find((p) => p.id === periodId);
     const group = period && period.condition_groups.find((g) => g.id === groupId);
     const condition = group && group.conditions.find((c) => c.id === conditionId);
     if (!condition) return;
@@ -2269,8 +2394,10 @@ class RoomFlowCard extends HTMLElement {
     this._scheduleSave();
   }
 
-  _movePeriod(periodId, direction) {
-    const periods = this._config_data.periods || [];
+  _movePeriod(scheduleId, periodId, direction) {
+    const schedule = this._schedule(scheduleId);
+    if (!schedule) return;
+    const periods = schedule.periods;
     const index = periods.findIndex((p) => p.id === periodId);
     if (index === -1) return;
     const swapWith = direction === "up" ? index - 1 : index + 1;
@@ -2422,46 +2549,62 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
-    if (e.target.closest("[data-add-period]")) {
-      this._addPeriod();
+    if (e.target.closest("[data-add-schedule]")) {
+      this._addSchedule();
+      return;
+    }
+
+    const removeScheduleBtn = e.target.closest("[data-remove-schedule]");
+    if (removeScheduleBtn) {
+      this._removeSchedule(removeScheduleBtn.getAttribute("data-remove-schedule"));
+      return;
+    }
+
+    const addPeriodBtn = e.target.closest("[data-add-period]");
+    if (addPeriodBtn) {
+      this._addPeriod(addPeriodBtn.getAttribute("data-add-period"));
       return;
     }
 
     const removePeriodBtn = e.target.closest("[data-remove-period]");
     if (removePeriodBtn) {
-      this._removePeriod(removePeriodBtn.getAttribute("data-remove-period"));
+      const [scheduleId, periodId] = removePeriodBtn.getAttribute("data-remove-period").split("|");
+      this._removePeriod(scheduleId, periodId);
       return;
     }
 
     const movePeriodUpBtn = e.target.closest("[data-move-period-up]");
     if (movePeriodUpBtn) {
-      this._movePeriod(movePeriodUpBtn.getAttribute("data-move-period-up"), "up");
+      const [scheduleId, periodId] = movePeriodUpBtn.getAttribute("data-move-period-up").split("|");
+      this._movePeriod(scheduleId, periodId, "up");
       return;
     }
 
     const movePeriodDownBtn = e.target.closest("[data-move-period-down]");
     if (movePeriodDownBtn) {
-      this._movePeriod(movePeriodDownBtn.getAttribute("data-move-period-down"), "down");
+      const [scheduleId, periodId] = movePeriodDownBtn.getAttribute("data-move-period-down").split("|");
+      this._movePeriod(scheduleId, periodId, "down");
       return;
     }
 
     const addConditionGroupBtn = e.target.closest("[data-add-condition-group]");
     if (addConditionGroupBtn) {
-      this._addConditionGroup(addConditionGroupBtn.getAttribute("data-add-condition-group"));
+      const [scheduleId, periodId] = addConditionGroupBtn.getAttribute("data-add-condition-group").split("|");
+      this._addConditionGroup(scheduleId, periodId);
       return;
     }
 
     const removeConditionGroupBtn = e.target.closest("[data-remove-condition-group]");
     if (removeConditionGroupBtn) {
-      const [periodId, groupId] = removeConditionGroupBtn.getAttribute("data-remove-condition-group").split("|");
-      this._removeConditionGroup(periodId, groupId);
+      const [scheduleId, periodId, groupId] = removeConditionGroupBtn.getAttribute("data-remove-condition-group").split("|");
+      this._removeConditionGroup(scheduleId, periodId, groupId);
       return;
     }
 
     const removePeriodConditionBtn = e.target.closest("[data-remove-condition]");
     if (removePeriodConditionBtn) {
-      const [periodId, groupId, conditionId] = removePeriodConditionBtn.getAttribute("data-remove-condition").split("|");
-      this._removeCondition(periodId, groupId, conditionId);
+      const [scheduleId, periodId, groupId, conditionId] = removePeriodConditionBtn.getAttribute("data-remove-condition").split("|");
+      this._removeCondition(scheduleId, periodId, groupId, conditionId);
       return;
     }
 
@@ -2488,6 +2631,7 @@ class RoomFlowCard extends HTMLElement {
     if (e.target.closest("#add-room-btn")) {
       const areaSelect = this.querySelector("#new-room-area");
       const nameInput = this.querySelector("#new-room-name");
+      const scheduleSelect = this.querySelector("#new-room-schedule");
       const areaId = areaSelect.value;
       let name = nameInput.value.trim();
       if (areaId) {
@@ -2495,7 +2639,7 @@ class RoomFlowCard extends HTMLElement {
         name = name || (area ? area.name : "");
       }
       if (!name) return;
-      this._addRoom(name, areaId || null);
+      this._addRoom(name, areaId || null, scheduleSelect ? scheduleSelect.value : undefined);
       return;
     }
 
@@ -2575,6 +2719,21 @@ class RoomFlowCard extends HTMLElement {
       if (periodWrap) {
         periodWrap.style.display =
           e.target.closest("#new-button-action").value === "force_period" ? "inline-block" : "none";
+      }
+      return;
+    }
+
+    if (e.target.closest("#new-button-room")) {
+      // "Force period" always targets the chosen room, so its period
+      // choices come from that room's own schedule - repopulate directly
+      // (no save/re-render) rather than losing the rest of the in-progress
+      // add-button form.
+      const periodSelect = this.querySelector("#new-button-period");
+      if (periodSelect) {
+        const roomId = e.target.closest("#new-button-room").value;
+        const room = this._config_data.rooms.find((r) => r.id === roomId);
+        const periods = room ? this._roomPeriods(room) : [];
+        periodSelect.innerHTML = periods.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
       }
       return;
     }
@@ -2721,42 +2880,49 @@ class RoomFlowCard extends HTMLElement {
 
     const defaultTransitionInput = e.target.closest("[data-default-transition]");
     if (defaultTransitionInput) {
-      const period = defaultTransitionInput.getAttribute("data-default-transition");
+      const [scheduleId, periodId] = defaultTransitionInput.getAttribute("data-default-transition").split("|");
       const val = parseFloat(defaultTransitionInput.value);
-      this._config_data.default_transitions[period] = isNaN(val) ? 0 : val;
+      if (!this._config_data.default_transitions[scheduleId]) this._config_data.default_transitions[scheduleId] = {};
+      this._config_data.default_transitions[scheduleId][periodId] = isNaN(val) ? 0 : val;
       this._scheduleSave();
       return;
     }
 
-    // ---------- Settings tab: time-of-day periods / day-type / home-away / device ----------
+    // ---------- Settings tab: schedules/periods / day-type / home-away / device ----------
+
+    const scheduleNameInput = e.target.closest("[data-schedule-name]");
+    if (scheduleNameInput) {
+      this._updateScheduleName(
+        scheduleNameInput.getAttribute("data-schedule-name"),
+        scheduleNameInput.value.trim() || this._t("schedule_fallback_name")
+      );
+      return;
+    }
 
     const periodNameInput = e.target.closest("[data-period-name]");
     if (periodNameInput) {
-      this._updatePeriod(
-        periodNameInput.getAttribute("data-period-name"),
-        "name",
-        periodNameInput.value.trim() || this._t("period_fallback_name")
-      );
+      const [scheduleId, periodId] = periodNameInput.getAttribute("data-period-name").split("|");
+      this._updatePeriod(scheduleId, periodId, "name", periodNameInput.value.trim() || this._t("period_fallback_name"));
       return;
     }
 
     const conditionTypeSelect = e.target.closest("[data-condition-type]");
     if (conditionTypeSelect) {
-      const [periodId, groupId, conditionId] = conditionTypeSelect.getAttribute("data-condition-type").split("|");
-      this._updateConditionType(periodId, groupId, conditionId, conditionTypeSelect.value);
+      const [scheduleId, periodId, groupId, conditionId] = conditionTypeSelect.getAttribute("data-condition-type").split("|");
+      this._updateConditionType(scheduleId, periodId, groupId, conditionId, conditionTypeSelect.value);
       return;
     }
 
     const addConditionSelect = e.target.closest("[data-add-condition]");
     if (addConditionSelect) {
-      const [periodId, groupId] = addConditionSelect.getAttribute("data-add-condition").split("|");
-      if (addConditionSelect.value) this._addCondition(periodId, groupId, addConditionSelect.value);
+      const [scheduleId, periodId, groupId] = addConditionSelect.getAttribute("data-add-condition").split("|");
+      if (addConditionSelect.value) this._addCondition(scheduleId, periodId, groupId, addConditionSelect.value);
       return;
     }
 
     const conditionField = e.target.closest("[data-condition]");
     if (conditionField) {
-      const [periodId, groupId, conditionId, field] = conditionField.getAttribute("data-condition").split("|");
+      const [scheduleId, periodId, groupId, conditionId, field] = conditionField.getAttribute("data-condition").split("|");
       let value;
       if (field === "offset_minutes") {
         const val = parseFloat(conditionField.value);
@@ -2768,7 +2934,7 @@ class RoomFlowCard extends HTMLElement {
       } else {
         value = conditionField.value.trim();
       }
-      this._updateCondition(periodId, groupId, conditionId, field, value);
+      this._updateCondition(scheduleId, periodId, groupId, conditionId, field, value);
       return;
     }
 
@@ -2887,7 +3053,7 @@ class RoomFlowCard extends HTMLElement {
         ${iconName ? icon(iconName) : ""}${label}
       </button>`;
 
-    const roomTabsHtml = rooms.map((r) => tabBtn(r.id, r.name, "mdi:sofa-outline")).join("");
+    const roomTabsHtml = rooms.map((r) => tabBtn(r.id, r.name, this._roomIcon(r))).join("");
     const activeRoom = rooms.find((r) => r.id === this._activeRoomId);
 
     let contentHtml;
@@ -2934,6 +3100,8 @@ class RoomFlowCard extends HTMLElement {
     const areaOptions = this._areas
       .map((a) => `<option value="${a.area_id}">${a.name}</option>`)
       .join("");
+    const schedules = this._config_data.schedules || [];
+    const scheduleOptions = schedules.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
     return `
       <div class="rf-card">
         <div class="rf-card-title">${icon("mdi:plus-circle-outline")}${this._t("add_room_header")}</div>
@@ -2943,6 +3111,11 @@ class RoomFlowCard extends HTMLElement {
             ${areaOptions}
           </select>
           ${textField(`id="new-room-name" placeholder="${this._t("room_name_placeholder")}"`)}
+          ${
+            schedules.length > 1
+              ? `<select id="new-room-schedule" title="${this._t("room_schedule_label")}">${scheduleOptions}</select>`
+              : ""
+          }
           <button id="add-room-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
         </div>
         <div class="rf-help">
@@ -2953,21 +3126,10 @@ class RoomFlowCard extends HTMLElement {
   }
 
   _renderSettingsForm() {
-    const dt = this._config_data.default_transitions || {};
-    const periods = this._config_data.periods || [];
-    const rows = periods.map(
-      (p) => `
-      <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
-        ${icon(periodIcon(p.id))}
-        <span style="width:100px">${p.name}</span>
-        ${textField(`type="number" min="0" step="0.5" value="${dt[p.id] ?? 0}" data-default-transition="${p.id}" style="width:70px"`)} ${this._t("seconds")}
-      </div>`
-    ).join("");
-
     const hasDayType = this._hasDayType();
     const hasHome = this._hasHome();
     const capsInfo = `
-      <div style="margin-top:16px;font-size:0.9em;opacity:0.8;display:flex;flex-direction:column;gap:4px">
+      <div style="font-size:0.9em;opacity:0.8;display:flex;flex-direction:column;gap:4px">
         <span>${icon(hasDayType ? "mdi:check-circle-outline" : "mdi:circle-outline")}${this._t("day_type_condition_label")} ${hasDayType ? this._t("status_enabled") : this._t("status_not_configured")}</span>
         <span>${icon(hasHome ? "mdi:check-circle-outline" : "mdi:circle-outline")}${this._t("home_away_condition_label")} ${hasHome ? this._t("status_enabled") : this._t("status_not_configured")}</span>
         ${!hasDayType || !hasHome ? this._t("enable_more_conditions_help") : ""}
@@ -2976,14 +3138,9 @@ class RoomFlowCard extends HTMLElement {
 
     return `
       <div>
-        <div class="rf-section-title">${icon("mdi:transition")}${this._t("default_transition_header")}</div>
-        <div class="rf-help">
-          ${this._t("default_transition_help")}
-        </div>
-        ${rows}
         ${capsInfo}
         <div style="margin-top:20px;border-top:1px solid var(--divider-color);padding-top:4px">
-          ${this._renderPeriodsSection()}
+          ${this._renderSchedulesSection()}
           ${this._renderDayTypeSection()}
           ${this._renderHomeSection()}
           ${this._renderDeviceSection()}
@@ -2995,8 +3152,8 @@ class RoomFlowCard extends HTMLElement {
   // One condition's type-specific operator + value field(s). Every
   // condition type gets its own <select data-condition-type> so switching
   // it (see _updateConditionType) resets the row to that type's defaults.
-  _renderConditionFields(p, groupId, c) {
-    const path = `${p.id}|${groupId}|${c.id}`;
+  _renderConditionFields(scheduleId, p, groupId, c) {
+    const path = `${scheduleId}|${p.id}|${groupId}|${c.id}`;
 
     if (c.type === "time") {
       const operatorOptions = ["after", "before"]
@@ -3060,34 +3217,34 @@ class RoomFlowCard extends HTMLElement {
     return `<select data-condition="${path}|value">${valueOptions}</select>`;
   }
 
-  _renderConditionRow(p, groupId, c) {
+  _renderConditionRow(scheduleId, p, groupId, c) {
     const typeOptions = CONDITION_TYPES.map(
       (t) => `<option value="${t.key}" ${t.key === c.type ? "selected" : ""}>${this._t(t.labelKey)}</option>`
     ).join("");
     return `
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
         ${icon(CONDITION_TYPE_ICONS[c.type])}
-        <select data-condition-type="${p.id}|${groupId}|${c.id}">${typeOptions}</select>
-        ${this._renderConditionFields(p, groupId, c)}
-        <button class="rf-icon-btn rf-danger" data-remove-condition="${p.id}|${groupId}|${c.id}">${icon("mdi:close")}</button>
+        <select data-condition-type="${scheduleId}|${p.id}|${groupId}|${c.id}">${typeOptions}</select>
+        ${this._renderConditionFields(scheduleId, p, groupId, c)}
+        <button class="rf-icon-btn rf-danger" data-remove-condition="${scheduleId}|${p.id}|${groupId}|${c.id}">${icon("mdi:close")}</button>
       </div>`;
   }
 
   // One OR'd group: its conditions are AND'd together (see const.py's
   // period docs). No move-up/down needed here (or between groups) - AND/OR
   // are both commutative, so only add/remove matter.
-  _renderConditionGroup(p, group) {
-    const rows = group.conditions.map((c) => this._renderConditionRow(p, group.id, c)).join("");
+  _renderConditionGroup(scheduleId, p, group) {
+    const rows = group.conditions.map((c) => this._renderConditionRow(scheduleId, p, group.id, c)).join("");
     const addOptions = CONDITION_TYPES.map((t) => `<option value="${t.key}">${this._t(t.labelKey)}</option>`).join("");
     return `
       <div class="rf-condition-group">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:0.85em;opacity:0.7;flex:1">${this._t("and_within_group_help")}</span>
-          <button class="rf-icon-btn rf-danger" data-remove-condition-group="${p.id}|${group.id}">${icon("mdi:close")}</button>
+          <button class="rf-icon-btn rf-danger" data-remove-condition-group="${scheduleId}|${p.id}|${group.id}">${icon("mdi:close")}</button>
         </div>
         ${rows}
         <div style="margin-top:6px">
-          <select data-add-condition="${p.id}|${group.id}">
+          <select data-add-condition="${scheduleId}|${p.id}|${group.id}">
             <option value="" selected disabled>${this._t("add_condition_placeholder")}</option>
             ${addOptions}
           </select>
@@ -3095,40 +3252,71 @@ class RoomFlowCard extends HTMLElement {
       </div>`;
   }
 
-  _renderPeriodsSection() {
-    const periods = this._config_data.periods || [];
-
-    const rows = periods
-      .map((p, i) => {
-        const groupsHtml = p.condition_groups
-          .map((g, gi) => `${gi > 0 ? `<div class="rf-or-divider">${this._t("or_between_groups_label")}</div>` : ""}${this._renderConditionGroup(p, g)}`)
-          .join("");
-        return `
+  // One period within one schedule - its own name/transition/priority
+  // controls plus its condition groups.
+  _renderPeriod(scheduleId, p, i, periodCount, defaultTransitions) {
+    const groupsHtml = p.condition_groups
+      .map((g, gi) => `${gi > 0 ? `<div class="rf-or-divider">${this._t("or_between_groups_label")}</div>` : ""}${this._renderConditionGroup(scheduleId, p, g)}`)
+      .join("");
+    return `
       <div class="rf-card" style="margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${icon(periodIcon(p.id), "", "rf-device-icon")}
-          ${textField(`data-period-name="${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px"`)}
-          <button class="rf-icon-btn" data-move-period-up="${p.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
-          <button class="rf-icon-btn" data-move-period-down="${p.id}" ${i === periods.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
-          <button class="rf-icon-btn rf-danger" data-remove-period="${p.id}">${icon("mdi:close")}</button>
+          ${textField(`data-period-name="${scheduleId}|${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px"`)}
+          ${textField(`type="number" min="0" step="0.5" value="${defaultTransitions[p.id] ?? 0}" data-default-transition="${scheduleId}|${p.id}" style="width:70px" title="${this._t("default_transition_header")}"`)} ${this._t("seconds")}
+          <button class="rf-icon-btn" data-move-period-up="${scheduleId}|${p.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
+          <button class="rf-icon-btn" data-move-period-down="${scheduleId}|${p.id}" ${i === periodCount - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
+          <button class="rf-icon-btn rf-danger" data-remove-period="${scheduleId}|${p.id}">${icon("mdi:close")}</button>
         </div>
         <div style="margin-top:6px">${groupsHtml}</div>
         <div style="margin-top:6px">
-          <button class="rf-btn rf-btn-flat" data-add-condition-group="${p.id}">${icon("mdi:plus")}${this._t("add_condition_group")}</button>
+          <button class="rf-btn rf-btn-flat" data-add-condition-group="${scheduleId}|${p.id}">${icon("mdi:plus")}${this._t("add_condition_group")}</button>
         </div>
       </div>`;
-      })
+  }
+
+  // One schedule: a named, independent periods list of its own (see
+  // DEFAULT_SCHEDULE_ID docs) - a room follows one via room.schedule_id,
+  // so e.g. outdoor lighting can have its own simple dusk-to-dawn window
+  // instead of the shared indoor morning/day/afternoon/evening/night one.
+  _renderSchedule(schedule, scheduleCount) {
+    const defaultTransitions = (this._config_data.default_transitions || {})[schedule.id] || {};
+    const periods = schedule.periods;
+    const periodsHtml = periods
+      .map((p, i) => this._renderPeriod(schedule.id, p, i, periods.length, defaultTransitions))
       .join("");
 
     return `
-      <div class="rf-section">
-        <div class="rf-section-title">${icon("mdi:clock-time-eight-outline")}${this._t("periods_header")}</div>
-        <div class="rf-help">
-          ${this._t("periods_help")}
+      <div class="rf-card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${icon("mdi:calendar-clock-outline", "", "rf-device-icon")}
+          ${textField(`data-schedule-name="${schedule.id}" value="${schedule.name || ""}" placeholder="${this._t("schedule_name_placeholder")}" style="width:140px"`)}
+          ${
+            scheduleCount > 1
+              ? `<button class="rf-icon-btn rf-danger" data-remove-schedule="${schedule.id}">${icon("mdi:close")}</button>`
+              : ""
+          }
         </div>
-        <div style="margin-top:10px">${rows}</div>
+        <div style="margin-top:8px">${periodsHtml}</div>
         <div>
-          <button class="rf-btn rf-btn-flat" data-add-period>${icon("mdi:plus")}${this._t("add_period")}</button>
+          <button class="rf-btn rf-btn-flat" data-add-period="${schedule.id}">${icon("mdi:plus")}${this._t("add_period")}</button>
+        </div>
+      </div>`;
+  }
+
+  _renderSchedulesSection() {
+    const schedules = this._config_data.schedules || [];
+    const schedulesHtml = schedules.map((s) => this._renderSchedule(s, schedules.length)).join("");
+
+    return `
+      <div class="rf-section">
+        <div class="rf-section-title">${icon("mdi:clock-time-eight-outline")}${this._t("schedules_header")}</div>
+        <div class="rf-help">
+          ${this._t("schedules_help")}
+        </div>
+        <div style="margin-top:10px">${schedulesHtml}</div>
+        <div>
+          <button class="rf-btn rf-btn-flat" data-add-schedule>${icon("mdi:plus")}${this._t("add_schedule")}</button>
         </div>
       </div>
     `;
@@ -3255,7 +3443,6 @@ class RoomFlowCard extends HTMLElement {
 
   _renderButtonsTab() {
     const rooms = this._config_data.rooms;
-    const periods = this._config_data.periods || [];
     const actionLabels = {
       toggle: this._t("action_toggle"),
       off: this._t("action_off"),
@@ -3266,10 +3453,13 @@ class RoomFlowCard extends HTMLElement {
     const buttonsHtml = (this._config_data.buttons || [])
       .map((b) => {
         const room = rooms.find((r) => r.id === b.room_id);
+        // "Force period" always targets the button's own room, so its
+        // period choices come from that room's own schedule.
+        const roomPeriods = room ? this._roomPeriods(room) : [];
         const actionText =
           actionLabels[b.action] +
           (b.action === "force_period" && b.force_period
-            ? ` (${periods.find((p) => p.id === b.force_period)?.name || b.force_period})`
+            ? ` (${roomPeriods.find((p) => p.id === b.force_period)?.name || b.force_period})`
             : "");
         return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px;margin-bottom:8px">
@@ -3280,7 +3470,11 @@ class RoomFlowCard extends HTMLElement {
       .join("");
 
     const roomOptions = rooms.map((r) => `<option value="${r.id}">${r.name}</option>`).join("");
-    const periodOptions = periods.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+    // Empty until a room is picked (see the #new-button-room handler in
+    // _onChange, which repopulates this from that room's own schedule) -
+    // periods aren't a single global list any more, so there's nothing
+    // meaningful to show before a room is chosen.
+    const periodOptions = "";
 
     return `
       <div>
@@ -3424,7 +3618,7 @@ class RoomFlowCard extends HTMLElement {
   // individually. Devices can still be flipped to a different period on
   // their own below afterward for a closer look at just that one.
   _renderRoomPeriodTabs(room) {
-    const periods = this._config_data.periods || [];
+    const periods = this._roomPeriods(room);
     if (!periods.length) return "";
     const activePeriod = this._activeRoomPeriod[room.id] || periods[0].id;
 
@@ -3450,7 +3644,7 @@ class RoomFlowCard extends HTMLElement {
     return `
       <div>
         <div class="rf-room-header">
-          <h2>${icon("mdi:sofa-outline")}${room.name}</h2>
+          <h2>${icon(this._roomIcon(room))}${room.name}</h2>
           <div>
             <button class="rf-btn rf-btn-flat" data-apply-room="${room.id}">${icon("mdi:play-outline")}${this._t("test_now")}</button>
             <button class="rf-btn rf-btn-danger" data-remove-room="${room.id}">${icon("mdi:delete-outline")}${this._t("remove_room")}</button>
@@ -3532,7 +3726,7 @@ class RoomFlowCard extends HTMLElement {
 
     let bodyHtml = "";
     if (isOpen) {
-      const periods = this._config_data.periods || [];
+      const periods = this._roomPeriods(room);
       const activePeriod = this._activeTab[deviceKey] || (periods[0] && periods[0].id);
 
       const tabsHtml = periods

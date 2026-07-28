@@ -38,6 +38,7 @@ async def ws_save_config(hass: HomeAssistant, connection, msg):
         "refresh_device_fn",
         "refresh_rooms_fn",
         "refresh_periods_fn",
+        "refresh_schedule_sensors_fn",
     ):
         refresh_fn = hass.data[DOMAIN].get(refresh_key)
         if refresh_fn:
@@ -78,7 +79,7 @@ async def ws_apply_room(hass: HomeAssistant, connection, msg):
 @websocket_api.async_response
 async def ws_list_areas(hass: HomeAssistant, connection, msg):
     registry = ar.async_get(hass)
-    areas = [{"area_id": a.id, "name": a.name} for a in registry.async_list_areas()]
+    areas = [{"area_id": a.id, "name": a.name, "icon": a.icon} for a in registry.async_list_areas()]
     connection.send_result(msg["id"], areas)
 
 

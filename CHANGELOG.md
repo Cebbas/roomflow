@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Multiple independent schedules, so a room (e.g. outdoor lighting) can
+  follow its own periods instead of the shared indoor one.** Periods used
+  to be one single global list shared by every room. Settings -> Schedules
+  now lets you create as many named schedules as you want, each with its
+  own independent, priority-ordered periods list (built with the same
+  condition-group editor as before). Every room picks which schedule
+  governs it when it's added (defaulting to the existing "Main" schedule,
+  auto-created from your current periods, so nothing changes for existing
+  rooms). Each schedule's periods also get their own default-transition
+  timing and their own "current period"/per-period on-off sensors, grouped
+  under a device named after the schedule so two schedules can both have a
+  period called e.g. "morning" without colliding.
 - **Periods are now built from a condition list instead of 5 fixed source
   rows.** Each period previously always showed all 5 source types
   (schedule/sun/illuminance/boolean/sensor) at once, each with its own

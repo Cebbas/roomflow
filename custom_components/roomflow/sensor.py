@@ -24,7 +24,7 @@ from .const import (
     CONF_DEVICE_NAME,
     DEFAULT_DEVICE_NAME,
     SIGNAL_RECOMPUTE,
-    infer_periods,
+    infer_schedules,
 )
 
 
@@ -33,11 +33,35 @@ async def async_setup_entry(
 ) -> None:
     async_add_entities(
         [
-            RoomFlowPeriodSensor(hass, entry),
             RoomFlowDayTypeSensor(hass, entry),
             RoomFlowHomeStateSensor(hass, entry),
         ]
     )
+
+    hass.data[DOMAIN].setdefault("schedule_period_entities", {})
+
+    def _refresh_schedule_period_sensors() -> None:
+        cfg = hass.data[DOMAIN]["config"]
+        schedules = infer_schedules(cfg)
+        existing = hass.data[DOMAIN]["schedule_period_entities"]
+        current_schedule_ids = {schedule["id"] for schedule in schedules}
+
+        for schedule_id in list(existing):
+            if schedule_id not in current_schedule_ids:
+                entity = existing.pop(schedule_id)
+                hass.async_create_task(entity.async_remove(force_remove=True))
+
+        new_entities = []
+        for schedule in schedules:
+            if schedule["id"] not in existing:
+                entity = RoomFlowSchedulePeriodSensor(hass, entry, schedule["id"])
+                existing[schedule["id"]] = entity
+                new_entities.append(entity)
+        if new_entities:
+            async_add_entities(new_entities)
+
+    hass.data[DOMAIN]["refresh_schedule_sensors_fn"] = _refresh_schedule_period_sensors
+    _refresh_schedule_period_sensors()
 
     hass.data[DOMAIN].setdefault("room_status_entities", {})
 
@@ -125,29 +149,45 @@ class _RoomFlowBaseSensor(SensorEntity):
         raise NotImplementedError
 
 
-class RoomFlowPeriodSensor(_RoomFlowBaseSensor):
-    """Current time-of-day period's display name, resolved from whichever
-    per-period source (schedule/sun/illuminance/boolean/existing sensor)
-    wins right now. Periods are a user-editable list, so - unlike day
-    type/home state - this has no fixed vocabulary and isn't an ENUM."""
+class RoomFlowSchedulePeriodSensor(_RoomFlowBaseSensor):
+    """Current period's display name for one specific schedule, resolved
+    from whichever condition group wins right now for that schedule (see
+    _get_period in __init__.py). One of these exists per schedule (see
+    const.py's CONF_SCHEDULES), living in that schedule's own device
+    (like binary_sensor.py's per-period sensors) instead of the shared
+    RoomFlow device - so two schedules can't collide, and it's obvious at
+    a glance which schedule a "Current period" value belongs to. Periods
+    are a user-editable list, so - unlike day type/home state - this has
+    no fixed vocabulary and isn't an ENUM."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, schedule_id: str) -> None:
+        self._schedule_id = schedule_id
         super().__init__(
             hass,
             entry,
-            key="current_period",
+            key=f"{schedule_id}_current_period",
             name="Current period",
             icon="mdi:clock-outline",
         )
+        schedule = self._schedule()
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"schedule_{schedule_id}")},
+            name=schedule.get("name") if schedule else schedule_id,
+            entry_type=DeviceEntryType.SERVICE,
+        )
+
+    def _schedule(self) -> dict | None:
+        cfg = self.hass.data.get(DOMAIN, {}).get("config", {})
+        return next((s for s in infer_schedules(cfg) if s["id"] == self._schedule_id), None)
 
     def _update_state(self) -> None:
         get_period_fn = self.hass.data.get(DOMAIN, {}).get("get_period_fn")
-        period_id = get_period_fn() if get_period_fn else None
+        period_id = get_period_fn(self._schedule_id) if get_period_fn else None
         if period_id is None:
             self._attr_native_value = None
             return
-        cfg = self.hass.data.get(DOMAIN, {}).get("config", {})
-        period = next((p for p in infer_periods(cfg) if p.get("id") == period_id), None)
+        schedule = self._schedule()
+        period = next((p for p in (schedule["periods"] if schedule else []) if p.get("id") == period_id), None)
         self._attr_native_value = period.get("name", period_id) if period else period_id
 
 
@@ -262,7 +302,7 @@ class RoomFlowRoomStatusSensor(SensorEntity):
         get_period_fn = domain_data.get("get_period_fn")
         get_day_type_fn = domain_data.get("get_day_type_fn")
         get_home_state_fn = domain_data.get("get_home_state_fn")
-        period = get_period_fn() if get_period_fn else None
+        period = get_period_fn(room.get("schedule_id")) if get_period_fn else None
         day_type = get_day_type_fn() if get_day_type_fn else "weekday"
         home_state = get_home_state_fn() if get_home_state_fn else "home"
 

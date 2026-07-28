@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.9"
+VERSION = "0.0.10"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -111,6 +111,19 @@ DEFAULT_WEEKEND_DAYS = ["sat", "sun"]
 # fixed set of always-visible source rows. First period (list order, top =
 # highest) with a true group wins - see _get_period in __init__.py.
 CONF_PERIODS = "periods"  # ordered list of {id, name, condition_groups}
+
+# Schedules: a named, independent `periods` list of its own (see CONF_PERIODS
+# above) - a room picks *which* schedule governs it (room["schedule_id"]),
+# so e.g. outdoor lighting can follow its own simple dusk-to-dawn window
+# instead of the shared indoor morning/day/afternoon/evening/night one,
+# without cluttering every other room's period list with an entry only
+# relevant to one room. Every install has at least one schedule
+# (DEFAULT_SCHEDULE_ID) - existing configs migrate their single top-level
+# `periods` list into it once (see infer_schedules), so every room without
+# an explicit schedule_id keeps behaving exactly as before.
+CONF_SCHEDULES = "schedules"  # ordered list of {id, name, periods}
+DEFAULT_SCHEDULE_ID = "main"
+DEFAULT_SCHEDULE_NAME = "Main"
 
 CONDITION_TYPE_TIME = "time"          # operator: after/before; value: "HH:MM:SS"
 CONDITION_TYPE_SUN = "sun"            # operator: after/before; event, offset_minutes, earliest, latest
@@ -643,6 +656,52 @@ def infer_periods(data: dict) -> list[dict]:
             config = {"time": schedule.get(period_id, DEFAULT_SCHEDULE[period_id])}
         periods.append({"id": period_id, "name": name, "source": source, "config": config})
     return _normalize_periods_list(periods)
+
+
+def infer_schedules(data: dict) -> list[dict]:
+    """The single source of truth for the list of schedules - each an
+    independently named, priority-ordered `periods` list (see
+    _normalize_periods_list) that a room can opt into via its
+    `schedule_id` instead of the default one. Entries saved before
+    schedules existed have a flat top-level `periods` list (or older
+    legacy fields still - see infer_periods) instead of CONF_SCHEDULES -
+    migrate that into a single default schedule (DEFAULT_SCHEDULE_ID) so
+    every existing room (which has no schedule_id yet) keeps following
+    exactly the same periods as before. Always returns at least one
+    schedule."""
+    if CONF_SCHEDULES in data:
+        schedules = [
+            {
+                "id": schedule["id"],
+                "name": schedule.get("name", ""),
+                "periods": _normalize_periods_list(schedule.get("periods") or []),
+            }
+            for schedule in data[CONF_SCHEDULES]
+        ]
+        if schedules:
+            return schedules
+    return [{"id": DEFAULT_SCHEDULE_ID, "name": DEFAULT_SCHEDULE_NAME, "periods": infer_periods(data)}]
+
+
+def periods_for_schedule(data: dict, schedule_id: str | None) -> list[dict]:
+    """A specific schedule's periods, falling back to the first schedule
+    (never empty - see infer_schedules) if `schedule_id` is unset or no
+    longer exists (e.g. its schedule was deleted after a room was pointed
+    at it) - so a dangling reference degrades gracefully instead of
+    leaving the room with no periods at all."""
+    schedules = infer_schedules(data)
+    match = next((s for s in schedules if s["id"] == schedule_id), None)
+    return (match or schedules[0])["periods"]
+
+
+def transitions_for_schedule(data: dict, schedule_id: str | None) -> dict:
+    """A schedule's {period_id: seconds} default-transition map, nested
+    under the top-level `default_transitions` by schedule id now that
+    periods live inside per-schedule lists (see async_setup_entry's
+    one-time nesting migration in __init__.py) - empty for a schedule with
+    no defaults saved yet rather than falling back to another schedule's
+    timings, which were tuned for that schedule's own period names."""
+    return (data.get("default_transitions") or {}).get(schedule_id) or {}
 
 
 def infer_day_type_mode(data: dict) -> str:

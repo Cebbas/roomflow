@@ -1,6 +1,5 @@
 {
   "name": "RoomFlow",
   "render_readme": true,
-  "domains": ["light", "switch"],
   "homeassistant": "2024.7.0"
 }

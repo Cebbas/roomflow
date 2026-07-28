@@ -3,7 +3,7 @@
   "name": "RoomFlow",
   "version": "0.0.1",
   "config_flow": true,
-  "dependencies": ["panel_custom"],
+  "dependencies": ["http", "panel_custom"],
   "documentation": "https://github.com/Cebbas/roomflow",
   "issue_tracker": "https://github.com/Cebbas/roomflow/issues",
   "codeowners": ["@Cebbas"],

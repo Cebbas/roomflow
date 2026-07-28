@@ -2,17 +2,18 @@
 
 ## Unreleased
 
+- **Reverted: native `ha-switch`/`ha-textfield` form components (v0.0.7).**
+  After release, many fields became unreadable/uneditable in practice -
+  reverted back to plain browser `<input>` for checkboxes and text/number
+  fields, since that was proven to work reliably throughout this project
+  and the Material component swap couldn't be verified live before
+  shipping. Same visual redesign (icons, colors, layout) stays in place;
+  only the underlying form elements changed back.
 - **Fixed: "Test now" (room and all-rooms) lost its icon after the first
   click.** The button's transient "Applying…"/"Done!" text was set via
   `textContent`, which wiped out the icon element inside it instead of
   just swapping the visible label. Now saves/restores `innerHTML` so the
   icon survives.
-- **Checkboxes and text/number fields now use Home Assistant's native
-  `ha-switch`/`ha-textfield` components** instead of plain browser
-  `<input>`, so they match the rest of Home Assistant's own UI. Fields
-  that rely on entity-id autocomplete (`list=` suggestions) and the
-  `<select>` dropdowns were intentionally left as-is, since converting
-  them risked losing autocomplete or needed a larger markup rework.
 - **Visual redesign of the card.** Icons throughout (device type, period,
   Default/Weekend/Away/condition variant, source type, and every action
   button), a shared stylesheet replacing most of the scattered inline

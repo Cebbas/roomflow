@@ -1606,9 +1606,6 @@ const RF_STYLES = `
   .rf-slider-row { margin-top: 6px; }
   .rf-slider-row input[type="range"] { width: 100%; accent-color: var(--primary-color); }
 
-  .rf-root ha-textfield { --mdc-typography-subtitle1-font-size: 0.92em; }
-  .rf-root ha-switch { flex: none; vertical-align: middle; }
-
   .rf-empty { opacity: 0.65; font-size: 0.9em; padding: 8px 0; }
 </style>
 `;
@@ -2446,11 +2443,7 @@ class RoomFlowCard extends HTMLElement {
     if (periodConfigField) {
       const [periodId, sourceType, field] = periodConfigField.getAttribute("data-period-config").split("|");
       let value;
-      if (field === "weekend_enabled" || field === "and_condition.enabled") {
-        // These two are the only boolean fields in this shared handler -
-        // checked by field name rather than element type, since they're
-        // <ha-switch> (no native "checkbox" type) while the rest are
-        // <ha-textfield>/<select>.
+      if (periodConfigField.type === "checkbox") {
         value = periodConfigField.checked;
       } else if (field === "threshold" || field === "offset_minutes" || field === "weekend_offset_minutes") {
         const val = parseFloat(periodConfigField.value);
@@ -2635,7 +2628,7 @@ class RoomFlowCard extends HTMLElement {
             <option value="">${this._t("custom_name_option")}</option>
             ${areaOptions}
           </select>
-          <ha-textfield id="new-room-name" placeholder="${this._t("room_name_placeholder")}"></ha-textfield>
+          <input id="new-room-name" placeholder="${this._t("room_name_placeholder")}" />
           <button id="add-room-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
         </div>
         <div class="rf-help">
@@ -2653,8 +2646,8 @@ class RoomFlowCard extends HTMLElement {
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
         ${icon(periodIcon(p.id))}
         <span style="width:100px">${p.name}</span>
-        <ha-textfield type="number" min="0" step="0.5" value="${dt[p.id] ?? 0}"
-          data-default-transition="${p.id}" style="width:70px"></ha-textfield> ${this._t("seconds")}
+        <input type="number" min="0" step="0.5" value="${dt[p.id] ?? 0}"
+          data-default-transition="${p.id}" style="width:70px" /> ${this._t("seconds")}
       </div>`
     ).join("");
 
@@ -2706,8 +2699,8 @@ class RoomFlowCard extends HTMLElement {
       ).join("");
       weekendFieldsHtml = `
         <select data-period-config="${p.id}|sun|weekend_event" ${fieldsDisabled ? "disabled" : ""}>${weekendSunEventOptions}</select>
-        <ha-textfield type="number" step="1" data-period-config="${p.id}|sun|weekend_offset_minutes"
-          value="${cfg.weekend_offset_minutes ?? 0}" ${fieldsDisabled ? "disabled" : ""} style="width:70px"></ha-textfield> ${this._t("min_offset")}`;
+        <input type="number" step="1" data-period-config="${p.id}|sun|weekend_offset_minutes"
+          value="${cfg.weekend_offset_minutes ?? 0}" ${fieldsDisabled ? "disabled" : ""} style="width:70px" /> ${this._t("min_offset")}`;
     }
 
     return `
@@ -2715,8 +2708,8 @@ class RoomFlowCard extends HTMLElement {
         sourceEnabled ? "" : ";opacity:0.5"
       }">
         <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
-          <ha-switch data-period-config="${p.id}|${sourceKey}|weekend_enabled"
-            ${weekendEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"}></ha-switch>
+          <input type="checkbox" data-period-config="${p.id}|${sourceKey}|weekend_enabled"
+            ${weekendEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
           ${icon("mdi:calendar-weekend-outline")}${sourceKey === "schedule" ? this._t("weekend_override_time") : this._t("weekend_override_sun")}
         </label>
         <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
@@ -2749,8 +2742,8 @@ class RoomFlowCard extends HTMLElement {
         sourceEnabled ? "" : ";opacity:0.5"
       }">
         <label style="display:flex;align-items:center;gap:4px;font-size:0.9em">
-          <ha-switch data-period-config="${p.id}|${sourceKey}|and_condition.enabled"
-            ${andEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"}></ha-switch>
+          <input type="checkbox" data-period-config="${p.id}|${sourceKey}|and_condition.enabled"
+            ${andEnabled ? "checked" : ""} ${sourceEnabled ? "" : "disabled"} />
           ${icon("mdi:filter-variant")}${this._t("and_condition_label")}
         </label>
         <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap${
@@ -2759,8 +2752,8 @@ class RoomFlowCard extends HTMLElement {
           <input list="all-entities-list" data-period-config="${p.id}|${sourceKey}|and_condition.entity_id"
             value="${andCfg.entity_id || ""}" placeholder="sensor...." ${fieldsDisabled ? "disabled" : ""} style="width:190px" />
           <select data-period-config="${p.id}|${sourceKey}|and_condition.operator" ${fieldsDisabled ? "disabled" : ""}>${operatorOptions}</select>
-          <ha-textfield data-period-config="${p.id}|${sourceKey}|and_condition.value"
-            value="${andCfg.value || ""}" placeholder="${this._t("value_placeholder")}" ${fieldsDisabled ? "disabled" : ""} style="width:90px"></ha-textfield>
+          <input data-period-config="${p.id}|${sourceKey}|and_condition.value"
+            value="${andCfg.value || ""}" placeholder="${this._t("value_placeholder")}" ${fieldsDisabled ? "disabled" : ""} style="width:90px" />
         </div>
       </div>`;
   }
@@ -2780,8 +2773,8 @@ class RoomFlowCard extends HTMLElement {
       ).join("");
       fieldsHtml = `
         <select data-period-config="${p.id}|sun|event" ${enabled ? "" : "disabled"}>${sunEventOptions}</select>
-        <ha-textfield type="number" step="1" data-period-config="${p.id}|sun|offset_minutes"
-          value="${cfg.offset_minutes ?? 0}" ${enabled ? "" : "disabled"} style="width:70px"></ha-textfield> ${this._t("min_offset")}
+        <input type="number" step="1" data-period-config="${p.id}|sun|offset_minutes"
+          value="${cfg.offset_minutes ?? 0}" ${enabled ? "" : "disabled"} style="width:70px" /> ${this._t("min_offset")}
         <span style="opacity:0.7;font-size:0.85em">${this._t("never_before")}</span>
         <input type="time" step="1" data-period-config="${p.id}|sun|min_time"
           value="${cfg.min_time || "00:00:00"}" ${enabled ? "" : "disabled"} style="width:110px"
@@ -2790,8 +2783,8 @@ class RoomFlowCard extends HTMLElement {
       fieldsHtml = `
         <input list="all-entities-list" data-period-config="${p.id}|illuminance|entity_id"
           value="${cfg.entity_id || ""}" placeholder="sensor.outdoor_illuminance" ${enabled ? "" : "disabled"} style="width:200px" />
-        <ha-textfield type="number" data-period-config="${p.id}|illuminance|threshold"
-          value="${cfg.threshold ?? 0}" ${enabled ? "" : "disabled"} style="width:80px"></ha-textfield> ${this._t("lx")}`;
+        <input type="number" data-period-config="${p.id}|illuminance|threshold"
+          value="${cfg.threshold ?? 0}" ${enabled ? "" : "disabled"} style="width:80px" /> ${this._t("lx")}`;
     } else if (sourceKey === "boolean") {
       fieldsHtml = `
         <input list="all-entities-list" data-period-config="${p.id}|boolean|entity_id"
@@ -2801,8 +2794,8 @@ class RoomFlowCard extends HTMLElement {
         <input list="all-entities-list" data-period-config="${p.id}|sensor|entity_id"
           value="${cfg.entity_id || ""}" placeholder="sensor.time_of_day" ${enabled ? "" : "disabled"} style="width:200px" />
         <span style="opacity:0.7;font-size:0.85em">=</span>
-        <ha-textfield data-period-config="${p.id}|sensor|value" value="${cfg.value || ""}"
-          placeholder="${this._t("value_placeholder")}" ${enabled ? "" : "disabled"} style="width:100px"></ha-textfield>`;
+        <input data-period-config="${p.id}|sensor|value" value="${cfg.value || ""}"
+          placeholder="${this._t("value_placeholder")}" ${enabled ? "" : "disabled"} style="width:100px" />`;
     }
 
     const showWeekendOverride = hasDayType && (sourceKey === "schedule" || sourceKey === "sun");
@@ -2811,7 +2804,7 @@ class RoomFlowCard extends HTMLElement {
       <div class="rf-source-row">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <label class="rf-source-label">
-            <ha-switch data-period-source-enabled="${p.id}|${sourceKey}" ${enabled ? "checked" : ""}></ha-switch>
+            <input type="checkbox" data-period-source-enabled="${p.id}|${sourceKey}" ${enabled ? "checked" : ""} />
             ${icon(SOURCE_ICONS[sourceKey])}${label}
           </label>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap${enabled ? "" : ";opacity:0.5"}">
@@ -2833,7 +2826,7 @@ class RoomFlowCard extends HTMLElement {
       <div class="rf-card" style="margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${icon(periodIcon(p.id), "", "rf-device-icon")}
-          <ha-textfield data-period-name="${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px"></ha-textfield>
+          <input data-period-name="${p.id}" value="${p.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:110px" />
           <button class="rf-icon-btn" data-move-period-up="${p.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
           <button class="rf-icon-btn" data-move-period-down="${p.id}" ${i === periods.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
           <button class="rf-icon-btn rf-danger" data-remove-period="${p.id}">${icon("mdi:close")}</button>
@@ -2873,7 +2866,7 @@ class RoomFlowCard extends HTMLElement {
           ${this._t("day_type_sensor_help")}
         </div>
         <label style="display:inline-flex;align-items:center;gap:4px;margin-top:4px">
-          <ha-switch data-day-type-sensor-inverted ${cd.day_type_sensor_inverted ? "checked" : ""}></ha-switch>
+          <input type="checkbox" data-day-type-sensor-inverted ${cd.day_type_sensor_inverted ? "checked" : ""} />
           ${this._t("day_type_sensor_inverted_label")}
         </label>`;
     } else if (mode === "weekday_selection") {
@@ -2881,7 +2874,7 @@ class RoomFlowCard extends HTMLElement {
       const checkboxes = WEEKDAYS.map(
         (w) => `
         <label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;margin-top:6px">
-          <ha-switch data-weekend-day="${w.key}" ${weekendDays.includes(w.key) ? "checked" : ""}></ha-switch>
+          <input type="checkbox" data-weekend-day="${w.key}" ${weekendDays.includes(w.key) ? "checked" : ""} />
           ${this._t(w.labelKey)}
         </label>`
       ).join("");
@@ -2967,7 +2960,7 @@ class RoomFlowCard extends HTMLElement {
           ${this._t("device_help")}
         </div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
-          <ha-textfield data-device-name value="${cd.device_name || "RoomFlow"}" style="width:200px"></ha-textfield>
+          <input data-device-name value="${cd.device_name || "RoomFlow"}" style="width:200px" />
           <select data-area-id>
             <option value="">${this._t("no_area_option")}</option>
             ${areaOptions}
@@ -3051,8 +3044,8 @@ class RoomFlowCard extends HTMLElement {
             <span style="opacity:0.7;font-size:0.9em;width:120px">${this._t("motion_sensor_value_above")}</span>
             <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
               value="${t.entity_id || ""}" placeholder="sensor.humidity_..." style="width:180px" />
-            <ha-textfield type="number" step="1" data-motion-trigger-threshold="${room.id}|${t.id}"
-              value="${t.threshold ?? 60}" style="width:55px"></ha-textfield>
+            <input type="number" step="1" data-motion-trigger-threshold="${room.id}|${t.id}"
+              value="${t.threshold ?? 60}" style="width:55px" />
             <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${room.id}|${t.id}">${icon("mdi:close")}</button>
           </div>`;
         }
@@ -3070,7 +3063,7 @@ class RoomFlowCard extends HTMLElement {
     return `
       <div class="rf-card">
         <label class="rf-card-title" style="cursor:pointer">
-          <ha-switch data-motion-enabled="${room.id}" ${motion.enabled ? "checked" : ""}></ha-switch>
+          <input type="checkbox" data-motion-enabled="${room.id}" ${motion.enabled ? "checked" : ""} />
           ${icon("mdi:motion-sensor")} ${this._t("motion_active_label")}
         </label>
         <div style="margin-top:6px${motion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
@@ -3085,22 +3078,22 @@ class RoomFlowCard extends HTMLElement {
           <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${icon("mdi:timer-off-outline")}
             ${this._t("turn_off_after")}
-            <ha-textfield type="number" min="1" data-motion-timeout="${room.id}"
-              value="${motion.timeout_minutes || 10}" style="width:55px"></ha-textfield>
+            <input type="number" min="1" data-motion-timeout="${room.id}"
+              value="${motion.timeout_minutes || 10}" style="width:55px" />
             ${this._t("turn_off_after_suffix")}
           </div>
           <div style="margin-top:10px">
             <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
-              <ha-switch data-motion-warn-enabled="${room.id}" ${
+              <input type="checkbox" data-motion-warn-enabled="${room.id}" ${
                 motion.warn_enabled ? "checked" : ""
-              }></ha-switch>
+              } />
               ${icon("mdi:brightness-4")} ${this._t("dim_warning_label")}
             </label>
             <div style="margin-top:4px${motion.warn_enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-              ${this._t("dim_to")} <ha-textfield type="number" min="1" max="255" data-motion-warn-brightness="${room.id}"
-                value="${motion.warn_brightness ?? 25}" style="width:55px"></ha-textfield> ${this._t("brightness_for")}
-              <ha-textfield type="number" min="1" data-motion-warn-minutes="${room.id}"
-                value="${motion.warn_minutes ?? 3}" style="width:55px"></ha-textfield> ${this._t("minutes_before_off")}
+              ${this._t("dim_to")} <input type="number" min="1" max="255" data-motion-warn-brightness="${room.id}"
+                value="${motion.warn_brightness ?? 25}" style="width:55px" /> ${this._t("brightness_for")}
+              <input type="number" min="1" data-motion-warn-minutes="${room.id}"
+                value="${motion.warn_minutes ?? 3}" style="width:55px" /> ${this._t("minutes_before_off")}
             </div>
           </div>
         </div>
@@ -3118,13 +3111,13 @@ class RoomFlowCard extends HTMLElement {
       .map(
         (c, i) => `
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-        <ha-textfield data-condition-name="${room.id}|${c.id}" value="${c.name || ""}"
-          placeholder="${this._t("name_placeholder")}" style="width:120px"></ha-textfield>
+        <input data-condition-name="${room.id}|${c.id}" value="${c.name || ""}"
+          placeholder="${this._t("name_placeholder")}" style="width:120px" />
         <input list="all-entities-list" data-condition-entity="${room.id}|${c.id}"
           value="${c.entity_id || ""}" placeholder="binary_sensor...." style="width:200px" />
         <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
-        <ha-textfield data-condition-state="${room.id}|${c.id}" value="${c.state || ""}"
-          placeholder="on" style="width:70px"></ha-textfield>
+        <input data-condition-state="${room.id}|${c.id}" value="${c.state || ""}"
+          placeholder="on" style="width:70px" />
         <button class="rf-icon-btn" data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
         <button class="rf-icon-btn" data-move-custom-condition-down="${room.id}|${c.id}" ${
           i === conditions.length - 1 ? "disabled" : ""
@@ -3219,7 +3212,7 @@ class RoomFlowCard extends HTMLElement {
 
     const toggleHtml = hasToggle
       ? `<label class="rf-variant-title" style="cursor:pointer">
-          <ha-switch data-variant-toggle="${fieldPrefix}" ${enabled ? "checked" : ""}></ha-switch>
+          <input type="checkbox" data-variant-toggle="${fieldPrefix}" ${enabled ? "checked" : ""} />
           ${variantIcon}${toggleText || this._t("custom_setting_for", { label: label.toLowerCase() })}
         </label>`
       : `<div class="rf-variant-title">${variantIcon}${label}</div>`;
@@ -3229,9 +3222,9 @@ class RoomFlowCard extends HTMLElement {
         ${toggleHtml}
         <div style="margin-top:6px${disabled ? ";pointer-events:none" : ""}">
           <label style="cursor:pointer">
-            <ha-switch data-field="${fieldPrefix}|state" ${
+            <input type="checkbox" data-field="${fieldPrefix}|state" ${
               variant.state === "on" ? "checked" : ""
-            } ${disabled ? "disabled" : ""}></ha-switch>
+            } ${disabled ? "disabled" : ""} />
             ${this._t("on_label")}
           </label>
           ${
@@ -3308,9 +3301,9 @@ class RoomFlowCard extends HTMLElement {
           <div style="margin-top:10px;font-size:0.9em;display:flex;align-items:center;gap:6px">
             ${icon("mdi:transition")}
             ${this._t("transition_time_label", { s: globalDefault })}
-            <ha-textfield type="number" min="0" step="0.5" placeholder="${globalDefault}"
+            <input type="number" min="0" step="0.5" placeholder="${globalDefault}"
               value="${deviceTransition !== null && deviceTransition !== undefined ? deviceTransition : ""}"
-              data-transition="${deviceKey}|${activePeriod}" style="width:70px"></ha-textfield>
+              data-transition="${deviceKey}|${activePeriod}" style="width:70px" />
           </div>
         `;
       }
@@ -3320,20 +3313,20 @@ class RoomFlowCard extends HTMLElement {
         controlsHtml += `
           <div style="margin-top:10px;font-size:0.9em">
             <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
-              <ha-switch data-device-motion-enabled="${deviceKey}" ${
+              <input type="checkbox" data-device-motion-enabled="${deviceKey}" ${
                 deviceMotion.enabled ? "checked" : ""
-              }></ha-switch>
+              } />
               ${icon("mdi:motion-sensor")} ${this._t("device_motion_reacts")}
             </label>
             <div style="margin-top:4px${deviceMotion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
               ${this._t("device_off_after")}
-              <ha-textfield type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}"
+              <input type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}"
                 value="${
                   deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
                     ? deviceMotion.off_delay_minutes
                     : ""
                 }"
-                data-device-motion-delay="${deviceKey}" style="width:55px"></ha-textfield>
+                data-device-motion-delay="${deviceKey}" style="width:55px" />
               ${this._t("device_off_after_suffix")}
             </div>
           </div>

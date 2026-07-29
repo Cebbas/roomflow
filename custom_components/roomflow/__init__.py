@@ -385,6 +385,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("motion_off_timers", {})
     hass.data[DOMAIN].setdefault("motion_active_state", {})
     hass.data[DOMAIN].setdefault("motion_manual_override", {})
+    hass.data[DOMAIN].setdefault("forced_period", {})
 
     # Register websocket commands only once
     if not hass.data[DOMAIN].get("ws_registered"):
@@ -515,6 +516,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
             if forced_period is not None:
                 period = forced_period
+                # Remembered so the "Current period" sensor reflects the
+                # forced period immediately instead of the stale
+                # naturally-resolved value it last computed - cleared again
+                # by the next real recompute (_handle_relevant_change) so a
+                # forced period never sticks past the condition that should
+                # actually be governing the schedule.
+                hass.data[DOMAIN]["forced_period"][schedule_id] = forced_period
             else:
                 # Resolved per-room (not once for the whole batch) since
                 # each room can follow a different schedule (room["schedule_id"])
@@ -541,6 +549,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await _apply_single_device(
                     device, period, day_type, home_state, active_condition_ids, default_transitions
                 )
+
+        if forced_period is not None:
+            # Push the just-recorded override to the "Current period" sensor
+            # right away instead of waiting for whatever ambient trigger
+            # happens to fire next.
+            async_dispatcher_send(hass, SIGNAL_RECOMPUTE)
 
     async def apply_current_period() -> None:
         cfg = hass.data[DOMAIN]["config"]
@@ -858,6 +872,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # has no entity of its own to watch in built-in modes) to recompute too.
 
     async def _handle_relevant_change(*_args) -> None:
+        # A real ambient trigger firing means whatever period a button
+        # forced earlier is no longer the last word - let the naturally
+        # resolved period win again.
+        hass.data[DOMAIN]["forced_period"].clear()
         await apply_current_period()
         async_dispatcher_send(hass, SIGNAL_RECOMPUTE)
 

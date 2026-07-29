@@ -131,7 +131,11 @@ class RoomFlowPeriodBooleanSensor(BinarySensorEntity):
         # (renamed via the card) - picked up on the next state write.
         self._attr_name = period.get("name", self._period_id) if period else self._period_id
 
-        get_period_fn = domain_data.get("get_period_fn")
-        self._attr_is_on = (
-            get_period_fn(self._schedule_id) == self._period_id if get_period_fn else False
-        )
+        forced = domain_data.get("forced_period", {}).get(self._schedule_id)
+        if forced is not None:
+            self._attr_is_on = forced == self._period_id
+        else:
+            get_period_fn = domain_data.get("get_period_fn")
+            self._attr_is_on = (
+                get_period_fn(self._schedule_id) == self._period_id if get_period_fn else False
+            )

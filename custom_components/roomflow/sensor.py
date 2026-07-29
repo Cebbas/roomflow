@@ -181,8 +181,12 @@ class RoomFlowSchedulePeriodSensor(_RoomFlowBaseSensor):
         return next((s for s in infer_schedules(cfg) if s["id"] == self._schedule_id), None)
 
     def _update_state(self) -> None:
-        get_period_fn = self.hass.data.get(DOMAIN, {}).get("get_period_fn")
-        period_id = get_period_fn(self._schedule_id) if get_period_fn else None
+        forced = self.hass.data.get(DOMAIN, {}).get("forced_period", {}).get(self._schedule_id)
+        if forced is not None:
+            period_id = forced
+        else:
+            get_period_fn = self.hass.data.get(DOMAIN, {}).get("get_period_fn")
+            period_id = get_period_fn(self._schedule_id) if get_period_fn else None
         if period_id is None:
             self._attr_native_value = None
             return

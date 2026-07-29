@@ -384,6 +384,25 @@ anything, and add an "Undo" button (card action + maybe a bound-button
 action) that replays those prior states via the same `light`/`switch`
 services, clearing the record once used so it can't be replayed twice.
 
+## Native midnight-spanning time condition
+
+A period's `time` condition (`CONDITION_TYPE_TIME` in `const.py`, evaluated
+by `_condition_ok` in `__init__.py`) only supports a single `after`/`before`
+boundary compared against the current time-of-day - there's no condition
+that natively expresses a range like "22:00 to 06:00". Today the only way
+to cover a window that crosses midnight is two separate OR'd condition
+groups (one `after 22:00`, one `before 06:00`), which is exactly the
+pattern `_default_condition_groups` already generates for the last default
+period, and works correctly, but has to be built by hand for any
+custom period a user adds (e.g. a "Night" period covering 22:00-06:00).
+
+Possible approach: add a `between` operator (or a dedicated condition type)
+that takes two clock values and, when the "start" is later than the "end",
+treats the range as wrapping past midnight (`now >= start or now < end`)
+instead of requiring the user to construct two OR'd groups manually. Purely
+a UX simplification over what two condition groups already accomplish -
+not a new capability.
+
 ## Time-window restriction on a motion/threshold trigger
 
 A trigger in `room.motion.triggers` (`_is_trigger_active` in `__init__.py`)

@@ -7,7 +7,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
-from .const import DOMAIN
+from .const import DOMAIN, infer_schedules
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_config"})
@@ -125,6 +125,41 @@ async def ws_list_entities(hass: HomeAssistant, connection, msg):
     connection.send_result(msg["id"], result)
 
 
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_dashboard"})
+@websocket_api.async_response
+async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
+    """Overview tab data: each schedule's currently resolved period (forced
+    override wins if one is active, same precedence the sensors use - see
+    sensor.py/binary_sensor.py), plus the two persisted logs, newest first."""
+    domain_data = hass.data[DOMAIN]
+    cfg = domain_data["config"]
+    get_period_fn = domain_data.get("get_period_fn")
+    forced = domain_data.get("forced_period", {})
+
+    schedules = []
+    for schedule in infer_schedules(cfg):
+        schedule_id = schedule["id"]
+        period_id = forced.get(schedule_id) or (get_period_fn(schedule_id) if get_period_fn else None)
+        period = next((p for p in schedule["periods"] if p["id"] == period_id), None)
+        schedules.append(
+            {
+                "id": schedule_id,
+                "name": schedule.get("name", schedule_id),
+                "period_id": period_id,
+                "period_name": period.get("name", period_id) if period else period_id,
+            }
+        )
+
+    connection.send_result(
+        msg["id"],
+        {
+            "schedules": schedules,
+            "device_log": list(reversed(domain_data.get("device_log", []))),
+            "period_log": list(reversed(domain_data.get("period_log", []))),
+        },
+    )
+
+
 def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_config)
     websocket_api.async_register_command(hass, ws_save_config)
@@ -132,3 +167,4 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_apply_room)
     websocket_api.async_register_command(hass, ws_list_areas)
     websocket_api.async_register_command(hass, ws_list_entities)
+    websocket_api.async_register_command(hass, ws_get_dashboard)

@@ -424,7 +424,23 @@ const STRINGS = {
     tab_add_room: "+ Room",
     tab_buttons: "Buttons",
     tab_settings: "Settings",
+    tab_overview: "Overview",
     test_all: "Test all",
+
+    overview_status_header: "Current status",
+    overview_device_log_header: "Device log",
+    overview_period_log_header: "Period log",
+    overview_refresh: "Refresh",
+    overview_log_empty: "No events yet",
+    overview_no_rooms: "No rooms configured yet",
+    log_source_schedule: "schedule",
+    log_source_forced: "forced period",
+    log_source_motion_on: "motion",
+    log_source_motion_off: "motion timeout",
+    log_source_motion_warn: "motion warning (dimmed)",
+    log_source_motion_warn_expired: "motion warning (timed out)",
+    log_source_button_off: "off button",
+    log_source_button_toggle: "toggle button",
 
     add_room_header: "Add room",
     custom_name_option: "— Custom name —",
@@ -592,7 +608,23 @@ const STRINGS = {
     tab_add_room: "+ Rum",
     tab_buttons: "Knappar",
     tab_settings: "Inställningar",
+    tab_overview: "Översikt",
     test_all: "Testa alla",
+
+    overview_status_header: "Aktuell status",
+    overview_device_log_header: "Enhetslogg",
+    overview_period_log_header: "Periodlogg",
+    overview_refresh: "Uppdatera",
+    overview_log_empty: "Inga händelser än",
+    overview_no_rooms: "Inga rum tillagda än",
+    log_source_schedule: "schema",
+    log_source_forced: "tvingad period",
+    log_source_motion_on: "rörelse",
+    log_source_motion_off: "rörelse (timeout)",
+    log_source_motion_warn: "rörelsevarning (dimmad)",
+    log_source_motion_warn_expired: "rörelsevarning (av)",
+    log_source_button_off: "av-knapp",
+    log_source_button_toggle: "toggle-knapp",
 
     add_room_header: "Lägg till rum",
     custom_name_option: "— Eget namn —",
@@ -1886,6 +1918,20 @@ const RF_STYLES = `
   .rf-badge.rf-on { background: #4caf5026; color: #2e7d32; }
   .rf-badge.rf-off { background: var(--divider-color); color: var(--secondary-text-color); }
 
+  .rf-status-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--divider-color); flex-wrap: wrap;
+  }
+  .rf-status-row:last-child { border-bottom: none; }
+
+  .rf-log-list { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
+  .rf-log-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--divider-color); font-size: 0.88em; flex-wrap: wrap;
+  }
+  .rf-log-row:last-child { border-bottom: none; }
+  .rf-log-time { opacity: 0.6; flex: none; font-variant-numeric: tabular-nums; }
+
   .rf-variant {
     border-radius: 8px; padding: 8px 10px; margin-top: 8px;
     border-left: 3px solid var(--divider-color); background: var(--secondary-background-color);
@@ -2518,6 +2564,113 @@ class RoomFlowCard extends HTMLElement {
     return st.state === "on" ? "rf-on" : "rf-off";
   }
 
+  // ---------- Overview tab ----------
+
+  async _loadDashboard() {
+    if (!this._hass) return;
+    this._dashboard = await this._hass.callWS({ type: "roomflow/get_dashboard" });
+    this._render();
+  }
+
+  _logSourceLabel(source) {
+    return this._t(`log_source_${source}`);
+  }
+
+  _formatLogTime(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  _renderLogList(entries, describeFn) {
+    if (!entries || !entries.length) {
+      return `<div class="rf-help">${this._t("overview_log_empty")}</div>`;
+    }
+    return `
+      <div class="rf-log-list">
+        ${entries
+          .map(
+            (e) => `
+              <div class="rf-log-row">
+                <span class="rf-log-time">${this._formatLogTime(e.time)}</span>
+                <span>${describeFn(e)}</span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  _renderOverviewTab() {
+    const rooms = this._config_data.rooms || [];
+    const dash = this._dashboard || { schedules: [], device_log: [], period_log: [] };
+    const scheduleById = Object.fromEntries((dash.schedules || []).map((s) => [s.id, s]));
+
+    const statusRowsHtml = rooms.length
+      ? rooms
+          .map((room) => {
+            const schedule = scheduleById[room.schedule_id || DEFAULT_SCHEDULE_ID];
+            const periodName = schedule ? schedule.period_name : "-";
+            const badgesHtml = (room.devices || [])
+              .map((d) => {
+                const deviceKey = `${room.id}:${d.entity_id}`;
+                return `<span class="rf-badge ${this._liveStatusClass(d)}" data-live-status="${deviceKey}">${d.name}: ${this._liveStatusText(d)}</span>`;
+              })
+              .join("");
+            return `
+              <div class="rf-status-row">
+                <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(this._roomIcon(room))}${room.name}</div>
+                <div style="opacity:0.8;font-size:0.9em">${periodName}</div>
+                <div>${badgesHtml || "-"}</div>
+              </div>
+            `;
+          })
+          .join("")
+      : `<div class="rf-help">${this._t("overview_no_rooms")}</div>`;
+
+    const deviceLogHtml = this._renderLogList(
+      dash.device_log,
+      (e) => `
+        <b>${e.room_name}</b> · ${e.device_name} → ${e.state_label}
+        <span class="rf-badge">${e.period_name}</span>
+        <span class="rf-badge">${this._logSourceLabel(e.source)}</span>
+      `
+    );
+
+    const periodLogHtml = this._renderLogList(
+      dash.period_log,
+      (e) => `
+        <b>${e.schedule_name}</b> → ${e.period_name}
+        <span class="rf-badge">${this._logSourceLabel(e.source)}</span>
+      `
+    );
+
+    return `
+      <div class="rf-card">
+        <div class="rf-card-title">
+          ${icon("mdi:view-dashboard-outline")}${this._t("overview_status_header")}
+          <button class="rf-icon-btn" style="margin-left:auto" data-refresh-dashboard title="${this._t("overview_refresh")}">${icon("mdi:refresh")}</button>
+        </div>
+        ${statusRowsHtml}
+      </div>
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:swap-horizontal")}${this._t("overview_device_log_header")}</div>
+        ${deviceLogHtml}
+      </div>
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:clock-outline")}${this._t("overview_period_log_header")}</div>
+        ${periodLogHtml}
+      </div>
+    `;
+  }
+
   _updateLiveStatusTexts() {
     this.querySelectorAll("[data-live-status]").forEach((el) => {
       const { roomId, entityId } = parseDeviceKey(el.getAttribute("data-live-status"));
@@ -2536,6 +2689,13 @@ class RoomFlowCard extends HTMLElement {
     if (roomTab) {
       this._activeRoomId = roomTab.getAttribute("data-room-tab");
       this._render();
+      if (this._activeRoomId === "__overview__") this._loadDashboard();
+      return;
+    }
+
+    const refreshDashboardBtn = e.target.closest("[data-refresh-dashboard]");
+    if (refreshDashboardBtn) {
+      this._loadDashboard();
       return;
     }
 
@@ -3195,6 +3355,7 @@ class RoomFlowCard extends HTMLElement {
       this._activeRoomId !== "__add__" &&
       this._activeRoomId !== "__settings__" &&
       this._activeRoomId !== "__buttons__" &&
+      this._activeRoomId !== "__overview__" &&
       !rooms.some((r) => r.id === this._activeRoomId)
     ) {
       this._activeRoomId = rooms.length ? rooms[0].id : "__add__";
@@ -3209,7 +3370,9 @@ class RoomFlowCard extends HTMLElement {
     const activeRoom = rooms.find((r) => r.id === this._activeRoomId);
 
     let contentHtml;
-    if (this._activeRoomId === "__add__") {
+    if (this._activeRoomId === "__overview__") {
+      contentHtml = this._renderOverviewTab();
+    } else if (this._activeRoomId === "__add__") {
       contentHtml = this._renderAddRoomForm();
     } else if (this._activeRoomId === "__settings__") {
       contentHtml = this._renderSettingsForm();
@@ -3233,6 +3396,7 @@ class RoomFlowCard extends HTMLElement {
       <ha-card header="RoomFlow" class="rf-root">
         <div class="rf-topbar">
           <div class="rf-tabs">
+            ${tabBtn("__overview__", this._t("tab_overview"), "mdi:view-dashboard-outline")}
             ${roomTabsHtml}
             ${tabBtn("__add__", this._t("tab_add_room").replace(/^\+\s*/, ""), "mdi:plus")}
             ${tabBtn("__buttons__", this._t("tab_buttons"), "mdi:gesture-tap-button")}

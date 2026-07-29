@@ -46,6 +46,48 @@ triggering entity's new-state (or `event_type` attribute for `event.*`
 entities) before running the action, alongside the existing `entity_id` +
 `action` fields.
 
+## Per-device button targeting (not just whole-room toggle)
+
+A button binding's `toggle`/`off` actions (`_toggle_room`/`_turn_off_room`
+in `__init__.py`, called from `_handle_button_press`) always act on
+*every* device in the bound room together - `_toggle_room` even picks
+on-vs-off by majority vote across all of the room's devices. There's no
+way to bind a physical button channel to just *one* device in a
+multi-device room. This is a common real-world pattern (e.g. a kitchen
+with two wall-switch channels, one toggling the ceiling light and the
+other a separate decorative light) that can't be expressed today - the
+only way to gets close is putting each light in its own single-device
+"room", which then loses shared room-level scheduling/away/weekend
+behavior.
+
+Possible approach: add an optional `entity_id` field to a button binding
+that, when set, targets `light.turn_on`/`turn_off/toggle` (or
+`switch.*`) directly at that one device instead of running
+`_toggle_room`/`_turn_off_room` across the whole room - leaving the
+existing whole-room behavior as the default when unset.
+
+## Continuous hold-to-dim button action
+
+Button bindings (`_handle_button_press` in `__init__.py`) only support
+discrete, one-shot actions (`toggle`, `off`, `apply_now`, `force_period`)
+triggered by a single state-change event. There's no way to bind a
+press-and-hold gesture to continuous brightness ramping (repeatedly
+stepping `brightness_step` up/down at a fixed interval for as long as the
+button is held, reversing direction near the brightness extremes) - a
+common wall-switch pattern for dimmable lights that today has to be built
+as a bespoke automation outside RoomFlow entirely.
+
+Possible approach: a new action type (e.g. `hold_dim`) bound to a
+press/hold-capable event entity rather than a plain state-change trigger,
+starting a repeating timer (e.g. `async_track_time_interval` at ~50ms)
+that calls `light.turn_on` with a small `brightness_step_pct` on the
+target device until a corresponding release event fires, alternating
+direction each time the hold starts based on the device's current
+brightness. Needs its own target device (see the per-device button
+targeting idea above, since dimming a whole room in lockstep is rarely
+what's wanted) and is a meaningfully different trigger model than every
+other button action today.
+
 ## Floors
 
 Rooms aren't grouped under anything larger today - there's no notion of a
@@ -256,21 +298,6 @@ plain-HTML fallback where a given HA frontend version might not have the
 element registered, and trimming the corresponding hand-written CSS rules
 once each category is fully native.
 
-## Decision / audit log
-
-Today "a failing device logs a warning instead of blocking the rest of
-the room" (per the README), but there's no log of RoomFlow's *successful*
-decisions either - which override tier won (away/weekend/default/custom
-condition) and why, for a given room at a given time. When behavior looks
-wrong, there's currently no way to answer "why did it do that" other than
-re-deriving it by hand from the config.
-
-Possible approach: an in-memory ring buffer (surfaced in the card, e.g. a
-"History" tab per room) recording each resolved decision - timestamp,
-room, period, which override tier applied, and which condition/source
-triggered it - independent of Home Assistant's own logbook/history, which
-only shows the resulting entity state changes, not RoomFlow's reasoning.
-
 ## Standalone schedules for individual devices (e.g. outdoor lighting)
 
 Periods are configured once, globally (`CONF_PERIODS` in `const.py`, read
@@ -429,3 +456,28 @@ already need elsewhere) - so a trigger outside its window is treated as
 inactive regardless of the sensor's actual state. The card's trigger row
 would need two optional time inputs next to the existing sensor/threshold
 fields.
+
+## Restore-on-motion-return for motion_off-only devices
+
+`_handle_motion_change` in `__init__.py` only cancels a device's pending
+motion-off timer and re-applies its "on" behavior
+(`_cancel_motion_timer`/`_apply_motion_device_on`) for devices in
+`_motion_on_devices` (control mode "motion" with `motion_on` enabled) -
+when motion becomes active again mid-countdown. A device configured with
+`motion_on` off but `motion_off` on (e.g. turned on by a bound button,
+then left to the room's motion trigger purely to dim-and-turn-off after
+inactivity - the intended replacement for the legacy bathroom/toilet
+ceiling-light pattern of "button turns it on, motion governs the
+dim/off/restore sequence") never gets that cancel-and-restore: if motion
+returns while its off-timer/dim-warning is counting down, the device
+still turns off on schedule instead of snapping back to full brightness
+like the old hand-built automation did.
+
+Possible approach: in `_handle_motion_change`'s "motion became active"
+branch, also check `_motion_off_devices` (not just `_motion_on_devices`)
+for any device with a live pending timer (`hass.data[DOMAIN]
+["motion_off_timers"]`) and cancel + restore it to the current period's
+resolved behavior via `_apply_motion_device_on`, even though `motion_on`
+itself is off - the restore is a reaction to an in-progress countdown
+being interrupted, not a fresh "motion turned this on" event, so it
+should be gated on "has a pending timer" rather than on `motion_on`.

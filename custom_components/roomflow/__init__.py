@@ -72,6 +72,7 @@ from .const import (
     infer_day_type_mode,
     infer_home_mode,
 )
+from .logs import async_load_logs, log_device_change, log_period_change
 from .websocket_api import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -386,6 +387,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("motion_active_state", {})
     hass.data[DOMAIN].setdefault("motion_manual_override", {})
     hass.data[DOMAIN].setdefault("forced_period", {})
+    hass.data[DOMAIN].setdefault("last_logged_period", {})
+    await async_load_logs(hass)
 
     # Register websocket commands only once
     if not hass.data[DOMAIN].get("ws_registered"):
@@ -464,7 +467,65 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN]["get_day_type_fn"] = _get_day_type
     hass.data[DOMAIN]["get_home_state_fn"] = _get_home_state
 
-    async def _apply_device(device: dict, behavior: dict, transition: float | None) -> None:
+    def _device_display_name(entity_id: str) -> str:
+        state = hass.states.get(entity_id)
+        return state.name if state and state.name else entity_id
+
+    def _behavior_state_label(behavior: dict) -> str:
+        if behavior.get("state") != "on":
+            return "off"
+        parts = ["on"]
+        if "brightness" in behavior:
+            parts.append(f"{round(behavior['brightness'] / 255 * 100)}%")
+        if "color_temp_kelvin" in behavior:
+            parts.append(f"{behavior['color_temp_kelvin']}K")
+        return " ".join(parts)
+
+    def _period_display_name(schedule_id: str, period_id: str | None) -> str:
+        if not period_id:
+            return "-"
+        schedule = next((s for s in infer_schedules(hass.data[DOMAIN]["config"]) if s["id"] == schedule_id), None)
+        period = next((p for p in (schedule["periods"] if schedule else []) if p["id"] == period_id), None)
+        return period.get("name", period_id) if period else period_id
+
+    def _log_device_action(
+        room: dict, device: dict, state_label: str, schedule_id: str, period_id: str | None, source: str
+    ) -> None:
+        log_device_change(
+            hass,
+            room_id=room.get("id"),
+            room_name=room.get("name", room.get("id")),
+            entity_id=device.get("entity_id"),
+            device_name=_device_display_name(device.get("entity_id")),
+            state_label=state_label,
+            period_name=_period_display_name(schedule_id, period_id),
+            source=source,
+        )
+
+    def _record_period_change(schedule_id: str, period_id: str, source: str) -> None:
+        tracker = hass.data[DOMAIN]["last_logged_period"]
+        if tracker.get(schedule_id) == period_id:
+            return
+        tracker[schedule_id] = period_id
+        schedule = next((s for s in infer_schedules(hass.data[DOMAIN]["config"]) if s["id"] == schedule_id), None)
+        log_period_change(
+            hass,
+            schedule_id=schedule_id,
+            schedule_name=schedule.get("name", schedule_id) if schedule else schedule_id,
+            period_id=period_id,
+            period_name=_period_display_name(schedule_id, period_id),
+            source=source,
+        )
+
+    async def _apply_device(
+        room: dict,
+        device: dict,
+        behavior: dict,
+        transition: float | None,
+        schedule_id: str,
+        period_id: str | None,
+        source: str,
+    ) -> None:
         try:
             await _apply_behavior(hass, device, behavior, transition)
         except Exception as err:  # noqa: BLE001
@@ -473,14 +534,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 device.get("entity_id"),
                 err,
             )
+            return
+        _log_device_action(room, device, _behavior_state_label(behavior), schedule_id, period_id, source)
 
     async def _apply_single_device(
+        room: dict,
         device: dict,
         period: str,
         day_type: str,
         home_state: str,
         active_condition_ids: list[str],
         default_transitions: dict,
+        schedule_id: str,
+        source: str,
     ) -> None:
         raw_behaviors = device.get("behaviors", {}).get(period)
         if not raw_behaviors:
@@ -503,7 +569,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if transition is None:
             transition = default_transitions.get(period)
 
-        await _apply_device(device, behavior, transition)
+        await _apply_device(room, device, behavior, transition, schedule_id, period, source)
 
     async def _apply_to_rooms(
         rooms: list, forced_period: str | None = None, respect_motion_control: bool = False
@@ -534,6 +600,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     )
                     continue
 
+            source = "forced" if forced_period is not None else "schedule"
+            _record_period_change(schedule_id, period, source)
+
             default_transitions = transitions_for_schedule(cfg, schedule_id)
             active_condition_ids = _active_room_conditions(hass, room)
             for device in room.get("devices", []):
@@ -547,7 +616,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if respect_motion_control and _control_mode(device, period)["mode"] == "motion":
                     continue
                 await _apply_single_device(
-                    device, period, day_type, home_state, active_condition_ids, default_transitions
+                    room,
+                    device,
+                    period,
+                    day_type,
+                    home_state,
+                    active_condition_ids,
+                    default_transitions,
+                    schedule_id,
+                    source,
                 )
 
         if forced_period is not None:
@@ -578,6 +655,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             cancel()
 
     async def _turn_off_room(room: dict) -> None:
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         for device in room.get("devices", []):
             key = _motion_key(room["id"], device["entity_id"])
             hass.data[DOMAIN]["motion_manual_override"][key] = True
@@ -590,11 +668,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.warning(
                     "RoomFlow: could not turn off %s: %s", device.get("entity_id"), err
                 )
+                continue
+            _log_device_action(room, device, "off", schedule_id, _get_period(schedule_id), "button_off")
 
     async def _toggle_room(room: dict) -> None:
         devices = room.get("devices", [])
         if not devices:
             return
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         on_count = 0
         for device in devices:
             state = hass.states.get(device["entity_id"])
@@ -614,6 +695,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.warning(
                     "RoomFlow: could not toggle %s: %s", device.get("entity_id"), err
                 )
+                continue
+            _log_device_action(
+                room, device, "on" if turn_on else "off", schedule_id, _get_period(schedule_id), "button_toggle"
+            )
 
     hass.data[DOMAIN]["apply_fn"] = apply_current_period
     hass.data[DOMAIN]["apply_room_fn"] = apply_room
@@ -715,7 +800,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 result.append(device)
         return result
 
-    async def _turn_off_device(device: dict) -> None:
+    async def _turn_off_device(room: dict, device: dict, source: str = "motion_off") -> None:
         try:
             await hass.services.async_call(
                 _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}
@@ -724,8 +809,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning(
                 "RoomFlow: could not turn off %s: %s", device.get("entity_id"), err
             )
+            return
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        _log_device_action(room, device, "off", schedule_id, _get_period(schedule_id), source)
 
-    async def _dim_device_for_warning(device: dict, brightness: float) -> None:
+    async def _dim_device_for_warning(room: dict, device: dict, brightness: float) -> None:
         if _device_domain(device) != "light":
             return  # the dim-warning stage only makes sense for lights
         try:
@@ -736,6 +824,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning(
                 "RoomFlow: could not dim %s for motion warning: %s", device.get("entity_id"), err
             )
+            return
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        _log_device_action(
+            room, device, f"on {round(brightness / 255 * 100)}%", schedule_id, _get_period(schedule_id), "motion_warn"
+        )
 
     async def _apply_motion_device_on(room: dict, device: dict) -> None:
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
@@ -748,7 +841,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cfg = hass.data[DOMAIN]["config"]
         default_transitions = transitions_for_schedule(cfg, schedule_id)
         await _apply_single_device(
-            device, period, day_type, home_state, active_condition_ids, default_transitions
+            room, device, period, day_type, home_state, active_condition_ids, default_transitions, schedule_id, "motion_on"
         )
 
     def _schedule_motion_off(room_id: str, device: dict, motion_cfg: dict) -> None:
@@ -771,7 +864,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 (d for d in final_room.get("devices", []) if d["entity_id"] == entity_id), None
             )
             if final_device:
-                await _turn_off_device(final_device)
+                await _turn_off_device(final_room, final_device, "motion_warn_expired")
 
         async def _after_off_delay(_now) -> None:
             hass.data[DOMAIN]["motion_off_timers"].pop(key, None)
@@ -784,11 +877,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not current_device:
                 return
             if warn_enabled:
-                await _dim_device_for_warning(current_device, warn_brightness)
+                await _dim_device_for_warning(current_room, current_device, warn_brightness)
                 cancel = async_call_later(hass, warn_minutes * 60, _after_warn)
                 hass.data[DOMAIN]["motion_off_timers"][key] = cancel
             else:
-                await _turn_off_device(current_device)
+                await _turn_off_device(current_room, current_device)
 
         _cancel_motion_timer(key)
         cancel = async_call_later(hass, off_delay * 60, _after_off_delay)

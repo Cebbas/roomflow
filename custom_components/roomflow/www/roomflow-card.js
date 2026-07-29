@@ -550,8 +550,15 @@ const STRINGS = {
     remove_room: "Remove room",
     add_device_option: "+ Add device…",
 
-    default_variant_help:
-      "Let the schedule control this period (uncheck to leave this device alone here - e.g. button/manual only)",
+    control_mode_label: "Controlled by",
+    control_mode_schedule: "Schedule",
+    control_mode_motion: "Motion sensor",
+    control_mode_button: "Button / manual only",
+    motion_turns_on: "Turns on with motion",
+    motion_turns_off: "Turns off with motion",
+    away_default_label: "Default away behavior",
+    away_default_help:
+      "Applies to every period while away, unless a period above has its own away setting enabled",
     custom_setting_for: "Custom setting for {label}",
     on_label: "On",
     brightness_label: "Brightness:",
@@ -563,7 +570,6 @@ const STRINGS = {
     condition_fallback_name: "Condition",
 
     transition_time_label: "Transition time (sec) — default is {s}s:",
-    device_motion_reacts: "Reacts to this room's motion/threshold triggers",
     device_off_after: "Off after",
     device_off_after_suffix: "minutes (blank = room default)",
 
@@ -712,8 +718,15 @@ const STRINGS = {
     remove_room: "Ta bort rum",
     add_device_option: "+ Lägg till enhet…",
 
-    default_variant_help:
-      "Låt schemat styra den här perioden (avmarkera för att lämna den här enheten ifred här - t.ex. knapp/manuellt läge)",
+    control_mode_label: "Styrs av",
+    control_mode_schedule: "Schema",
+    control_mode_motion: "Rörelsesensor",
+    control_mode_button: "Knapp/manuellt läge",
+    motion_turns_on: "Tänds av rörelse",
+    motion_turns_off: "Släcks av rörelse",
+    away_default_label: "Standardbeteende för borta",
+    away_default_help:
+      "Gäller alla perioder när du är borta, om inte en period ovan har egen inställning för borta aktiverad",
     custom_setting_for: "Egen inställning för {label}",
     on_label: "På",
     brightness_label: "Ljusstyrka:",
@@ -725,7 +738,6 @@ const STRINGS = {
     condition_fallback_name: "Villkor",
 
     transition_time_label: "Transitionstid (sek) — standard är {s}s:",
-    device_motion_reacts: "Reagerar på det här rummets rörelse-/tröskelvärdestriggers",
     device_off_after: "Av efter",
     device_off_after_suffix: "minuter (tomt = rummets standard)",
 
@@ -865,8 +877,15 @@ const STRINGS = {
     remove_room: "Fjern rom",
     add_device_option: "+ Legg til enhet…",
 
-    default_variant_help:
-      "La tidsplanen styre denne perioden (fjern haken for å la denne enheten være i fred her - f.eks. knapp/manuell modus)",
+    control_mode_label: "Styres av",
+    control_mode_schedule: "Tidsplan",
+    control_mode_motion: "Bevegelsessensor",
+    control_mode_button: "Knapp/manuell modus",
+    motion_turns_on: "Slås på av bevegelse",
+    motion_turns_off: "Slås av av bevegelse",
+    away_default_label: "Standard borte-oppførsel",
+    away_default_help:
+      "Gjelder alle perioder når du er borte, med mindre en periode ovenfor har egen borte-innstilling aktivert",
     custom_setting_for: "Egendefinert innstilling for {label}",
     on_label: "På",
     brightness_label: "Lysstyrke:",
@@ -878,7 +897,6 @@ const STRINGS = {
     condition_fallback_name: "Betingelse",
 
     transition_time_label: "Overgangstid (sek) — standard er {s}s:",
-    device_motion_reacts: "Reagerer på dette rommets bevegelses-/terskeltriggere",
     device_off_after: "Av etter",
     device_off_after_suffix: "minutter (tomt = romstandard)",
 
@@ -1018,8 +1036,15 @@ const STRINGS = {
     remove_room: "Fjern rum",
     add_device_option: "+ Tilføj enhed…",
 
-    default_variant_help:
-      "Lad tidsplanen styre denne periode (fjern fluebenet for at lade denne enhed være i fred her - f.eks. knap/manuel tilstand)",
+    control_mode_label: "Styres af",
+    control_mode_schedule: "Tidsplan",
+    control_mode_motion: "Bevægelsessensor",
+    control_mode_button: "Knap/manuel tilstand",
+    motion_turns_on: "Tændes af bevægelse",
+    motion_turns_off: "Slukkes af bevægelse",
+    away_default_label: "Standard borte-adfærd",
+    away_default_help:
+      "Gælder alle perioder når du er væk, medmindre en periode ovenfor har egen borte-indstilling aktiveret",
     custom_setting_for: "Brugerdefineret indstilling for {label}",
     on_label: "Til",
     brightness_label: "Lysstyrke:",
@@ -1031,7 +1056,6 @@ const STRINGS = {
     condition_fallback_name: "Betingelse",
 
     transition_time_label: "Overgangstid (sek) — standard er {s}s:",
-    device_motion_reacts: "Reagerer på dette rums bevægelses-/tærskeltriggere",
     device_off_after: "Fra efter",
     device_off_after_suffix: "minutter (tomt = rumstandard)",
 
@@ -1171,8 +1195,15 @@ const STRINGS = {
     remove_room: "Poista huone",
     add_device_option: "+ Lisää laite…",
 
-    default_variant_help:
-      "Anna aikataulun ohjata tätä jaksoa (poista valinta jättääksesi tämän laitteen rauhaan täällä - esim. painike-/manuaalitila)",
+    control_mode_label: "Ohjaustapa",
+    control_mode_schedule: "Aikataulu",
+    control_mode_motion: "Liiketunnistin",
+    control_mode_button: "Painike/manuaalitila",
+    motion_turns_on: "Syttyy liikkeestä",
+    motion_turns_off: "Sammuu liikkeestä",
+    away_default_label: "Oletuspoissaolokäytös",
+    away_default_help:
+      "Koskee kaikkia jaksoja poissa ollessa, ellei yllä olevalla jaksolla ole omaa poissaoloasetusta käytössä",
     custom_setting_for: "Oma asetus kohteelle {label}",
     on_label: "Päällä",
     brightness_label: "Kirkkaus:",
@@ -1184,7 +1215,6 @@ const STRINGS = {
     condition_fallback_name: "Ehto",
 
     transition_time_label: "Siirtymäaika (s) — oletus on {s}s:",
-    device_motion_reacts: "Reagoi tämän huoneen liike-/kynnysarvolaukaisimiin",
     device_off_after: "Pois",
     device_off_after_suffix: "minuutin kuluttua (tyhjä = huoneen oletus)",
 
@@ -1324,8 +1354,15 @@ const STRINGS = {
     remove_room: "Raum entfernen",
     add_device_option: "+ Gerät hinzufügen…",
 
-    default_variant_help:
-      "Lass den Zeitplan diesen Zeitraum steuern (deaktivieren, um dieses Gerät hier in Ruhe zu lassen - z. B. Tasten-/manueller Modus)",
+    control_mode_label: "Gesteuert durch",
+    control_mode_schedule: "Zeitplan",
+    control_mode_motion: "Bewegungssensor",
+    control_mode_button: "Taste/manueller Modus",
+    motion_turns_on: "Schaltet bei Bewegung ein",
+    motion_turns_off: "Schaltet bei Bewegung aus",
+    away_default_label: "Standard-Abwesenheitsverhalten",
+    away_default_help:
+      "Gilt für alle Zeiträume während der Abwesenheit, außer ein Zeitraum oben hat eine eigene Abwesenheitseinstellung aktiviert",
     custom_setting_for: "Eigene Einstellung für {label}",
     on_label: "An",
     brightness_label: "Helligkeit:",
@@ -1337,7 +1374,6 @@ const STRINGS = {
     condition_fallback_name: "Bedingung",
 
     transition_time_label: "Übergangszeit (Sek.) — Standard ist {s}s:",
-    device_motion_reacts: "Reagiert auf die Bewegungs-/Schwellenwert-Trigger dieses Raums",
     device_off_after: "Aus nach",
     device_off_after_suffix: "Minuten (leer = Raumstandard)",
 
@@ -1477,8 +1513,15 @@ const STRINGS = {
     remove_room: "Supprimer la pièce",
     add_device_option: "+ Ajouter un appareil…",
 
-    default_variant_help:
-      "Laissez l'horaire fixe contrôler cette période (décochez pour laisser cet appareil tranquille ici - par ex. mode bouton/manuel)",
+    control_mode_label: "Contrôlé par",
+    control_mode_schedule: "Horaire",
+    control_mode_motion: "Détecteur de mouvement",
+    control_mode_button: "Bouton / manuel uniquement",
+    motion_turns_on: "S'allume avec le mouvement",
+    motion_turns_off: "S'éteint avec le mouvement",
+    away_default_label: "Comportement d'absence par défaut",
+    away_default_help:
+      "S'applique à toutes les périodes en cas d'absence, sauf si une période ci-dessus a son propre réglage d'absence activé",
     custom_setting_for: "Réglage personnalisé pour {label}",
     on_label: "Allumé",
     brightness_label: "Luminosité :",
@@ -1490,7 +1533,6 @@ const STRINGS = {
     condition_fallback_name: "Condition",
 
     transition_time_label: "Temps de transition (s) — par défaut {s}s :",
-    device_motion_reacts: "Réagit aux déclencheurs de mouvement/seuil de cette pièce",
     device_off_after: "Éteint après",
     device_off_after_suffix: "minutes (vide = valeur par défaut de la pièce)",
 
@@ -1630,8 +1672,15 @@ const STRINGS = {
     remove_room: "Kamer verwijderen",
     add_device_option: "+ Apparaat toevoegen…",
 
-    default_variant_help:
-      "Laat het schema deze periode besturen (vink uit om dit apparaat hier met rust te laten - bijv. knop-/handmatige modus)",
+    control_mode_label: "Bestuurd door",
+    control_mode_schedule: "Schema",
+    control_mode_motion: "Bewegingssensor",
+    control_mode_button: "Knop/handmatige modus",
+    motion_turns_on: "Gaat aan bij beweging",
+    motion_turns_off: "Gaat uit bij beweging",
+    away_default_label: "Standaard afwezigheidsgedrag",
+    away_default_help:
+      "Geldt voor elke periode tijdens afwezigheid, tenzij een periode hierboven een eigen afwezigheidsinstelling heeft geactiveerd",
     custom_setting_for: "Aangepaste instelling voor {label}",
     on_label: "Aan",
     brightness_label: "Helderheid:",
@@ -1643,7 +1692,6 @@ const STRINGS = {
     condition_fallback_name: "Voorwaarde",
 
     transition_time_label: "Overgangstijd (sec) — standaard is {s}s:",
-    device_motion_reacts: "Reageert op de beweging-/drempelwaardetriggers van deze kamer",
     device_off_after: "Uit na",
     device_off_after_suffix: "minuten (leeg = kamerstandaard)",
 
@@ -2050,6 +2098,12 @@ class RoomFlowCard extends HTMLElement {
       (room.devices || []).forEach((device) => {
         if (!device.transitions) device.transitions = {};
         if (!device.motion) device.motion = { enabled: false, off_delay_minutes: null };
+        if (!device.control) device.control = {};
+        if (!device.away_default) {
+          device.away_default = { enabled: false, state: "off" };
+          if (device.supports_brightness) device.away_default.brightness = 255;
+          if (device.supports_color_temp) device.away_default.color_temp_kelvin = 3000;
+        }
         const behaviors = device.behaviors || {};
         roomPeriods.forEach((p) => {
           const raw = behaviors[p.id];
@@ -2075,6 +2129,18 @@ class RoomFlowCard extends HTMLElement {
             else if (raw.default.enabled === undefined) raw.default.enabled = true;
             if (!raw.weekend) raw.weekend = emptyVariant(raw.default, true);
             if (!raw.away) raw.away = emptyVariant(raw.default, true);
+          }
+
+          // Per-period control mode: migrate from the old device-wide
+          // motion.enabled flag / default.enabled toggle so existing
+          // configs keep behaving exactly the same until edited via the
+          // new control-mode selector.
+          if (!device.control[p.id]) {
+            const defaultEnabled = behaviors[p.id].default.enabled !== false;
+            let mode = "schedule";
+            if (device.motion.enabled) mode = "motion";
+            else if (!defaultEnabled) mode = "button";
+            device.control[p.id] = { mode, motion_on: true, motion_off: true };
           }
         });
         device.behaviors = behaviors;
@@ -2102,6 +2168,7 @@ class RoomFlowCard extends HTMLElement {
     if (supportsColorTemp) base.color_temp_kelvin = 3000;
 
     const behaviors = {};
+    const control = {};
     const periods = (this._schedule(scheduleId) || {}).periods || [];
     periods.forEach((p) => {
       behaviors[p.id] = {
@@ -2109,7 +2176,12 @@ class RoomFlowCard extends HTMLElement {
         weekend: emptyVariant(base, true),
         away: emptyVariant(base, true),
       };
+      control[p.id] = { mode: "schedule", motion_on: true, motion_off: true };
     });
+
+    const awayDefault = { enabled: false, state: "off" };
+    if (supportsBrightness) awayDefault.brightness = 255;
+    if (supportsColorTemp) awayDefault.color_temp_kelvin = 3000;
 
     return {
       entity_id: entity.entity_id,
@@ -2119,6 +2191,8 @@ class RoomFlowCard extends HTMLElement {
       supports_color_temp: supportsColorTemp,
       transitions: {},
       behaviors: behaviors,
+      control: control,
+      away_default: awayDefault,
     };
   }
 
@@ -2416,6 +2490,11 @@ class RoomFlowCard extends HTMLElement {
   _availableEntities(room) {
     const used = new Set(room.devices.map((d) => d.entity_id));
     return this._entities.filter((e) => !used.has(e.entity_id));
+  }
+
+  _deviceHeaderIcon(device) {
+    const st = this._hass && this._hass.states[device.entity_id];
+    return (st && st.attributes && st.attributes.icon) || deviceIcon(device);
   }
 
   _liveStatusText(device) {
@@ -2825,15 +2904,73 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
-    const deviceMotionEnabled = e.target.closest("[data-device-motion-enabled]");
-    if (deviceMotionEnabled) {
-      const { roomId, entityId } = parseDeviceKey(deviceMotionEnabled.getAttribute("data-device-motion-enabled"));
+    const controlMode = e.target.closest("[data-control-mode]");
+    if (controlMode) {
+      const [deviceKey, period] = controlMode.getAttribute("data-control-mode").split("|");
+      const { roomId, entityId } = parseDeviceKey(deviceKey);
       const device = this._findDevice(roomId, entityId);
       if (device) {
-        if (!device.motion) device.motion = { enabled: false, off_delay_minutes: null };
-        device.motion.enabled = deviceMotionEnabled.checked;
+        if (!device.control) device.control = {};
+        if (!device.control[period]) device.control[period] = { mode: "schedule", motion_on: true, motion_off: true };
+        device.control[period].mode = controlMode.value;
         this._scheduleSave();
         this._render();
+      }
+      return;
+    }
+
+    const controlMotionOn = e.target.closest("[data-control-motion-on]");
+    if (controlMotionOn) {
+      const [deviceKey, period] = controlMotionOn.getAttribute("data-control-motion-on").split("|");
+      const { roomId, entityId } = parseDeviceKey(deviceKey);
+      const device = this._findDevice(roomId, entityId);
+      if (device && device.control && device.control[period]) {
+        device.control[period].motion_on = controlMotionOn.checked;
+        this._scheduleSave();
+      }
+      return;
+    }
+
+    const controlMotionOff = e.target.closest("[data-control-motion-off]");
+    if (controlMotionOff) {
+      const [deviceKey, period] = controlMotionOff.getAttribute("data-control-motion-off").split("|");
+      const { roomId, entityId } = parseDeviceKey(deviceKey);
+      const device = this._findDevice(roomId, entityId);
+      if (device && device.control && device.control[period]) {
+        device.control[period].motion_off = controlMotionOff.checked;
+        this._scheduleSave();
+      }
+      return;
+    }
+
+    const awayDefaultEnabled = e.target.closest("[data-away-default-enabled]");
+    if (awayDefaultEnabled) {
+      const { roomId, entityId } = parseDeviceKey(awayDefaultEnabled.getAttribute("data-away-default-enabled"));
+      const device = this._findDevice(roomId, entityId);
+      if (device) {
+        if (!device.away_default) device.away_default = { enabled: false, state: "off" };
+        device.away_default.enabled = awayDefaultEnabled.checked;
+        this._scheduleSave();
+        this._render();
+      }
+      return;
+    }
+
+    const awayDefaultField = e.target.closest("[data-away-default-field]");
+    if (awayDefaultField) {
+      const [deviceKey, key] = awayDefaultField.getAttribute("data-away-default-field").split("|");
+      const { roomId, entityId } = parseDeviceKey(deviceKey);
+      const device = this._findDevice(roomId, entityId);
+      if (device) {
+        if (!device.away_default) device.away_default = { enabled: false, state: "off" };
+        const target = device.away_default;
+        if (key === "state") {
+          target.state = awayDefaultField.checked ? "on" : "off";
+        } else if (key === "brightness" || key === "color_temp_kelvin") {
+          target[key] = parseInt(awayDefaultField.value, 10);
+        }
+        this._scheduleSave();
+        if (key === "state") this._render();
       }
       return;
     }
@@ -3020,16 +3157,31 @@ class RoomFlowCard extends HTMLElement {
   _onInput(e) {
     // Live-update the number next to the slider without saving/re-rendering
     const field = e.target.closest('[data-field][type="range"]');
-    if (!field) return;
-    const parts = field.getAttribute("data-field").split("|");
-    const key = parts[3];
-    const variantPrefix = parts.slice(0, 3).join("|");
-    if (key === "brightness") {
-      const span = this.querySelector(`[data-brightness-val="${variantPrefix}"]`);
-      if (span) span.textContent = field.value;
-    } else if (key === "color_temp_kelvin") {
-      const span = this.querySelector(`[data-kelvin-val="${variantPrefix}"]`);
-      if (span) span.textContent = field.value;
+    if (field) {
+      const parts = field.getAttribute("data-field").split("|");
+      const key = parts[3];
+      const variantPrefix = parts.slice(0, 3).join("|");
+      if (key === "brightness") {
+        const span = this.querySelector(`[data-brightness-val="${variantPrefix}"]`);
+        if (span) span.textContent = field.value;
+      } else if (key === "color_temp_kelvin") {
+        const span = this.querySelector(`[data-kelvin-val="${variantPrefix}"]`);
+        if (span) span.textContent = field.value;
+      }
+      return;
+    }
+
+    const awayField = e.target.closest('[data-away-default-field][type="range"]');
+    if (awayField) {
+      const [deviceKey, key] = awayField.getAttribute("data-away-default-field").split("|");
+      const awayPrefix = `${deviceKey}|__away_default`;
+      if (key === "brightness") {
+        const span = this.querySelector(`[data-brightness-val="${awayPrefix}"]`);
+        if (span) span.textContent = awayField.value;
+      } else if (key === "color_temp_kelvin") {
+        const span = this.querySelector(`[data-kelvin-val="${awayPrefix}"]`);
+        if (span) span.textContent = awayField.value;
+      }
     }
   }
 
@@ -3717,6 +3869,108 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
+  _renderControlMode(deviceKey, device, period, room) {
+    const control = (device.control && device.control[period]) || {
+      mode: "schedule",
+      motion_on: true,
+      motion_off: true,
+    };
+    const motionAvailable = !!(room.motion && room.motion.enabled);
+    const fieldPrefix = `${deviceKey}|${period}`;
+    const groupName = `rf-control-mode|${fieldPrefix}`;
+
+    const modeOption = (value, iconName, label) => `
+      <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+        <input type="radio" name="${groupName}" value="${value}" data-control-mode="${fieldPrefix}" ${
+          control.mode === value ? "checked" : ""
+        } />
+        ${icon(iconName)} ${label}
+      </label>
+    `;
+
+    let motionSubHtml = "";
+    if (control.mode === "motion") {
+      const deviceMotion = device.motion || { enabled: false, off_delay_minutes: null };
+      motionSubHtml = `
+        <div style="margin-top:6px;margin-left:24px;font-size:0.9em">
+          <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+            ${switchEl(`data-control-motion-on="${fieldPrefix}" ${control.motion_on !== false ? "checked" : ""}`)}
+            ${this._t("motion_turns_on")}
+          </label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+            ${switchEl(`data-control-motion-off="${fieldPrefix}" ${control.motion_off !== false ? "checked" : ""}`)}
+            ${this._t("motion_turns_off")}
+          </label>
+          <div style="margin-top:4px">
+            ${this._t("device_off_after")}
+            ${textField(`type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}" value="${
+                deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
+                  ? deviceMotion.off_delay_minutes
+                  : ""
+              }" data-device-motion-delay="${deviceKey}" style="width:55px"`)}
+            ${this._t("device_off_after_suffix")}
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="rf-variant" style="margin-bottom:10px">
+        <div class="rf-variant-title">${icon("mdi:tune-variant")}${this._t("control_mode_label")}</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+          ${modeOption("schedule", "mdi:calendar-clock-outline", this._t("control_mode_schedule"))}
+          ${motionAvailable ? modeOption("motion", "mdi:motion-sensor", this._t("control_mode_motion")) : ""}
+          ${modeOption("button", "mdi:gesture-tap-button", this._t("control_mode_button"))}
+        </div>
+        ${motionSubHtml}
+      </div>
+    `;
+  }
+
+  _renderAwayDefault(deviceKey, device) {
+    const away = device.away_default || { enabled: false, state: "off" };
+    const supportsBrightness = !!device.supports_brightness;
+    const supportsColorTemp = !!device.supports_color_temp;
+    const disabled = !away.enabled;
+    const awayPrefix = `${deviceKey}|__away_default`;
+
+    return `
+      <div class="rf-variant rf-variant-away${disabled ? " rf-disabled" : ""}" style="margin-top:8px">
+        <label class="rf-variant-title" style="cursor:pointer">
+          ${switchEl(`data-away-default-enabled="${deviceKey}" ${away.enabled ? "checked" : ""}`)}
+          ${icon(VARIANT_ICONS.away)}${this._t("away_default_label")}
+        </label>
+        <div style="font-size:0.85em;opacity:0.75;margin-top:2px">${this._t("away_default_help")}</div>
+        <div style="margin-top:6px${disabled ? ";pointer-events:none" : ""}">
+          <label style="cursor:pointer">
+            ${switchEl(`data-away-default-field="${deviceKey}|state" ${away.state === "on" ? "checked" : ""} ${
+              disabled ? "disabled" : ""
+            }`)}
+            ${this._t("on_label")}
+          </label>
+          ${
+            supportsBrightness
+              ? `<div class="rf-slider-row">
+                  ${icon("mdi:brightness-6")} ${this._t("brightness_label")} <span data-brightness-val="${awayPrefix}">${away.brightness ?? 255}</span>
+                  <input type="range" min="1" max="255" value="${away.brightness ?? 255}"
+                    data-away-default-field="${deviceKey}|brightness" ${disabled ? "disabled" : ""} />
+                </div>`
+              : ""
+          }
+          ${
+            supportsColorTemp
+              ? `<div class="rf-slider-row">
+                  ${icon("mdi:thermometer")} ${this._t("color_temp_label")} <span data-kelvin-val="${awayPrefix}">${away.color_temp_kelvin ?? 3000}</span>
+                  <input type="range" min="2000" max="6500" step="100" value="${away.color_temp_kelvin ?? 3000}"
+                    data-away-default-field="${deviceKey}|color_temp_kelvin" ${disabled ? "disabled" : ""} />
+                </div>`
+              : ""
+          }
+        </div>
+      </div>
+    `;
+  }
+
   _renderDevice(room, device) {
     const deviceKey = `${room.id}:${device.entity_id}`;
     // Undefined (never toggled) defaults to open, matching the old
@@ -3738,9 +3992,9 @@ class RoomFlowCard extends HTMLElement {
         )
         .join("");
 
-      let controlsHtml = this._renderVariantControls(
-        deviceKey, device, activePeriod, "default", this._t("variant_default"), true,
-        this._t("default_variant_help")
+      let controlsHtml = this._renderControlMode(deviceKey, device, activePeriod, room);
+      controlsHtml += this._renderVariantControls(
+        deviceKey, device, activePeriod, "default", this._t("variant_default"), false
       );
       if (this._hasDayType()) {
         controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "weekend", this._t("variant_weekend"), true);
@@ -3773,30 +4027,12 @@ class RoomFlowCard extends HTMLElement {
         `;
       }
 
-      if (room.motion && room.motion.enabled) {
-        const deviceMotion = device.motion || { enabled: false, off_delay_minutes: null };
-        controlsHtml += `
-          <div style="margin-top:10px;font-size:0.9em">
-            <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
-              ${switchEl(`data-device-motion-enabled="${deviceKey}" ${deviceMotion.enabled ? "checked" : ""}`)}
-              ${icon("mdi:motion-sensor")} ${this._t("device_motion_reacts")}
-            </label>
-            <div style="margin-top:4px${deviceMotion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-              ${this._t("device_off_after")}
-              ${textField(`type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}" value="${
-                  deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
-                    ? deviceMotion.off_delay_minutes
-                    : ""
-                }" data-device-motion-delay="${deviceKey}" style="width:55px"`)}
-              ${this._t("device_off_after_suffix")}
-            </div>
-          </div>
-        `;
-      }
+      const awayDefaultHtml = this._hasHome() ? this._renderAwayDefault(deviceKey, device) : "";
 
       bodyHtml = `
         <div class="rf-device-body">
           <div class="rf-chip-row">${tabsHtml}</div>
+          ${awayDefaultHtml}
           <div style="margin-top:8px">${controlsHtml}</div>
         </div>
       `;
@@ -3806,7 +4042,7 @@ class RoomFlowCard extends HTMLElement {
       <div class="rf-device${isOpen ? " rf-open" : ""}">
         <div class="rf-device-header" data-device-toggle="${deviceKey}">
           <div class="rf-device-name">
-            ${icon(deviceIcon(device), "", "rf-device-icon")}
+            ${icon(this._deviceHeaderIcon(device), "", "rf-device-icon")}
             <span class="rf-device-text">${device.name}</span>
             <small>(${device.entity_id})</small>
             <span class="rf-badge ${this._liveStatusClass(device)}" data-live-status="${deviceKey}">${this._liveStatusText(device)}</span>

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Per-period control mode (schedule / motion sensor / button-manual),
+  replacing the old "let the schedule control this period" checkbox.**
+  Each device/period now picks explicitly how it's controlled: by the
+  schedule, by this room's motion trigger (with independent "turns on
+  with motion" / "turns off with motion" toggles, so a device can react
+  to only one), or left alone for button/manual control only - so a
+  device can be schedule-driven during the day and motion-driven at
+  night, per period, instead of one all-or-nothing device-wide motion
+  flag. Existing configs migrate automatically with no behavior change.
+- **Device-wide default away behavior**, shown next to the period tabs
+  and applying to every period while away, unless that period has its
+  own away override enabled (existing per-period away setting still
+  takes priority when set) - instead of having to configure away
+  behavior period by period from scratch.
+- The device header icon now shows the entity's own registered icon
+  (falling back to the generic lightbulb/plug icon only if it has none).
 - **Multiple independent schedules, so a room (e.g. outdoor lighting) can
   follow its own periods instead of the shared indoor one.** Periods used
   to be one single global list shared by every room. Settings -> Schedules

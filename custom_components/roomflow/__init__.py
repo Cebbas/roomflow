@@ -86,13 +86,20 @@ _CARD_JS_URL = f"{_CARD_URL_PATH}/roomflow-card.js"
 
 
 def _pick_behavior(
-    behaviors: dict, active_condition_ids: list[str], day_type: str, home_state: str
+    behaviors: dict,
+    active_condition_ids: list[str],
+    day_type: str,
+    home_state: str,
+    default_enabled: bool = True,
+    away_default: dict | None = None,
 ) -> dict | None:
     """Pick the right variant for a device/period: room conditions (in
-    priority order) > away > weekend > default. Returns None if nothing
-    applies - including when "default" itself is switched off for this
-    period, meaning "leave this device alone" (e.g. button/manual-only
-    during the day, while away/night overrides still turn it off)."""
+    priority order) > this period's own away override > the device-wide
+    away default (used only when the period has no away override of its
+    own) > weekend > default. Returns None if nothing applies - including
+    when the period's control mode isn't "schedule" (`default_enabled`
+    False), meaning "leave this device alone" here, while away/weekend/
+    condition overrides still act if enabled."""
     for condition_id in active_condition_ids:
         condition_cfg = behaviors.get(condition_id)
         if condition_cfg and condition_cfg.get("enabled"):
@@ -100,13 +107,40 @@ def _pick_behavior(
     away_cfg = behaviors.get("away")
     if away_cfg and away_cfg.get("enabled") and home_state == "away":
         return away_cfg
+    if away_default and away_default.get("enabled") and home_state == "away":
+        return away_default
     weekend_cfg = behaviors.get("weekend")
     if weekend_cfg and weekend_cfg.get("enabled") and day_type == "weekend":
         return weekend_cfg
     default_cfg = behaviors.get("default")
-    if default_cfg and default_cfg.get("enabled", True):
+    if default_cfg and default_enabled:
         return default_cfg
     return None
+
+
+def _control_mode(device: dict, period: str) -> dict:
+    """Per-period control mode for a device: which mechanism is allowed to
+    act on it this period - "schedule" (ambient time/day-type/home-state
+    ticks), "motion" (only the room's motion trigger, optionally split
+    into separate on/off reactions via motion_on/motion_off), or "button"
+    (left alone by both; only touched by an explicit bound button/Test-now/
+    force_period call). Falls back to inferring from the pre-control-mode
+    fields (device-wide motion.enabled, per-period behaviors.default.
+    enabled) for configs the card hasn't resaved with an explicit
+    "control" block yet."""
+    control = (device.get("control") or {}).get(period)
+    if control:
+        return {
+            "mode": control.get("mode", "schedule"),
+            "motion_on": control.get("motion_on", True),
+            "motion_off": control.get("motion_off", True),
+        }
+    if device.get("motion", {}).get("enabled"):
+        return {"mode": "motion", "motion_on": True, "motion_off": True}
+    default_cfg = _normalize_behaviors(device.get("behaviors", {}).get(period)).get("default")
+    if default_cfg and default_cfg.get("enabled", True) is False:
+        return {"mode": "button", "motion_on": True, "motion_off": True}
+    return {"mode": "schedule", "motion_on": True, "motion_off": True}
 
 
 def _active_room_conditions(hass: HomeAssistant, room: dict) -> list[str]:
@@ -451,7 +485,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not raw_behaviors:
             return
         behaviors = _normalize_behaviors(raw_behaviors)
-        behavior = _pick_behavior(behaviors, active_condition_ids, day_type, home_state)
+        control = _control_mode(device, period)
+        behavior = _pick_behavior(
+            behaviors,
+            active_condition_ids,
+            day_type,
+            home_state,
+            default_enabled=control["mode"] != "button",
+            away_default=device.get("away_default"),
+        )
         if not behavior:
             return
 
@@ -487,13 +529,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             default_transitions = transitions_for_schedule(cfg, schedule_id)
             active_condition_ids = _active_room_conditions(hass, room)
             for device in room.get("devices", []):
-                # Motion-enabled devices are exclusively controlled by the
-                # motion subsystem during routine ambient reapplies (time/
-                # day-type/home-state ticking) - otherwise every such tick
-                # would force them back on regardless of actual motion.
-                # Explicit triggers (Test now, apply_now/force_period
-                # buttons) still touch everything, same as before.
-                if respect_motion_control and device.get("motion", {}).get("enabled"):
+                # Devices whose control mode is "motion" for this period are
+                # exclusively controlled by the motion subsystem during
+                # routine ambient reapplies (time/day-type/home-state
+                # ticking) - otherwise every such tick would force them back
+                # on regardless of actual motion. Explicit triggers (Test
+                # now, apply_now/force_period buttons) still touch
+                # everything, same as before.
+                if respect_motion_control and _control_mode(device, period)["mode"] == "motion":
                     continue
                 await _apply_single_device(
                     device, period, day_type, home_state, active_condition_ids, default_transitions
@@ -637,8 +680,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         triggers = room.get("motion", {}).get("triggers", [])
         return any(_is_trigger_active(t) for t in triggers)
 
-    def _motion_devices(room: dict) -> list:
-        return [d for d in room.get("devices", []) if d.get("motion", {}).get("enabled")]
+    def _motion_on_devices(room: dict, period: str) -> list:
+        """Devices to turn on when this room's motion becomes active this
+        period - control mode "motion" with motion_on enabled."""
+        result = []
+        for device in room.get("devices", []):
+            control = _control_mode(device, period)
+            if control["mode"] == "motion" and control["motion_on"]:
+                result.append(device)
+        return result
+
+    def _motion_off_devices(room: dict, period: str) -> list:
+        """Devices to schedule off when this room's motion becomes
+        inactive this period - control mode "motion" with motion_off
+        enabled."""
+        result = []
+        for device in room.get("devices", []):
+            control = _control_mode(device, period)
+            if control["mode"] == "motion" and control["motion_off"]:
+                result.append(device)
+        return result
 
     async def _turn_off_device(device: dict) -> None:
         try:
@@ -733,10 +794,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
         hass.data[DOMAIN]["motion_active_state"][room_id] = new_active
 
-        motion_devices = _motion_devices(room)
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        period = _get_period(schedule_id)
+        if period is None:
+            return
 
         if new_active:
-            for device in motion_devices:
+            for device in _motion_on_devices(room, period):
                 key = _motion_key(room_id, device["entity_id"])
                 # A fresh motion cycle always releases any manual-mode lock
                 # from a prior button press, per RoomFlow's design.
@@ -744,7 +808,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _cancel_motion_timer(key)
                 await _apply_motion_device_on(room, device)
         else:
-            for device in motion_devices:
+            for device in _motion_off_devices(room, period):
                 key = _motion_key(room_id, device["entity_id"])
                 if hass.data[DOMAIN]["motion_manual_override"].get(key):
                     continue

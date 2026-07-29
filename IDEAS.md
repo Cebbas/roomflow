@@ -294,41 +294,6 @@ rather than added to the global list. Could double as a plain exposed
 binary_sensor (like today's per-period ones) so it's also directly usable
 in other automations, not just within RoomFlow.
 
-## Active vs. passive motion control, and per-period motion behavior
-
-A device's `motion.enabled` flag (`device_motion_reacts` in the card, read
-by `_motion_devices` in `__init__.py`) is all-or-nothing: whenever the
-room's motion trigger fires, `_apply_motion_device_on` turns the device on
-to whatever the *current period's* behavior is, and `_schedule_motion_off`
-turns it back off after the configured delay - the same for every period,
-every time. There's no way to say a device should only be **actively**
-turned on/off by motion during some periods (e.g. evening/night) while
-staying **passive** (untouched by motion, e.g. because daylight already
-covers it, or because it's a device that shouldn't auto-toggle at that time
-of day) during others, e.g. day.
-
-Possible approach: extend each device's `motion` config with a per-period
-enabled/disabled override (mirroring how per-period behavior is already
-keyed by period name), checked in `_apply_motion_device_on` and
-`_handle_motion_change` before acting on that device for the current
-period - so motion control can be scoped to specific periods per device
-instead of only toggled globally on/off. The card's device motion section
-would need a period-by-period toggle alongside the existing single
-"reacts to motion" checkbox.
-
-A related but distinct gap: `motion.enabled` also couples the *on* and
-*off* reaction into a single flag - a device either reacts to both
-motion-on and motion-off, or neither. There's no "manual on, motion off"
-mode: a device you only ever turn on yourself (e.g. via a bound button)
-but still want `_schedule_motion_off`/`_handle_motion_change` to switch
-off automatically once the room's motion trigger times out, so it doesn't
-stay on forever after you leave. Possible approach: split the single
-`motion.enabled` flag into separate `reacts_to_on` / `reacts_to_off` flags
-(or an on/off/both choice) per device, with `_handle_motion_change`'s two
-branches - turning devices on when motion starts, scheduling them off when
-it stops - each checking the relevant flag independently instead of the
-one shared `enabled` gate.
-
 ## Entity health as a real notification, not just a log warning
 
 When a bound entity's service call fails (`_apply_single_device` in
@@ -418,3 +383,30 @@ immediately before the last `_apply_to_rooms` call actually changed
 anything, and add an "Undo" button (card action + maybe a bound-button
 action) that replays those prior states via the same `light`/`switch`
 services, clearing the record once used so it can't be replayed twice.
+
+## Time-window restriction on a motion/threshold trigger
+
+A trigger in `room.motion.triggers` (`_is_trigger_active` in `__init__.py`)
+only ever checks the sensor's own state - a `motion` trigger fires
+whenever the entity reports "on", a `threshold_above` trigger whenever the
+value clears the threshold, with no notion of *when in the day* that
+should count. There's no way to say "only let this sensor activate the
+room between 22:00 and 06:00" (e.g. a driveway/hallway sensor that should
+only affect lighting at night, ignored the rest of the day) without an
+external automation that separately enables/disables the sensor or the
+whole room.
+
+This is a different scope than the per-device per-period motion idea
+above (which decides whether a *device* reacts once the room is already
+counted as active) - this one is about restricting when the *trigger
+itself* is allowed to count as active in the first place, as a plain
+clock-time window rather than tied to the named period list.
+
+Possible approach: add optional `active_from`/`active_until` clock-time
+fields to a trigger, checked in `_is_trigger_active` alongside the
+existing state/threshold check (using the same time-of-day comparison,
+handling the overnight-wrap case like 22:00-06:00, that period boundaries
+already need elsewhere) - so a trigger outside its window is treated as
+inactive regardless of the sensor's actual state. The card's trigger row
+would need two optional time inputs next to the existing sensor/threshold
+fields.

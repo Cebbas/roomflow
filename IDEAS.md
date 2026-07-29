@@ -163,18 +163,29 @@ away behavior with a randomized on/off schedule generated within a
 configurable window (e.g. "on sometime between 19:00-19:30, off sometime
 between 22:30-23:15"), re-rolled once a day.
 
-## Manual override / pause automation per room or device
+## Explicit pause/resume for a room or device
 
-There's no way to temporarily take a room or device out of RoomFlow's
-control. If someone manually dims a light to something specific, the next
-period change or triggered recompute (`SIGNAL_RECOMPUTE`) overwrites it -
-a common frustration in "smart lighting" setups where automation fights
-manual adjustments.
+`_apply_single_device` in `__init__.py` now skips an ambient re-apply
+(`respect_manual_override=True`, only set by `apply_current_period`)
+whenever the resolved behavior's signature (`_behavior_signature`) hasn't
+changed since the last time RoomFlow itself set it - so a manual change
+(app, voice, physical button/toggle) is left alone until the *schedule's
+own target* actually moves, instead of being stomped on the next tick.
+That passively covers the common "I dimmed a light and it snapped back a
+minute later" frustration without needing any explicit toggle.
 
-Possible approach: a per-room or per-device "pause" state (toggle from the
-card, or exposed as a service for automations/voice assistants) that skips
-that room/device in `_apply_to_rooms` until explicitly resumed, or until a
-fixed expiry (end of day, next period change, or a chosen duration).
+What's still missing: there's no way to deliberately take a room/device
+out of RoomFlow's control *even across a real period change* - e.g.
+"leave the kitchen alone for the next hour, I'm doing something" should
+survive the schedule's target actually moving, which today's passive
+signature-diff does not (a genuine period/condition/away-state change
+still re-asserts control immediately, by design). Possible approach: a
+per-room or per-device explicit "pause" state (toggle from the card, or
+exposed as a service for automations/voice assistants) checked in
+`_apply_to_rooms` ahead of the signature-diff check, skipping that room/
+device unconditionally until explicitly resumed or a fixed expiry (end of
+day, next period change, or a chosen duration) - a deliberate override on
+top of the automatic one, not a replacement for it.
 
 ## Scheduled ramping between periods
 

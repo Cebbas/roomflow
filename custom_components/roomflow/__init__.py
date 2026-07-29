@@ -144,6 +144,19 @@ def _control_mode(device: dict, period: str) -> dict:
     return {"mode": "schedule", "motion_on": True, "motion_off": True}
 
 
+def _behavior_signature(behavior: dict) -> tuple:
+    """A comparable snapshot of what a behavior asks for, used to tell
+    "the schedule's target actually changed" apart from "we're just being
+    asked to re-apply the same thing again" (ambient ticks re-resolve and
+    re-apply on every trigger, not only when something differs). Two
+    resolved behaviors that ask for the same practical outcome compare
+    equal even if a different tier (condition/away/weekend/default)
+    produced them."""
+    if behavior.get("state") != "on":
+        return ("off",)
+    return ("on", behavior.get("brightness"), behavior.get("color_temp_kelvin"))
+
+
 def _active_room_conditions(hass: HomeAssistant, room: dict) -> list[str]:
     """IDs of this room's custom conditions that are currently true, in
     priority order (list order = priority, top = highest)."""
@@ -388,6 +401,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("motion_manual_override", {})
     hass.data[DOMAIN].setdefault("forced_period", {})
     hass.data[DOMAIN].setdefault("last_logged_period", {})
+    hass.data[DOMAIN].setdefault("last_applied_signature", {})
     await async_load_logs(hass)
 
     # Register websocket commands only once
@@ -525,7 +539,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         schedule_id: str,
         period_id: str | None,
         source: str,
-    ) -> None:
+    ) -> bool:
         try:
             await _apply_behavior(hass, device, behavior, transition)
         except Exception as err:  # noqa: BLE001
@@ -534,8 +548,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 device.get("entity_id"),
                 err,
             )
-            return
+            return False
         _log_device_action(room, device, _behavior_state_label(behavior), schedule_id, period_id, source)
+        return True
 
     async def _apply_single_device(
         room: dict,
@@ -547,6 +562,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         default_transitions: dict,
         schedule_id: str,
         source: str,
+        respect_manual_override: bool = False,
     ) -> None:
         raw_behaviors = device.get("behaviors", {}).get(period)
         if not raw_behaviors:
@@ -564,15 +580,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not behavior:
             return
 
+        entity_id = device["entity_id"]
+        signature_key = f"{room['id']}:{entity_id}"
+        target_signature = _behavior_signature(behavior)
+
+        if respect_manual_override:
+            # Ambient ticks (time/day-type/home-state/sun polling) re-resolve
+            # and would otherwise re-issue the exact same service call every
+            # time they fire, overwriting anything a person just did by hand.
+            # If the schedule's own target hasn't moved since we last set it,
+            # this re-apply carries no new information - skip it, whether
+            # the device still matches (nothing to do) or has since diverged
+            # (someone changed it - leave it alone until the target itself
+            # actually changes, e.g. the next period/condition/away-state).
+            if hass.data[DOMAIN]["last_applied_signature"].get(signature_key) == target_signature:
+                return
+
         device_transitions = device.get("transitions", {}) or {}
         transition = device_transitions.get(period)
         if transition is None:
             transition = default_transitions.get(period)
 
-        await _apply_device(room, device, behavior, transition, schedule_id, period, source)
+        applied = await _apply_device(room, device, behavior, transition, schedule_id, period, source)
+        if applied:
+            hass.data[DOMAIN]["last_applied_signature"][signature_key] = target_signature
 
     async def _apply_to_rooms(
-        rooms: list, forced_period: str | None = None, respect_motion_control: bool = False
+        rooms: list,
+        forced_period: str | None = None,
+        respect_motion_control: bool = False,
+        respect_manual_override: bool = False,
     ) -> None:
         day_type = _get_day_type()
         home_state = _get_home_state()
@@ -625,6 +662,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     default_transitions,
                     schedule_id,
                     source,
+                    respect_manual_override=respect_manual_override,
                 )
 
         if forced_period is not None:
@@ -635,7 +673,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def apply_current_period() -> None:
         cfg = hass.data[DOMAIN]["config"]
-        await _apply_to_rooms(cfg.get("rooms", []), respect_motion_control=True)
+        await _apply_to_rooms(cfg.get("rooms", []), respect_motion_control=True, respect_manual_override=True)
 
     async def apply_room(room_id: str) -> None:
         cfg = hass.data[DOMAIN]["config"]

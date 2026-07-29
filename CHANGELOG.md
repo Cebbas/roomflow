@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Ambient re-applies no longer fight manual changes.** Every routine
+  recompute (a tracked sensor changing, a time boundary, or - if any
+  period uses a sun condition - a 1-minute poll) used to re-issue the
+  exact same `light.turn_on`/`turn_off` call and log entry for every
+  schedule-controlled device, even when nothing had changed, which meant
+  manually turning off a light that's "on" per schedule got undone again
+  within a minute. RoomFlow now remembers the target it last set per
+  device and skips a re-apply whenever the schedule's own target hasn't
+  moved since - so a manual change (app, voice, physical button) sticks
+  until the schedule's target actually changes (new period, condition,
+  weekend/away state), not on every ambient tick in between. Explicit
+  triggers (Test now, bound buttons' apply_now/force_period) are
+  unaffected and still force a re-apply as before.
 - **Per-period control mode (schedule / motion sensor / button-manual),
   replacing the old "let the schedule control this period" checkbox.**
   Each device/period now picks explicitly how it's controlled: by the

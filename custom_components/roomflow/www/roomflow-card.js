@@ -1923,6 +1923,15 @@ const RF_STYLES = `
     padding: 8px 0; border-bottom: 1px solid var(--divider-color); flex-wrap: wrap;
   }
   .rf-status-row:last-child { border-bottom: none; }
+  .rf-status-icon-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rf-status-icon {
+    --mdc-icon-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 999px; flex: none;
+    background: var(--divider-color); color: var(--secondary-text-color);
+  }
+  .rf-status-icon.rf-on { background: #4caf5026; color: #2e7d32; }
+  .rf-status-icon.rf-off { background: var(--divider-color); color: var(--secondary-text-color); }
 
   .rf-log-list { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
   .rf-log-row {
@@ -2618,17 +2627,19 @@ class RoomFlowCard extends HTMLElement {
           .map((room) => {
             const schedule = scheduleById[room.schedule_id || DEFAULT_SCHEDULE_ID];
             const periodName = schedule ? schedule.period_name : "-";
-            const badgesHtml = (room.devices || [])
+            const iconsHtml = (room.devices || [])
               .map((d) => {
                 const deviceKey = `${room.id}:${d.entity_id}`;
-                return `<span class="rf-badge ${this._liveStatusClass(d)}" data-live-status="${deviceKey}">${d.name}: ${this._liveStatusText(d)}</span>`;
+                const statusClass = this._liveStatusClass(d);
+                const statusText = this._liveStatusText(d);
+                return `<span class="rf-status-icon ${statusClass}" data-live-status-icon="${deviceKey}" title="${d.name}: ${statusText}">${icon(this._deviceHeaderIcon(d))}</span>`;
               })
               .join("");
             return `
               <div class="rf-status-row">
                 <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(this._roomIcon(room))}${room.name}</div>
                 <div style="opacity:0.8;font-size:0.9em">${periodName}</div>
-                <div>${badgesHtml || "-"}</div>
+                <div class="rf-status-icon-row">${iconsHtml || "-"}</div>
               </div>
             `;
           })
@@ -2678,6 +2689,14 @@ class RoomFlowCard extends HTMLElement {
       if (device) {
         el.textContent = this._liveStatusText(device);
         el.className = `rf-badge ${this._liveStatusClass(device)}`.trim();
+      }
+    });
+    this.querySelectorAll("[data-live-status-icon]").forEach((el) => {
+      const { roomId, entityId } = parseDeviceKey(el.getAttribute("data-live-status-icon"));
+      const device = this._findDevice(roomId, entityId);
+      if (device) {
+        el.className = `rf-status-icon ${this._liveStatusClass(device)}`.trim();
+        el.title = `${device.name}: ${this._liveStatusText(device)}`;
       }
     });
   }

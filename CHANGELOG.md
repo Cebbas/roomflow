@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Button bindings can target one specific device, not just the whole
+  room.** `toggle`/`off` button actions used to always act on every
+  device in the room together (`toggle` even picked on-vs-off by majority
+  vote) - there was no way to bind two physical switch channels in the
+  same room to two different lights. Adding a button now lets you pick a
+  device from the chosen room, or leave it as "Whole room" for the
+  existing behavior.
 - **Ambient re-applies no longer fight manual changes.** Every routine
   recompute (a tracked sensor changing, a time boundary, or - if any
   period uses a sun condition - a 1-minute poll) used to re-issue the

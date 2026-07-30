@@ -535,6 +535,7 @@ const STRINGS = {
     add_button_header: "Add button",
     new_button_entity_placeholder: "entity_id (e.g. event.kitchen_button)",
     choose_room_option: "Choose room…",
+    choose_device_option: "Whole room",
     action_toggle: "Toggle on/off",
     action_off: "Turn off room",
     action_apply_now: "Run scheduled behavior now",
@@ -719,6 +720,7 @@ const STRINGS = {
     add_button_header: "Lägg till knapp",
     new_button_entity_placeholder: "entity_id (t.ex. event.kitchen_button)",
     choose_room_option: "Välj rum…",
+    choose_device_option: "Hela rummet",
     action_toggle: "Växla på/av",
     action_off: "Stäng av rum",
     action_apply_now: "Kör schemalagt beteende nu",
@@ -878,6 +880,7 @@ const STRINGS = {
     add_button_header: "Legg til knapp",
     new_button_entity_placeholder: "entity_id (f.eks. event.kitchen_button)",
     choose_room_option: "Velg rom…",
+    choose_device_option: "Hele rommet",
     action_toggle: "Veksle på/av",
     action_off: "Slå av rom",
     action_apply_now: "Kjør planlagt atferd nå",
@@ -1037,6 +1040,7 @@ const STRINGS = {
     add_button_header: "Tilføj knap",
     new_button_entity_placeholder: "entity_id (f.eks. event.kitchen_button)",
     choose_room_option: "Vælg rum…",
+    choose_device_option: "Hele rummet",
     action_toggle: "Skift til/fra",
     action_off: "Sluk rum",
     action_apply_now: "Kør planlagt adfærd nu",
@@ -1196,6 +1200,7 @@ const STRINGS = {
     add_button_header: "Lisää painike",
     new_button_entity_placeholder: "entity_id (esim. event.kitchen_button)",
     choose_room_option: "Valitse huone…",
+    choose_device_option: "Koko huone",
     action_toggle: "Vaihda päällä/pois",
     action_off: "Sammuta huone",
     action_apply_now: "Aja ajastettu toiminta nyt",
@@ -1355,6 +1360,7 @@ const STRINGS = {
     add_button_header: "Taste hinzufügen",
     new_button_entity_placeholder: "entity_id (z. B. event.kitchen_button)",
     choose_room_option: "Raum wählen…",
+    choose_device_option: "Ganzer Raum",
     action_toggle: "An/Aus umschalten",
     action_off: "Raum ausschalten",
     action_apply_now: "Geplantes Verhalten jetzt ausführen",
@@ -1514,6 +1520,7 @@ const STRINGS = {
     add_button_header: "Ajouter un bouton",
     new_button_entity_placeholder: "entity_id (par ex. event.kitchen_button)",
     choose_room_option: "Choisir une pièce…",
+    choose_device_option: "Toute la pièce",
     action_toggle: "Basculer allumé/éteint",
     action_off: "Éteindre la pièce",
     action_apply_now: "Exécuter le comportement programmé maintenant",
@@ -1673,6 +1680,7 @@ const STRINGS = {
     add_button_header: "Knop toevoegen",
     new_button_entity_placeholder: "entity_id (bijv. event.kitchen_button)",
     choose_room_option: "Kies kamer…",
+    choose_device_option: "Hele kamer",
     action_toggle: "Aan/uit omschakelen",
     action_off: "Kamer uitschakelen",
     action_apply_now: "Gepland gedrag nu uitvoeren",
@@ -2292,13 +2300,14 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
-  _addButton(entityId, roomId, action, forcePeriod) {
+  _addButton(entityId, roomId, action, forcePeriod, targetEntityId) {
     this._config_data.buttons.push({
       id: uid(),
       entity_id: entityId,
       room_id: roomId,
       action: action,
       force_period: action === "force_period" ? forcePeriod : null,
+      target_entity_id: action === "toggle" || action === "off" ? targetEntityId || null : null,
     });
     this._scheduleSave();
     this._render();
@@ -2877,12 +2886,14 @@ class RoomFlowCard extends HTMLElement {
       const roomSelect = this.querySelector("#new-button-room");
       const actionSelect = this.querySelector("#new-button-action");
       const periodSelect = this.querySelector("#new-button-period");
+      const targetSelect = this.querySelector("#new-button-target");
       const entityId = entityInput.value.trim();
       const roomId = roomSelect.value;
       const action = actionSelect.value;
       const forcePeriod = periodSelect ? periodSelect.value : null;
+      const targetEntityId = targetSelect ? targetSelect.value : null;
       if (!entityId || !roomId) return;
-      this._addButton(entityId, roomId, action, forcePeriod);
+      this._addButton(entityId, roomId, action, forcePeriod, targetEntityId);
       return;
     }
 
@@ -2971,27 +2982,40 @@ class RoomFlowCard extends HTMLElement {
     }
 
     if (e.target.closest("#new-button-action")) {
-      // Show/hide the period picker depending on the chosen action; nothing
-      // is saved here, this only affects the add-form UI
+      // Show/hide the period picker and device-target picker depending on
+      // the chosen action; nothing is saved here, this only affects the
+      // add-form UI
+      const action = e.target.closest("#new-button-action").value;
       const periodWrap = this.querySelector("#new-button-period-wrap");
       if (periodWrap) {
-        periodWrap.style.display =
-          e.target.closest("#new-button-action").value === "force_period" ? "inline-block" : "none";
+        periodWrap.style.display = action === "force_period" ? "inline-block" : "none";
+      }
+      const targetWrap = this.querySelector("#new-button-target-wrap");
+      if (targetWrap) {
+        targetWrap.style.display = action === "toggle" || action === "off" ? "inline-block" : "none";
       }
       return;
     }
 
     if (e.target.closest("#new-button-room")) {
       // "Force period" always targets the chosen room, so its period
-      // choices come from that room's own schedule - repopulate directly
-      // (no save/re-render) rather than losing the rest of the in-progress
-      // add-button form.
+      // choices come from that room's own schedule, and a device-target
+      // binding can only pick from that room's own devices - repopulate
+      // both directly (no save/re-render) rather than losing the rest of
+      // the in-progress add-button form.
+      const roomId = e.target.closest("#new-button-room").value;
+      const room = this._config_data.rooms.find((r) => r.id === roomId);
       const periodSelect = this.querySelector("#new-button-period");
       if (periodSelect) {
-        const roomId = e.target.closest("#new-button-room").value;
-        const room = this._config_data.rooms.find((r) => r.id === roomId);
         const periods = room ? this._roomPeriods(room) : [];
         periodSelect.innerHTML = periods.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+      }
+      const targetSelect = this.querySelector("#new-button-target");
+      if (targetSelect) {
+        const devices = room ? room.devices || [] : [];
+        targetSelect.innerHTML =
+          `<option value="">${this._t("choose_device_option")}</option>` +
+          devices.map((d) => `<option value="${d.entity_id}">${d.name}</option>`).join("");
       }
       return;
     }
@@ -3791,10 +3815,15 @@ class RoomFlowCard extends HTMLElement {
         // "Force period" always targets the button's own room, so its
         // period choices come from that room's own schedule.
         const roomPeriods = room ? this._roomPeriods(room) : [];
+        const targetDevice =
+          b.target_entity_id && room ? (room.devices || []).find((d) => d.entity_id === b.target_entity_id) : null;
         const actionText =
           actionLabels[b.action] +
           (b.action === "force_period" && b.force_period
             ? ` (${roomPeriods.find((p) => p.id === b.force_period)?.name || b.force_period})`
+            : "") +
+          (b.target_entity_id
+            ? ` (${targetDevice ? targetDevice.name : b.target_entity_id})`
             : "");
         return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px;margin-bottom:8px">
@@ -3805,11 +3834,13 @@ class RoomFlowCard extends HTMLElement {
       .join("");
 
     const roomOptions = rooms.map((r) => `<option value="${r.id}">${r.name}</option>`).join("");
-    // Empty until a room is picked (see the #new-button-room handler in
-    // _onChange, which repopulates this from that room's own schedule) -
-    // periods aren't a single global list any more, so there's nothing
-    // meaningful to show before a room is chosen.
+    // Both empty until a room is picked (see the #new-button-room handler
+    // in _onChange, which repopulates them from that room's own schedule/
+    // device list) - periods aren't a single global list any more, and
+    // devices are obviously room-specific, so there's nothing meaningful
+    // to show before a room is chosen.
     const periodOptions = "";
+    const targetOptions = "";
 
     return `
       <div>
@@ -3835,6 +3866,12 @@ class RoomFlowCard extends HTMLElement {
             </select>
             <span id="new-button-period-wrap" style="display:none">
               <select id="new-button-period">${periodOptions}</select>
+            </span>
+            <span id="new-button-target-wrap" style="display:inline-block">
+              <select id="new-button-target">
+                <option value="">${this._t("choose_device_option")}</option>
+                ${targetOptions}
+              </select>
             </span>
             <button id="add-button-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
           </div>

@@ -46,26 +46,6 @@ triggering entity's new-state (or `event_type` attribute for `event.*`
 entities) before running the action, alongside the existing `entity_id` +
 `action` fields.
 
-## Per-device button targeting (not just whole-room toggle)
-
-A button binding's `toggle`/`off` actions (`_toggle_room`/`_turn_off_room`
-in `__init__.py`, called from `_handle_button_press`) always act on
-*every* device in the bound room together - `_toggle_room` even picks
-on-vs-off by majority vote across all of the room's devices. There's no
-way to bind a physical button channel to just *one* device in a
-multi-device room. This is a common real-world pattern (e.g. a kitchen
-with two wall-switch channels, one toggling the ceiling light and the
-other a separate decorative light) that can't be expressed today - the
-only way to gets close is putting each light in its own single-device
-"room", which then loses shared room-level scheduling/away/weekend
-behavior.
-
-Possible approach: add an optional `entity_id` field to a button binding
-that, when set, targets `light.turn_on`/`turn_off/toggle` (or
-`switch.*`) directly at that one device instead of running
-`_toggle_room`/`_turn_off_room` across the whole room - leaving the
-existing whole-room behavior as the default when unset.
-
 ## Continuous hold-to-dim button action
 
 Button bindings (`_handle_button_press` in `__init__.py`) only support
@@ -83,10 +63,11 @@ starting a repeating timer (e.g. `async_track_time_interval` at ~50ms)
 that calls `light.turn_on` with a small `brightness_step_pct` on the
 target device until a corresponding release event fires, alternating
 direction each time the hold starts based on the device's current
-brightness. Needs its own target device (see the per-device button
-targeting idea above, since dimming a whole room in lockstep is rarely
-what's wanted) and is a meaningfully different trigger model than every
-other button action today.
+brightness. Can reuse a button binding's existing `target_entity_id`
+field (added for per-device toggle/off targeting) to pick which device to
+dim, since dimming a whole room in lockstep is rarely what's wanted - but
+is still a meaningfully different trigger model than every other button
+action today.
 
 ## Floors
 

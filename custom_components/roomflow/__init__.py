@@ -738,6 +738,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 room, device, "on" if turn_on else "off", schedule_id, _get_period(schedule_id), "button_toggle"
             )
 
+    async def _toggle_device(room: dict, device: dict, source: str = "button_toggle") -> None:
+        state = hass.states.get(device["entity_id"])
+        turn_on = not (state and state.state == "on")
+        service = "turn_on" if turn_on else "turn_off"
+        key = _motion_key(room["id"], device["entity_id"])
+        hass.data[DOMAIN]["motion_manual_override"][key] = True
+        _cancel_motion_timer(key)
+        try:
+            await hass.services.async_call(
+                _device_domain(device), service, {"entity_id": device["entity_id"]}
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "RoomFlow: could not toggle %s: %s", device.get("entity_id"), err
+            )
+            return
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        _log_device_action(
+            room, device, "on" if turn_on else "off", schedule_id, _get_period(schedule_id), source
+        )
+
     hass.data[DOMAIN]["apply_fn"] = apply_current_period
     hass.data[DOMAIN]["apply_room_fn"] = apply_room
 
@@ -752,11 +773,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not room:
             return
         action = button.get("action")
+        # A binding can target one specific device in the room instead of
+        # every device together (the historical, still-default behavior) -
+        # e.g. two physical channels in the same room each toggling a
+        # different light. Falls back to the whole room if the configured
+        # target entity isn't actually one of the room's devices anymore
+        # (removed since the button was bound).
+        target_entity_id = button.get("target_entity_id")
+        target_device = None
+        if target_entity_id:
+            target_device = next(
+                (d for d in room.get("devices", []) if d.get("entity_id") == target_entity_id), None
+            )
         try:
             if action == "toggle":
-                await _toggle_room(room)
+                if target_device:
+                    await _toggle_device(room, target_device)
+                else:
+                    await _toggle_room(room)
             elif action == "off":
-                await _turn_off_room(room)
+                if target_device:
+                    await _turn_off_device(room, target_device, "button_off")
+                else:
+                    await _turn_off_room(room)
             elif action == "apply_now":
                 await apply_room(room["id"])
             elif action == "force_period":

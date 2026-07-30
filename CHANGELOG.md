@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Fixed: adding a button trigger did nothing.** The new shared
+  `button_triggers` catalog was never initialized to an empty list for
+  existing configs (unlike `motion_sensors`/`rooms`/`buttons`), so both
+  adding a fresh trigger and migrating old button bindings crashed with a
+  silent JS error - "Add" in the Buttons tab just did nothing, and configs
+  with existing bindings could fail to load at all.
 - **Buttons are now a shared trigger library, like motion sensors, with
   click-type support.** The Buttons tab is now a catalog of reusable
   button triggers (entity + optional click type: single/double/long

@@ -2205,6 +2205,7 @@ class RoomFlowCard extends HTMLElement {
     if (!cd.rooms) cd.rooms = [];
     if (!cd.buttons) cd.buttons = [];
     if (!cd.motion_sensors) cd.motion_sensors = [];
+    if (!cd.button_triggers) cd.button_triggers = [];
 
     // Schedules: a named, independent periods list of its own (see
     // DEFAULT_SCHEDULE_ID docs above) - a room follows one via its

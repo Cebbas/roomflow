@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.16"
+VERSION = "0.0.17"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 

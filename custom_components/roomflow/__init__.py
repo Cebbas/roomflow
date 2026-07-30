@@ -160,6 +160,45 @@ def _behavior_signature(behavior: dict) -> tuple:
     return ("on", behavior.get("brightness"), behavior.get("color_temp_kelvin"))
 
 
+def _click_type_matches(trigger: dict, event: Event) -> bool:
+    """True if a button-trigger definition's click_type matches what this
+    state-change event reports. "any" (or unset) always matches - today's
+    behavior, right for a simple binary/toggle-style button entity. For a
+    specific click_type ("single"/"double"/"long"), checked as a
+    case-insensitive substring against either the new state's plain state
+    string (covers e.g. a derived "single_press" sensor) or its event_type
+    attribute (covers native event.* entities, e.g. Zigbee2MQTT/ZHA
+    reporting "single_push"/"1_single") - integrations don't agree on
+    exact vocabulary, so a substring match covers more real-world button
+    hardware than an exact-value comparison would."""
+    click_type = trigger.get("click_type") or "any"
+    if click_type == "any":
+        return True
+    new_state = event.data.get("new_state")
+    if new_state is None:
+        return False
+    candidates = [new_state.state or "", (new_state.attributes or {}).get("event_type") or ""]
+    return any(click_type.lower() in candidate.lower() for candidate in candidates)
+
+
+def _button_attachments_for_trigger(cfg: dict, trigger_id: str) -> list[tuple[dict, dict | None, dict]]:
+    """Every (room, device, attachment) that subscribes to a given button
+    trigger definition - device is None for a room-level attachment
+    (whole-room toggle/off, or a schedule-wide apply_now/force_period).
+    The same trigger can be attached from multiple places at once, unlike
+    the old flat one-entry-per-binding list."""
+    result: list[tuple[dict, dict | None, dict]] = []
+    for room in cfg.get("rooms", []):
+        for attachment in room.get("buttons", []):
+            if attachment.get("trigger_id") == trigger_id:
+                result.append((room, None, attachment))
+        for device in room.get("devices", []):
+            for attachment in device.get("buttons", []):
+                if attachment.get("trigger_id") == trigger_id:
+                    result.append((room, device, attachment))
+    return result
+
+
 def _active_room_conditions(hass: HomeAssistant, room: dict) -> list[str]:
     """IDs of this room's custom conditions that are currently true, in
     priority order (list order = priority, top = highest)."""
@@ -767,46 +806,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # ---------- Physical buttons ----------
 
-    async def _handle_button_press(button: dict, event: Event) -> None:
+    async def _handle_button_press(trigger: dict, event: Event) -> None:
         old_state = event.data.get("old_state")
         if old_state is None:
             # Avoid triggering on HA restart / entity just appearing
             return
-        room = _get_room(button.get("room_id"))
-        if not room:
+        if not _click_type_matches(trigger, event):
             return
-        action = button.get("action")
-        # A binding can target one specific device in the room instead of
-        # every device together (the historical, still-default behavior) -
-        # e.g. two physical channels in the same room each toggling a
-        # different light. Falls back to the whole room if the configured
-        # target entity isn't actually one of the room's devices anymore
-        # (removed since the button was bound).
-        target_entity_id = button.get("target_entity_id")
-        target_device = None
-        if target_entity_id:
-            target_device = next(
-                (d for d in room.get("devices", []) if d.get("entity_id") == target_entity_id), None
-            )
+
+        cfg = hass.data[DOMAIN]["config"]
+        for room, device, attachment in _button_attachments_for_trigger(cfg, trigger.get("id")):
+            await _run_button_attachment(room, device, attachment, trigger)
+
+    async def _run_button_attachment(
+        room: dict, device: dict | None, attachment: dict, trigger: dict
+    ) -> None:
+        # device is set for a per-device attachment (toggle/off just that
+        # device); None for a room-level attachment (toggle/off the whole
+        # room by majority vote, or a schedule-wide action).
+        action = attachment.get("action")
         try:
             if action == "toggle":
-                if target_device:
-                    await _toggle_device(room, target_device)
+                if device:
+                    await _toggle_device(room, device)
                 else:
                     await _toggle_room(room)
             elif action == "off":
-                if target_device:
-                    await _turn_off_device(room, target_device, "button_off")
+                if device:
+                    await _turn_off_device(room, device, "button_off")
                 else:
                     await _turn_off_room(room)
             elif action == "apply_now":
                 await apply_room(room["id"])
             elif action == "force_period":
-                await _apply_to_rooms([room], forced_period=button.get("force_period"))
+                await _apply_to_rooms([room], forced_period=attachment.get("force_period"))
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
                 "RoomFlow: error handling button press (%s): %s",
-                button.get("entity_id"),
+                trigger.get("entity_id"),
                 err,
             )
 
@@ -814,20 +851,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for unsub in hass.data[DOMAIN].get("button_unsubs", []):
             unsub()
         unsubs = []
-        buttons = hass.data[DOMAIN]["config"].get("buttons", [])
-        for button in buttons:
-            entity_id = button.get("entity_id")
+        triggers = hass.data[DOMAIN]["config"].get("button_triggers", [])
+        for trigger in triggers:
+            entity_id = trigger.get("entity_id")
             if not entity_id:
                 continue
 
-            def _make_handler(btn):
+            def _make_handler(trg):
                 async def _handler(event: Event) -> None:
-                    await _handle_button_press(btn, event)
+                    await _handle_button_press(trg, event)
 
                 return _handler
 
             unsubs.append(
-                async_track_state_change_event(hass, [entity_id], _make_handler(button))
+                async_track_state_change_event(hass, [entity_id], _make_handler(trigger))
             )
         hass.data[DOMAIN]["button_unsubs"] = unsubs
 

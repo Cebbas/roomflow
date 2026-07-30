@@ -23,49 +23,30 @@ have `_active_room_conditions` branch on it the same way `_is_trigger_active`
 already does for motion triggers. The card's condition-row UI would need an
 operator `<select>` alongside the existing state-value `<input>`.
 
-## Button click-type distinction (single / double / long-press)
-
-RoomFlow's button system (`room` bindings in `buttons`, handled by
-`_handle_button_press` in `__init__.py`) binds one entity to one fixed
-action. It has no concept of click type - a Zigbee/Shelly button that
-reports single vs. double vs. long-press (or a press/release `event.*`
-entity with hold-duration logic) can't trigger different actions per click
-type from a single binding today.
-
-Before building anything here: many real-world setups (including the one
-that prompted this note) already expose a *separate* entity/template
-sensor per click type (e.g. a "click status" template sensor per channel).
-If so, those can likely just be bound as separate RoomFlow buttons already,
-with no RoomFlow change needed - worth confirming against a real setup
-before adding native click-type support, to avoid building something
-already achievable.
-
-If native support turns out to be needed: extend a button binding with an
-optional `click_type` field (`single`/`double`/`long`) checked against the
-triggering entity's new-state (or `event_type` attribute for `event.*`
-entities) before running the action, alongside the existing `entity_id` +
-`action` fields.
-
 ## Continuous hold-to-dim button action
 
-Button bindings (`_handle_button_press` in `__init__.py`) only support
-discrete, one-shot actions (`toggle`, `off`, `apply_now`, `force_period`)
-triggered by a single state-change event. There's no way to bind a
-press-and-hold gesture to continuous brightness ramping (repeatedly
-stepping `brightness_step` up/down at a fixed interval for as long as the
-button is held, reversing direction near the brightness extremes) - a
-common wall-switch pattern for dimmable lights that today has to be built
-as a bespoke automation outside RoomFlow entirely.
+Button triggers (`cd.button_triggers`, matched in `_handle_button_press`/
+`_click_type_matches` in `__init__.py`) can already be scoped to a
+`click_type` (single/double/long), but every attachment (`room.buttons`/
+`device.buttons`) only supports discrete, one-shot actions (`toggle`,
+`off`, `apply_now`, `force_period`) triggered by a single state-change
+event. There's no way to bind a press-and-hold gesture to continuous
+brightness ramping (repeatedly stepping `brightness_step` up/down at a
+fixed interval for as long as the button is held, reversing direction
+near the brightness extremes) - a common wall-switch pattern for
+dimmable lights that today has to be built as a bespoke automation
+outside RoomFlow entirely.
 
-Possible approach: a new action type (e.g. `hold_dim`) bound to a
-press/hold-capable event entity rather than a plain state-change trigger,
-starting a repeating timer (e.g. `async_track_time_interval` at ~50ms)
-that calls `light.turn_on` with a small `brightness_step_pct` on the
-target device until a corresponding release event fires, alternating
-direction each time the hold starts based on the device's current
-brightness. Can reuse a button binding's existing `target_entity_id`
-field (added for per-device toggle/off targeting) to pick which device to
-dim, since dimming a whole room in lockstep is rarely what's wanted - but
+Possible approach: a new attachment action type (e.g. `hold_dim`) on a
+`device.buttons` entry, active only for a trigger definition whose
+`click_type` implies hold semantics, starting a repeating timer (e.g.
+`async_track_time_interval` at ~50ms) that calls `light.turn_on` with a
+small `brightness_step_pct` on the attached device until a corresponding
+release event fires, alternating direction each time the hold starts
+based on the device's current brightness - device-level attachments
+already scope to one device (unlike `room.buttons`, where dimming a
+whole room in lockstep is rarely what's wanted), so this fits the
+existing per-device attachment shape rather than needing a new one, but
 is still a meaningfully different trigger model than every other button
 action today.
 
@@ -479,3 +460,32 @@ resolved behavior via `_apply_motion_device_on`, even though `motion_on`
 itself is off - the restore is a reaction to an in-progress countdown
 being interrupted, not a fresh "motion turned this on" event, so it
 should be gated on "has a pending timer" rather than on `motion_on`.
+
+## Room test mode (override every resolution input, applied live)
+
+There's no way to put a single room into a "test mode" where you can
+manually override every input that feeds into its resolved behavior -
+time of day, day type (weekday/weekend), home/away state, and which of
+the room's own custom conditions count as active - and see the *real*
+devices react accordingly, to check a room with many
+periods/conditions/overrides actually behaves as configured across the
+scenarios that matter (e.g. "weekend evening while away" or "a specific
+custom condition true at night"). This sits between two related ideas
+already here: unlike "Preview / simulate resolved behavior" above, the
+goal is to see it happen on the physical devices, not just a computed
+readout; unlike "Walk-through test button" above, the point is manual,
+independent control over every input at once (not just auto-cycling
+through periods with everything else left at its real current value).
+
+Possible approach: a per-room "Test mode" toggle in the card that, while
+on, feeds a manually-chosen time/day-type/home-state/active-custom-
+-conditions set into that one room's own `_apply_to_rooms` call instead
+of the real `_get_day_type`/`_get_home_state`/`_active_room_conditions`
+values (every other room keeps resolving normally) - with a panel of
+controls for each override and a live-updating "resolved period" readout,
+so changing any input immediately re-applies to that room's real
+lights/switches. Needs the override state held server-side (keyed by
+room id, similar to the existing `forced_period` override map) so a
+browser refresh doesn't silently drop back to real conditions while
+still "in test mode", and a clear always-visible indicator + one-click
+exit that restores the room to its real current-period behavior.

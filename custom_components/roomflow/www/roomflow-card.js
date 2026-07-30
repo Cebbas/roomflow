@@ -532,16 +532,25 @@ const STRINGS = {
 
     buttons_header: "Physical buttons",
     buttons_help:
-      'Bind a physical button/remote (e.g. a Zigbee button that shows up as an "event" or "sensor" entity in Home Assistant) to an action in a room.',
-    add_button_header: "Add button",
+      'Define reusable button triggers here (e.g. a Zigbee button that shows up as an "event" or "sensor" entity in Home Assistant) - then pick which one controls what from each room or device.',
+    add_button_trigger_header: "Add button trigger",
     new_button_entity_placeholder: "entity_id (e.g. event.kitchen_button)",
-    choose_room_option: "Choose room…",
-    choose_device_option: "Whole room",
+    button_trigger_name_placeholder: "Name (e.g. Kitchen button 1)",
+    click_type_any: "Any press",
+    click_type_single: "Single press",
+    click_type_double: "Double press",
+    click_type_long: "Long press",
+    room_buttons_header: "Room buttons",
+    device_buttons_header: "Buttons",
+    no_button_triggers_hint: "No button triggers yet - add one in the Buttons tab first.",
+    choose_button_trigger_option: "Choose button trigger…",
+    button_trigger_missing: "(trigger missing)",
+    device_action_toggle: "Toggle",
+    device_action_off: "Turn off",
     action_toggle: "Toggle on/off",
     action_off: "Turn off room",
     action_apply_now: "Run scheduled behavior now",
     action_force_period: "Force a specific period",
-    room_missing: "(room missing)",
 
     motion_sensors_help:
       "Build named, reusable motion-sensor definitions here once, then pick which one each device subscribes to (per period) from its own control-mode setting - not a room-wide switch, so two devices in the same room can react to two different sensors, and two rooms can share one.",
@@ -722,16 +731,25 @@ const STRINGS = {
 
     buttons_header: "Fysiska knappar",
     buttons_help:
-      'Bind en fysisk knapp/fjärrkontroll (t.ex. en Zigbee-knapp som visas som en "event"- eller "sensor"-entitet i Home Assistant) till en åtgärd i ett rum.',
-    add_button_header: "Lägg till knapp",
+      'Definiera återanvändbara knapptriggers här (t.ex. en Zigbee-knapp som visas som en "event"- eller "sensor"-entitet i Home Assistant) - välj sedan vilken som styr vad från varje rum eller enhet.',
+    add_button_trigger_header: "Lägg till knapptrigger",
     new_button_entity_placeholder: "entity_id (t.ex. event.kitchen_button)",
-    choose_room_option: "Välj rum…",
-    choose_device_option: "Hela rummet",
+    button_trigger_name_placeholder: "Namn (t.ex. Köksknapp 1)",
+    click_type_any: "Vilket tryck som helst",
+    click_type_single: "Enkeltryck",
+    click_type_double: "Dubbeltryck",
+    click_type_long: "Långtryck",
+    room_buttons_header: "Rumsknappar",
+    device_buttons_header: "Knappar",
+    no_button_triggers_hint: "Inga knapptriggers än - lägg till en i fliken Knappar först.",
+    choose_button_trigger_option: "Välj knapptrigger…",
+    button_trigger_missing: "(trigger saknas)",
+    device_action_toggle: "Växla",
+    device_action_off: "Stäng av",
     action_toggle: "Växla på/av",
     action_off: "Stäng av rum",
     action_apply_now: "Kör schemalagt beteende nu",
     action_force_period: "Tvinga en specifik period",
-    room_missing: "(rum saknas)",
 
     motion_sensors_help:
       "Bygg namngivna, återanvändbara rörelsevakter här en gång, välj sedan vilken varje enhet prenumererar på (per period) från dess egen styrningsinställning - inte en rumsomfattande brytare, så två enheter i samma rum kan reagera på olika sensorer, och två rum kan dela en.",
@@ -887,16 +905,25 @@ const STRINGS = {
 
     buttons_header: "Fysiske knapper",
     buttons_help:
-      'Bind en fysisk knapp/fjernkontroll (f.eks. en Zigbee-knapp som vises som en "event"- eller "sensor"-entitet i Home Assistant) til en handling i et rom.',
-    add_button_header: "Legg til knapp",
+      'Definer gjenbrukbare knappetriggere her (f.eks. en Zigbee-knapp som vises som en "event"- eller "sensor"-entitet i Home Assistant) - velg deretter hvilken som styrer hva fra hvert rom eller enhet.',
+    add_button_trigger_header: "Legg til knappetrigger",
     new_button_entity_placeholder: "entity_id (f.eks. event.kitchen_button)",
-    choose_room_option: "Velg rom…",
-    choose_device_option: "Hele rommet",
+    button_trigger_name_placeholder: "Navn (f.eks. Kjøkkenknapp 1)",
+    click_type_any: "Hvilket som helst trykk",
+    click_type_single: "Enkelttrykk",
+    click_type_double: "Dobbelttrykk",
+    click_type_long: "Langt trykk",
+    room_buttons_header: "Romknapper",
+    device_buttons_header: "Knapper",
+    no_button_triggers_hint: "Ingen knappetriggere ennå - legg til én i fanen Knapper først.",
+    choose_button_trigger_option: "Velg knappetrigger…",
+    button_trigger_missing: "(trigger mangler)",
+    device_action_toggle: "Veksle",
+    device_action_off: "Slå av",
     action_toggle: "Veksle på/av",
     action_off: "Slå av rom",
     action_apply_now: "Kjør planlagt atferd nå",
     action_force_period: "Tving frem en bestemt periode",
-    room_missing: "(rom mangler)",
 
     motion_sensors_help:
       "Bygg navngitte, gjenbrukbare bevegelsessensor-definisjoner her én gang, velg deretter hvilken hver enhet abonnerer på (per periode) fra sin egen styringsmodus - ikke en romomfattende bryter, så to enheter i samme rom kan reagere på forskjellige sensorer, og to rom kan dele én.",
@@ -1052,16 +1079,25 @@ const STRINGS = {
 
     buttons_header: "Fysiske knapper",
     buttons_help:
-      'Bind en fysisk knap/fjernbetjening (f.eks. en Zigbee-knap, der vises som en "event"- eller "sensor"-entitet i Home Assistant) til en handling i et rum.',
-    add_button_header: "Tilføj knap",
+      'Definér genbrugelige knaptriggere her (f.eks. en Zigbee-knap, der vises som en "event"- eller "sensor"-entitet i Home Assistant) - vælg derefter hvilken der styrer hvad fra hvert rum eller enhed.',
+    add_button_trigger_header: "Tilføj knaptrigger",
     new_button_entity_placeholder: "entity_id (f.eks. event.kitchen_button)",
-    choose_room_option: "Vælg rum…",
-    choose_device_option: "Hele rummet",
+    button_trigger_name_placeholder: "Navn (f.eks. Køkkenknap 1)",
+    click_type_any: "Alle tryk",
+    click_type_single: "Enkelt tryk",
+    click_type_double: "Dobbelt tryk",
+    click_type_long: "Langt tryk",
+    room_buttons_header: "Rumknapper",
+    device_buttons_header: "Knapper",
+    no_button_triggers_hint: "Ingen knaptriggere endnu - tilføj én under fanen Knapper først.",
+    choose_button_trigger_option: "Vælg knaptrigger…",
+    button_trigger_missing: "(trigger mangler)",
+    device_action_toggle: "Skift",
+    device_action_off: "Sluk",
     action_toggle: "Skift til/fra",
     action_off: "Sluk rum",
     action_apply_now: "Kør planlagt adfærd nu",
     action_force_period: "Gennemtving en bestemt periode",
-    room_missing: "(rum mangler)",
 
     motion_sensors_help:
       "Byg navngivne, genbrugelige bevægelsessensor-definitioner her én gang, vælg derefter hvilken hver enhed abonnerer på (pr. periode) fra dens egen styretilstand - ikke en rumdækkende kontakt, så to enheder i samme rum kan reagere på forskellige sensorer, og to rum kan dele én.",
@@ -1217,16 +1253,25 @@ const STRINGS = {
 
     buttons_header: "Fyysiset painikkeet",
     buttons_help:
-      'Sido fyysinen painike/kaukosäädin (esim. Zigbee-painike, joka näkyy Home Assistantissa "event"- tai "sensor"-entiteettinä) toimintoon huoneessa.',
-    add_button_header: "Lisää painike",
+      'Määritä uudelleenkäytettäviä painiketriggereitä täällä (esim. Zigbee-painike, joka näkyy Home Assistantissa "event"- tai "sensor"-entiteettinä) - valitse sitten, mikä ohjaa mitäkin kustakin huoneesta tai laitteesta.',
+    add_button_trigger_header: "Lisää painiketrigger",
     new_button_entity_placeholder: "entity_id (esim. event.kitchen_button)",
-    choose_room_option: "Valitse huone…",
-    choose_device_option: "Koko huone",
+    button_trigger_name_placeholder: "Nimi (esim. Keittiön painike 1)",
+    click_type_any: "Mikä tahansa painallus",
+    click_type_single: "Yksi painallus",
+    click_type_double: "Kaksoispainallus",
+    click_type_long: "Pitkä painallus",
+    room_buttons_header: "Huoneen painikkeet",
+    device_buttons_header: "Painikkeet",
+    no_button_triggers_hint: "Ei vielä painiketriggereitä - lisää yksi Painikkeet-välilehdellä ensin.",
+    choose_button_trigger_option: "Valitse painiketrigger…",
+    button_trigger_missing: "(trigger puuttuu)",
+    device_action_toggle: "Vaihda",
+    device_action_off: "Sammuta",
     action_toggle: "Vaihda päällä/pois",
     action_off: "Sammuta huone",
     action_apply_now: "Aja ajastettu toiminta nyt",
     action_force_period: "Pakota tietty jakso",
-    room_missing: "(huone puuttuu)",
 
     motion_sensors_help:
       "Rakenna nimettyjä, uudelleenkäytettäviä liiketunnistin-määrityksiä täällä kerran, valitse sitten kunkin laitteen kohdalla (jaksoittain) mihin se tilaa - ei huonekohtainen kytkin, joten kaksi laitetta samassa huoneessa voi reagoida eri antureihin, ja kaksi huonetta voi jakaa yhden.",
@@ -1382,16 +1427,25 @@ const STRINGS = {
 
     buttons_header: "Physische Tasten",
     buttons_help:
-      'Binde eine physische Taste/Fernbedienung (z. B. eine Zigbee-Taste, die als "event"- oder "sensor"-Entität erscheint) an eine Aktion in einem Raum.',
-    add_button_header: "Taste hinzufügen",
+      'Definiere hier wiederverwendbare Tasten-Trigger (z. B. eine Zigbee-Taste, die als "event"- oder "sensor"-Entität erscheint) - wähle dann pro Raum oder Gerät, welcher was steuert.',
+    add_button_trigger_header: "Tasten-Trigger hinzufügen",
     new_button_entity_placeholder: "entity_id (z. B. event.kitchen_button)",
-    choose_room_option: "Raum wählen…",
-    choose_device_option: "Ganzer Raum",
+    button_trigger_name_placeholder: "Name (z. B. Küchentaste 1)",
+    click_type_any: "Beliebiger Druck",
+    click_type_single: "Einfacher Druck",
+    click_type_double: "Doppelter Druck",
+    click_type_long: "Langer Druck",
+    room_buttons_header: "Raumtasten",
+    device_buttons_header: "Tasten",
+    no_button_triggers_hint: "Noch keine Tasten-Trigger - füge zuerst einen im Tab Tasten hinzu.",
+    choose_button_trigger_option: "Tasten-Trigger wählen…",
+    button_trigger_missing: "(Trigger fehlt)",
+    device_action_toggle: "Umschalten",
+    device_action_off: "Ausschalten",
     action_toggle: "An/Aus umschalten",
     action_off: "Raum ausschalten",
     action_apply_now: "Geplantes Verhalten jetzt ausführen",
     action_force_period: "Bestimmten Zeitraum erzwingen",
-    room_missing: "(Raum fehlt)",
 
     motion_sensors_help:
       "Erstelle hier einmal benannte, wiederverwendbare Bewegungssensor-Definitionen und wähle dann pro Gerät (und Zeitraum) in dessen eigener Steuerungsart, welche davon es abonniert - kein raumweiter Schalter, sodass zwei Geräte im selben Raum auf unterschiedliche Sensoren reagieren können und zwei Räume sich einen teilen können.",
@@ -1547,16 +1601,25 @@ const STRINGS = {
 
     buttons_header: "Boutons physiques",
     buttons_help:
-      "Liez un bouton physique/une télécommande (par ex. un bouton Zigbee apparaissant comme une entité « event » ou « sensor ») à une action dans une pièce.",
-    add_button_header: "Ajouter un bouton",
+      "Définissez ici des déclencheurs de bouton réutilisables (par ex. un bouton Zigbee apparaissant comme une entité « event » ou « sensor ») - choisissez ensuite lequel contrôle quoi depuis chaque pièce ou appareil.",
+    add_button_trigger_header: "Ajouter un déclencheur de bouton",
     new_button_entity_placeholder: "entity_id (par ex. event.kitchen_button)",
-    choose_room_option: "Choisir une pièce…",
-    choose_device_option: "Toute la pièce",
+    button_trigger_name_placeholder: "Nom (par ex. Bouton cuisine 1)",
+    click_type_any: "Appui quelconque",
+    click_type_single: "Appui simple",
+    click_type_double: "Double appui",
+    click_type_long: "Appui long",
+    room_buttons_header: "Boutons de la pièce",
+    device_buttons_header: "Boutons",
+    no_button_triggers_hint: "Aucun déclencheur de bouton pour l'instant - ajoutez-en un dans l'onglet Boutons d'abord.",
+    choose_button_trigger_option: "Choisir un déclencheur de bouton…",
+    button_trigger_missing: "(déclencheur manquant)",
+    device_action_toggle: "Basculer",
+    device_action_off: "Éteindre",
     action_toggle: "Basculer allumé/éteint",
     action_off: "Éteindre la pièce",
     action_apply_now: "Exécuter le comportement programmé maintenant",
     action_force_period: "Forcer une période spécifique",
-    room_missing: "(pièce manquante)",
 
     motion_sensors_help:
       "Créez ici, une seule fois, des définitions de détecteur de mouvement nommées et réutilisables, puis choisissez, pour chaque appareil (par période) dans son propre mode de contrôle, à laquelle il s'abonne - pas un interrupteur pour toute la pièce, donc deux appareils dans la même pièce peuvent réagir à des capteurs différents, et deux pièces peuvent en partager un.",
@@ -1712,16 +1775,25 @@ const STRINGS = {
 
     buttons_header: "Fysieke knoppen",
     buttons_help:
-      'Koppel een fysieke knop/afstandsbediening (bijv. een Zigbee-knop die verschijnt als een "event"- of "sensor"-entiteit) aan een actie in een kamer.',
-    add_button_header: "Knop toevoegen",
+      'Definieer hier herbruikbare knoptriggers (bijv. een Zigbee-knop die verschijnt als een "event"- of "sensor"-entiteit) - kies daarna per kamer of apparaat welke wat bestuurt.',
+    add_button_trigger_header: "Knoptrigger toevoegen",
     new_button_entity_placeholder: "entity_id (bijv. event.kitchen_button)",
-    choose_room_option: "Kies kamer…",
-    choose_device_option: "Hele kamer",
+    button_trigger_name_placeholder: "Naam (bijv. Keukenknop 1)",
+    click_type_any: "Elke druk",
+    click_type_single: "Enkele druk",
+    click_type_double: "Dubbele druk",
+    click_type_long: "Lange druk",
+    room_buttons_header: "Kamerknoppen",
+    device_buttons_header: "Knoppen",
+    no_button_triggers_hint: "Nog geen knoptriggers - voeg er eerst een toe op het tabblad Knoppen.",
+    choose_button_trigger_option: "Kies knoptrigger…",
+    button_trigger_missing: "(trigger ontbreekt)",
+    device_action_toggle: "Omschakelen",
+    device_action_off: "Uitschakelen",
     action_toggle: "Aan/uit omschakelen",
     action_off: "Kamer uitschakelen",
     action_apply_now: "Gepland gedrag nu uitvoeren",
     action_force_period: "Specifieke periode forceren",
-    room_missing: "(kamer ontbreekt)",
 
     motion_sensors_help:
       "Bouw hier eenmalig benoemde, herbruikbare bewegingssensor-definities, en kies daarna per apparaat (per periode) in diens eigen besturingsmodus op welke het zich abonneert - geen schakelaar voor de hele kamer, dus twee apparaten in dezelfde kamer kunnen op verschillende sensoren reageren, en twee kamers kunnen er één delen.",
@@ -2213,11 +2285,13 @@ class RoomFlowCard extends HTMLElement {
       delete room.motion;
 
       if (!room.custom_conditions) room.custom_conditions = [];
+      if (!room.buttons) room.buttons = [];
       const roomPeriods = this._roomPeriods(room);
       (room.devices || []).forEach((device) => {
         if (!device.transitions) device.transitions = {};
         if (!device.motion) device.motion = { enabled: false, off_delay_minutes: null };
         if (!device.control) device.control = {};
+        if (!device.buttons) device.buttons = [];
         if (!device.away_default) {
           device.away_default = { enabled: false, state: "off" };
           if (device.supports_brightness) device.away_default.brightness = 255;
@@ -2272,6 +2346,45 @@ class RoomFlowCard extends HTMLElement {
         device.behaviors = behaviors;
       });
     });
+
+    // Buttons moved the same way motion did: from a flat list bundling
+    // "which entity" + "which room/device" + "which action" into one
+    // entry, to a shared, named trigger catalog (cd.button_triggers) that
+    // rooms/devices attach to individually - so the same physical button
+    // signal can drive more than one attachment, and (new) a trigger can
+    // be scoped to a specific click type instead of firing on any state
+    // change. Migrate each legacy cd.buttons entry into a find-or-created
+    // trigger definition (deduped by entity_id, click_type "any" - the
+    // old behavior) plus a routed attachment, once - cd.buttons is
+    // deleted afterward.
+    if ((cd.buttons || []).length) {
+      cd.buttons.forEach((old) => {
+        if (!old.entity_id) return;
+        let trigger = cd.button_triggers.find((t) => t.entity_id === old.entity_id && t.click_type === "any");
+        if (!trigger) {
+          trigger = { id: uid(), name: old.entity_id, entity_id: old.entity_id, click_type: "any" };
+          cd.button_triggers.push(trigger);
+        }
+
+        const room = cd.rooms.find((r) => r.id === old.room_id);
+        if (!room) return;
+
+        if (old.action === "apply_now" || old.action === "force_period") {
+          room.buttons.push({ id: uid(), trigger_id: trigger.id, action: old.action, force_period: old.force_period || null });
+          return;
+        }
+        // toggle / off
+        const targetDevice = old.target_entity_id
+          ? (room.devices || []).find((d) => d.entity_id === old.target_entity_id)
+          : null;
+        if (targetDevice) {
+          targetDevice.buttons.push({ id: uid(), trigger_id: trigger.id, action: old.action });
+        } else {
+          room.buttons.push({ id: uid(), trigger_id: trigger.id, action: old.action });
+        }
+      });
+    }
+    delete cd.buttons;
   }
 
   _scheduleSave() {
@@ -2319,6 +2432,7 @@ class RoomFlowCard extends HTMLElement {
       behaviors: behaviors,
       control: control,
       away_default: awayDefault,
+      buttons: [],
     };
   }
 
@@ -2363,21 +2477,56 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
-  _addButton(entityId, roomId, action, forcePeriod, targetEntityId) {
-    this._config_data.buttons.push({
+  _addButtonTrigger(name, entityId, clickType) {
+    this._config_data.button_triggers.push({
       id: uid(),
+      name: name || entityId,
       entity_id: entityId,
-      room_id: roomId,
-      action: action,
-      force_period: action === "force_period" ? forcePeriod : null,
-      target_entity_id: action === "toggle" || action === "off" ? targetEntityId || null : null,
+      click_type: clickType || "any",
     });
     this._scheduleSave();
     this._render();
   }
 
-  _removeButton(buttonId) {
-    this._config_data.buttons = this._config_data.buttons.filter((b) => b.id !== buttonId);
+  _removeButtonTrigger(triggerId) {
+    this._config_data.button_triggers = this._config_data.button_triggers.filter((t) => t.id !== triggerId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  _addRoomButton(roomId, triggerId, action, forcePeriod) {
+    const room = this._config_data.rooms.find((r) => r.id === roomId);
+    if (!room || !triggerId) return;
+    room.buttons.push({
+      id: uid(),
+      trigger_id: triggerId,
+      action: action,
+      force_period: action === "force_period" ? forcePeriod : null,
+    });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removeRoomButton(roomId, buttonId) {
+    const room = this._config_data.rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    room.buttons = room.buttons.filter((b) => b.id !== buttonId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  _addDeviceButton(roomId, entityId, triggerId, action) {
+    const device = this._findDevice(roomId, entityId);
+    if (!device || !triggerId) return;
+    device.buttons.push({ id: uid(), trigger_id: triggerId, action: action });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removeDeviceButton(roomId, entityId, buttonId) {
+    const device = this._findDevice(roomId, entityId);
+    if (!device) return;
+    device.buttons = device.buttons.filter((b) => b.id !== buttonId);
     this._scheduleSave();
     this._render();
   }
@@ -2981,30 +3130,69 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
-    const removeButtonBtn = e.target.closest("[data-remove-button]");
-    if (removeButtonBtn) {
-      this._removeButton(removeButtonBtn.getAttribute("data-remove-button"));
+    const removeButtonTriggerBtn = e.target.closest("[data-remove-button-trigger]");
+    if (removeButtonTriggerBtn) {
+      this._removeButtonTrigger(removeButtonTriggerBtn.getAttribute("data-remove-button-trigger"));
       return;
     }
 
-    if (e.target.closest("#add-button-btn")) {
-      const entityInput = this.querySelector("#new-button-entity");
-      const roomSelect = this.querySelector("#new-button-room");
-      const actionSelect = this.querySelector("#new-button-action");
-      const periodSelect = this.querySelector("#new-button-period");
-      const targetSelect = this.querySelector("#new-button-target");
+    if (e.target.closest("#add-button-trigger-btn")) {
+      const nameInput = this.querySelector("#new-trigger-name");
+      const entityInput = this.querySelector("#new-trigger-entity");
+      const clickTypeSelect = this.querySelector("#new-trigger-click-type");
       const entityId = entityInput.value.trim();
-      const roomId = roomSelect.value;
-      const action = actionSelect.value;
-      const forcePeriod = periodSelect ? periodSelect.value : null;
-      const targetEntityId = targetSelect ? targetSelect.value : null;
-      // Flash the offending field red instead of silently doing nothing -
-      // an empty room_id/entity_id used to fail here with zero feedback,
-      // which looked exactly like the "Add" button being broken.
-      if (!entityId) this._flashFieldError(entityInput);
-      if (!roomId) this._flashFieldError(roomSelect);
-      if (!entityId || !roomId) return;
-      this._addButton(entityId, roomId, action, forcePeriod, targetEntityId);
+      if (!entityId) {
+        this._flashFieldError(entityInput);
+        return;
+      }
+      this._addButtonTrigger(nameInput.value.trim(), entityId, clickTypeSelect.value);
+      nameInput.value = "";
+      entityInput.value = "";
+      return;
+    }
+
+    const removeRoomButtonBtn = e.target.closest("[data-remove-room-button]");
+    if (removeRoomButtonBtn) {
+      const [roomId, buttonId] = removeRoomButtonBtn.getAttribute("data-remove-room-button").split("|");
+      this._removeRoomButton(roomId, buttonId);
+      return;
+    }
+
+    const addRoomButtonBtn = e.target.closest("[data-add-room-button]");
+    if (addRoomButtonBtn) {
+      const roomId = addRoomButtonBtn.getAttribute("data-add-room-button");
+      const wrap = addRoomButtonBtn.closest(".rf-room-button-add");
+      const triggerSelect = wrap.querySelector('[data-field="trigger"]');
+      const actionSelect = wrap.querySelector('[data-field="action"]');
+      const periodSelect = wrap.querySelector('[data-field="period"]');
+      if (!triggerSelect.value) {
+        this._flashFieldError(triggerSelect);
+        return;
+      }
+      this._addRoomButton(roomId, triggerSelect.value, actionSelect.value, periodSelect ? periodSelect.value : null);
+      return;
+    }
+
+    const removeDeviceButtonBtn = e.target.closest("[data-remove-device-button]");
+    if (removeDeviceButtonBtn) {
+      const [deviceKey, buttonId] = removeDeviceButtonBtn.getAttribute("data-remove-device-button").split("|");
+      const { roomId, entityId } = parseDeviceKey(deviceKey);
+      this._removeDeviceButton(roomId, entityId, buttonId);
+      return;
+    }
+
+    const addDeviceButtonBtn = e.target.closest("[data-add-device-button]");
+    if (addDeviceButtonBtn) {
+      const deviceKey = addDeviceButtonBtn.getAttribute("data-add-device-button");
+      const { roomId, entityId } = parseDeviceKey(deviceKey);
+      const wrap = addDeviceButtonBtn.closest(".rf-device-button-add");
+      const triggerSelect = wrap.querySelector('[data-field="trigger"]');
+      const actionSelect = wrap.querySelector('[data-field="action"]');
+      if (!triggerSelect.value) {
+        this._flashFieldError(triggerSelect);
+        return;
+      }
+      this._addDeviceButton(roomId, entityId, triggerSelect.value, actionSelect.value);
       return;
     }
 
@@ -3092,41 +3280,16 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
-    if (e.target.closest("#new-button-action")) {
-      // Show/hide the period picker and device-target picker depending on
-      // the chosen action; nothing is saved here, this only affects the
-      // add-form UI
-      const action = e.target.closest("#new-button-action").value;
-      const periodWrap = this.querySelector("#new-button-period-wrap");
+    const roomButtonAction = e.target.closest(".rf-room-button-add [data-field=\"action\"]");
+    if (roomButtonAction) {
+      // Show/hide the period picker depending on the chosen action;
+      // nothing is saved here, this only affects the add-form UI. Scoped
+      // to this specific room's add-form (not a page-global id) since
+      // every room renders its own copy.
+      const wrap = roomButtonAction.closest(".rf-room-button-add");
+      const periodWrap = wrap.querySelector('[data-field="period-wrap"]');
       if (periodWrap) {
-        periodWrap.style.display = action === "force_period" ? "inline-block" : "none";
-      }
-      const targetWrap = this.querySelector("#new-button-target-wrap");
-      if (targetWrap) {
-        targetWrap.style.display = action === "toggle" || action === "off" ? "inline-block" : "none";
-      }
-      return;
-    }
-
-    if (e.target.closest("#new-button-room")) {
-      // "Force period" always targets the chosen room, so its period
-      // choices come from that room's own schedule, and a device-target
-      // binding can only pick from that room's own devices - repopulate
-      // both directly (no save/re-render) rather than losing the rest of
-      // the in-progress add-button form.
-      const roomId = e.target.closest("#new-button-room").value;
-      const room = this._config_data.rooms.find((r) => r.id === roomId);
-      const periodSelect = this.querySelector("#new-button-period");
-      if (periodSelect) {
-        const periods = room ? this._roomPeriods(room) : [];
-        periodSelect.innerHTML = periods.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
-      }
-      const targetSelect = this.querySelector("#new-button-target");
-      if (targetSelect) {
-        const devices = room ? room.devices || [] : [];
-        targetSelect.innerHTML =
-          `<option value="">${this._t("choose_device_option")}</option>` +
-          devices.map((d) => `<option value="${d.entity_id}">${d.name}</option>`).join("");
+        periodWrap.style.display = roomButtonAction.value === "force_period" ? "inline-block" : "none";
       }
       return;
     }
@@ -3933,55 +4096,23 @@ class RoomFlowCard extends HTMLElement {
   }
 
   _renderButtonsTab() {
-    const rooms = this._config_data.rooms;
-    const actionLabels = {
-      toggle: this._t("action_toggle"),
-      off: this._t("action_off"),
-      apply_now: this._t("action_apply_now"),
-      force_period: this._t("action_force_period"),
+    const triggers = this._config_data.button_triggers || [];
+    const clickTypeLabels = {
+      any: this._t("click_type_any"),
+      single: this._t("click_type_single"),
+      double: this._t("click_type_double"),
+      long: this._t("click_type_long"),
     };
 
-    const buttonsHtml = (this._config_data.buttons || [])
-      .map((b) => {
-        const room = rooms.find((r) => r.id === b.room_id);
-        // "Force period" always targets the button's own room, so its
-        // period choices come from that room's own schedule.
-        const roomPeriods = room ? this._roomPeriods(room) : [];
-        const targetDevice =
-          b.target_entity_id && room ? (room.devices || []).find((d) => d.entity_id === b.target_entity_id) : null;
-        const actionText =
-          actionLabels[b.action] +
-          (b.action === "force_period" && b.force_period
-            ? ` (${roomPeriods.find((p) => p.id === b.force_period)?.name || b.force_period})`
-            : "") +
-          (b.target_entity_id
-            ? ` (${targetDevice ? targetDevice.name : b.target_entity_id})`
-            : "");
-        return `
+    const triggersHtml = triggers
+      .map(
+        (t) => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px;margin-bottom:8px">
-          <span style="display:flex;align-items:center;gap:8px">${icon("mdi:gesture-tap-button")}<b>${b.entity_id}</b> → ${room ? room.name : this._t("room_missing")}: ${actionText}</span>
-          <button class="rf-icon-btn rf-danger" data-remove-button="${b.id}">${icon("mdi:close")}</button>
-        </div>`;
-      })
+          <span style="display:flex;align-items:center;gap:8px">${icon("mdi:gesture-tap-button")}<b>${t.name}</b> <small>(${t.entity_id})</small> · ${clickTypeLabels[t.click_type] || clickTypeLabels.any}</span>
+          <button class="rf-icon-btn rf-danger" data-remove-button-trigger="${t.id}">${icon("mdi:close")}</button>
+        </div>`
+      )
       .join("");
-
-    // Defaults to the first room instead of a blank "choose one" placeholder -
-    // leaving the room select untouched used to silently submit with an
-    // empty room_id (the add button just did nothing, no error shown) since
-    // nothing forced the user to actually interact with the dropdown. The
-    // period/target selects are seeded to match this same default room (see
-    // the #new-button-room handler in _onChange, which repopulates both from
-    // whichever room is actually picked).
-    const defaultRoom = rooms[0] || null;
-    const roomOptions = rooms
-      .map((r) => `<option value="${r.id}"${defaultRoom && r.id === defaultRoom.id ? " selected" : ""}>${r.name}</option>`)
-      .join("");
-    const periodOptions = defaultRoom
-      ? this._roomPeriods(defaultRoom).map((p) => `<option value="${p.id}">${p.name}</option>`).join("")
-      : "";
-    const targetOptions = defaultRoom
-      ? (defaultRoom.devices || []).map((d) => `<option value="${d.entity_id}">${d.name}</option>`).join("")
-      : "";
 
     return `
       <div>
@@ -3989,32 +4120,20 @@ class RoomFlowCard extends HTMLElement {
         <div class="rf-help">
           ${this._t("buttons_help")}
         </div>
-        <div style="margin-top:12px">${buttonsHtml}</div>
+        <div style="margin-top:12px">${triggersHtml}</div>
         <div class="rf-card" style="margin-top:16px">
-          <div class="rf-card-title">${icon("mdi:plus-circle-outline")}${this._t("add_button_header")}</div>
+          <div class="rf-card-title">${icon("mdi:plus-circle-outline")}${this._t("add_button_trigger_header")}</div>
           <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <input id="new-button-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
+            <input id="new-trigger-name" placeholder="${this._t("button_trigger_name_placeholder")}" style="width:180px" />
+            <input id="new-trigger-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
               style="width:220px" />
-            <select id="new-button-room">
-              ${rooms.length ? "" : `<option value="">${this._t("choose_room_option")}</option>`}
-              ${roomOptions}
+            <select id="new-trigger-click-type">
+              <option value="any">${clickTypeLabels.any}</option>
+              <option value="single">${clickTypeLabels.single}</option>
+              <option value="double">${clickTypeLabels.double}</option>
+              <option value="long">${clickTypeLabels.long}</option>
             </select>
-            <select id="new-button-action">
-              <option value="toggle">${this._t("action_toggle")}</option>
-              <option value="off">${this._t("action_off")}</option>
-              <option value="apply_now">${this._t("action_apply_now")}</option>
-              <option value="force_period">${this._t("action_force_period")}</option>
-            </select>
-            <span id="new-button-period-wrap" style="display:none">
-              <select id="new-button-period">${periodOptions}</select>
-            </span>
-            <span id="new-button-target-wrap" style="display:inline-block">
-              <select id="new-button-target">
-                <option value="">${this._t("choose_device_option")}</option>
-                ${targetOptions}
-              </select>
-            </span>
-            <button id="add-button-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
+            <button id="add-button-trigger-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
           </div>
         </div>
       </div>
@@ -4106,6 +4225,60 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
+  _renderRoomButtons(room) {
+    const triggers = this._config_data.button_triggers || [];
+    const actionLabels = {
+      toggle: this._t("action_toggle"),
+      off: this._t("action_off"),
+      apply_now: this._t("action_apply_now"),
+      force_period: this._t("action_force_period"),
+    };
+    const roomPeriods = this._roomPeriods(room);
+
+    const rows = (room.buttons || [])
+      .map((b) => {
+        const trigger = triggers.find((t) => t.id === b.trigger_id);
+        const actionText =
+          actionLabels[b.action] +
+          (b.action === "force_period" && b.force_period
+            ? ` (${roomPeriods.find((p) => p.id === b.force_period)?.name || b.force_period})`
+            : "");
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
+          <span style="display:flex;align-items:center;gap:6px;font-size:0.9em">${icon("mdi:gesture-tap-button")}${trigger ? trigger.name : this._t("button_trigger_missing")} → ${actionText}</span>
+          <button class="rf-icon-btn rf-danger" data-remove-room-button="${room.id}|${b.id}">${icon("mdi:close")}</button>
+        </div>`;
+      })
+      .join("");
+
+    const triggerOptions = triggers.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+    const periodOptions = roomPeriods.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+
+    return `
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:gesture-tap-button")}${this._t("room_buttons_header")}</div>
+        ${triggers.length ? "" : `<div class="rf-help" style="margin-top:0">${this._t("no_button_triggers_hint")}</div>`}
+        ${rows}
+        <div class="rf-room-button-add" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select data-field="trigger">
+            <option value="">${this._t("choose_button_trigger_option")}</option>
+            ${triggerOptions}
+          </select>
+          <select data-field="action">
+            <option value="toggle">${actionLabels.toggle}</option>
+            <option value="off">${actionLabels.off}</option>
+            <option value="apply_now">${actionLabels.apply_now}</option>
+            <option value="force_period">${actionLabels.force_period}</option>
+          </select>
+          <span data-field="period-wrap" style="display:none">
+            <select data-field="period">${periodOptions}</select>
+          </span>
+          <button data-add-room-button="${room.id}" class="rf-btn rf-btn-flat">${icon("mdi:plus")}${this._t("add")}</button>
+        </div>
+      </div>
+    `;
+  }
+
   _renderCustomConditionsBox(room) {
     const conditions = room.custom_conditions || [];
 
@@ -4181,6 +4354,7 @@ class RoomFlowCard extends HTMLElement {
             <button class="rf-btn rf-btn-danger" data-remove-room="${room.id}">${icon("mdi:delete-outline")}${this._t("remove_room")}</button>
           </div>
         </div>
+        ${this._renderRoomButtons(room)}
         ${this._renderCustomConditionsBox(room)}
         ${this._renderRoomPeriodTabs(room)}
         <div>${devicesHtml}</div>
@@ -4319,6 +4493,43 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
+  _renderDeviceButtons(deviceKey, device) {
+    const triggers = this._config_data.button_triggers || [];
+    const actionLabels = { toggle: this._t("device_action_toggle"), off: this._t("device_action_off") };
+
+    const rows = (device.buttons || [])
+      .map((b) => {
+        const trigger = triggers.find((t) => t.id === b.trigger_id);
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
+          <span style="display:flex;align-items:center;gap:6px;font-size:0.9em">${icon("mdi:gesture-tap-button")}${trigger ? trigger.name : this._t("button_trigger_missing")} → ${actionLabels[b.action] || b.action}</span>
+          <button class="rf-icon-btn rf-danger" data-remove-device-button="${deviceKey}|${b.id}">${icon("mdi:close")}</button>
+        </div>`;
+      })
+      .join("");
+
+    const triggerOptions = triggers.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+
+    return `
+      <div class="rf-card" style="margin-top:8px">
+        <div class="rf-card-title" style="font-size:0.95em">${icon("mdi:gesture-tap-button")}${this._t("device_buttons_header")}</div>
+        ${triggers.length ? "" : `<div class="rf-help" style="margin-top:0">${this._t("no_button_triggers_hint")}</div>`}
+        ${rows}
+        <div class="rf-device-button-add" style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select data-field="trigger">
+            <option value="">${this._t("choose_button_trigger_option")}</option>
+            ${triggerOptions}
+          </select>
+          <select data-field="action">
+            <option value="toggle">${actionLabels.toggle}</option>
+            <option value="off">${actionLabels.off}</option>
+          </select>
+          <button data-add-device-button="${deviceKey}" class="rf-btn rf-btn-flat">${icon("mdi:plus")}${this._t("add")}</button>
+        </div>
+      </div>
+    `;
+  }
+
   _renderAwayDefault(deviceKey, device) {
     const away = device.away_default || { enabled: false, state: "off" };
     const supportsBrightness = !!device.supports_brightness;
@@ -4420,10 +4631,12 @@ class RoomFlowCard extends HTMLElement {
       }
 
       const awayDefaultHtml = this._hasHome() ? this._renderAwayDefault(deviceKey, device) : "";
+      const deviceButtonsHtml = this._renderDeviceButtons(deviceKey, device);
 
       bodyHtml = `
         <div class="rf-device-body">
           <div class="rf-chip-row">${tabsHtml}</div>
+          ${deviceButtonsHtml}
           ${awayDefaultHtml}
           <div style="margin-top:8px">${controlsHtml}</div>
         </div>

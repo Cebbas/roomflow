@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Buttons are now a shared trigger library, like motion sensors, with
+  click-type support.** The Buttons tab is now a catalog of reusable
+  button triggers (entity + optional click type: single/double/long
+  press) instead of a flat list bundling entity, room, target device and
+  action together. Each device gets its own small "Buttons" section
+  (attach a trigger → toggle/turn off just that device) and each room
+  gets a "Room buttons" section (whole-room toggle/off, or run
+  schedule/force a period) - so the same physical button can drive more
+  than one attachment, and a Zigbee/Shelly button's single vs. long-press
+  can trigger different things. Existing button bindings migrate
+  automatically with no behavior change.
 - **Motion sensors are now a shared, named library instead of a
   per-room setting.** A new "Motion sensors" tab lets you build named,
   reusable motion-sensor definitions (sensors, timeout, dim-warning)

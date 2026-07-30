@@ -66,7 +66,7 @@ async def async_get_config_entry_diagnostics(
             "person_entities": [_state_snapshot(hass, e) for e in person_entities],
         },
         "room_count": len(config.get("rooms", [])),
-        "button_count": len(config.get("buttons", [])),
+        "button_trigger_count": len(config.get("button_triggers", [])),
         "default_transitions": config.get("default_transitions"),
         "motion_sensors": [
             {
@@ -80,6 +80,10 @@ async def async_get_config_entry_diagnostics(
             }
             for m in config.get("motion_sensors", [])
         ],
+        "button_triggers": [
+            {"name": t.get("name"), "click_type": t.get("click_type", "any")}
+            for t in config.get("button_triggers", [])
+        ],
         "rooms": [
             {
                 "name": room.get("name"),
@@ -91,11 +95,14 @@ async def async_get_config_entry_diagnostics(
                     if any(p.get("mode") == "motion" for p in (d.get("control") or {}).values())
                 ),
                 "custom_condition_count": len(room.get("custom_conditions", [])),
+                "room_button_attachments": [
+                    {"action": b.get("action"), "force_period": b.get("force_period")}
+                    for b in room.get("buttons", [])
+                ],
+                "device_button_attachment_count": sum(
+                    len(d.get("buttons", [])) for d in room.get("devices", [])
+                ),
             }
             for room in config.get("rooms", [])
-        ],
-        "buttons": [
-            {"action": b.get("action"), "force_period": b.get("force_period")}
-            for b in config.get("buttons", [])
         ],
     }

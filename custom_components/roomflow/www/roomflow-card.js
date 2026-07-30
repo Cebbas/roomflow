@@ -1941,6 +1941,8 @@ const RF_STYLES = `
   .rf-status-icon.rf-on { background: #4caf5026; color: #2e7d32; }
   .rf-status-icon.rf-off { background: var(--divider-color); color: var(--secondary-text-color); }
 
+  .rf-field-error { outline: 2px solid var(--error-color, #db4437); border-radius: 4px; }
+
   .rf-log-list { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
   .rf-log-row {
     display: flex; align-items: center; gap: 8px; padding: 6px 0;
@@ -2545,6 +2547,12 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
+  _flashFieldError(el) {
+    if (!el) return;
+    el.classList.add("rf-field-error");
+    setTimeout(() => el.classList.remove("rf-field-error"), 1500);
+  }
+
   _findDevice(roomId, entityId) {
     const room = this._config_data.rooms.find((r) => r.id === roomId);
     if (!room) return null;
@@ -2892,6 +2900,11 @@ class RoomFlowCard extends HTMLElement {
       const action = actionSelect.value;
       const forcePeriod = periodSelect ? periodSelect.value : null;
       const targetEntityId = targetSelect ? targetSelect.value : null;
+      // Flash the offending field red instead of silently doing nothing -
+      // an empty room_id/entity_id used to fail here with zero feedback,
+      // which looked exactly like the "Add" button being broken.
+      if (!entityId) this._flashFieldError(entityInput);
+      if (!roomId) this._flashFieldError(roomSelect);
       if (!entityId || !roomId) return;
       this._addButton(entityId, roomId, action, forcePeriod, targetEntityId);
       return;
@@ -3833,14 +3846,23 @@ class RoomFlowCard extends HTMLElement {
       })
       .join("");
 
-    const roomOptions = rooms.map((r) => `<option value="${r.id}">${r.name}</option>`).join("");
-    // Both empty until a room is picked (see the #new-button-room handler
-    // in _onChange, which repopulates them from that room's own schedule/
-    // device list) - periods aren't a single global list any more, and
-    // devices are obviously room-specific, so there's nothing meaningful
-    // to show before a room is chosen.
-    const periodOptions = "";
-    const targetOptions = "";
+    // Defaults to the first room instead of a blank "choose one" placeholder -
+    // leaving the room select untouched used to silently submit with an
+    // empty room_id (the add button just did nothing, no error shown) since
+    // nothing forced the user to actually interact with the dropdown. The
+    // period/target selects are seeded to match this same default room (see
+    // the #new-button-room handler in _onChange, which repopulates both from
+    // whichever room is actually picked).
+    const defaultRoom = rooms[0] || null;
+    const roomOptions = rooms
+      .map((r) => `<option value="${r.id}"${defaultRoom && r.id === defaultRoom.id ? " selected" : ""}>${r.name}</option>`)
+      .join("");
+    const periodOptions = defaultRoom
+      ? this._roomPeriods(defaultRoom).map((p) => `<option value="${p.id}">${p.name}</option>`).join("")
+      : "";
+    const targetOptions = defaultRoom
+      ? (defaultRoom.devices || []).map((d) => `<option value="${d.entity_id}">${d.name}</option>`).join("")
+      : "";
 
     return `
       <div>
@@ -3855,7 +3877,7 @@ class RoomFlowCard extends HTMLElement {
             <input id="new-button-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
               style="width:220px" />
             <select id="new-button-room">
-              <option value="">${this._t("choose_room_option")}</option>
+              ${rooms.length ? "" : `<option value="">${this._t("choose_room_option")}</option>`}
               ${roomOptions}
             </select>
             <select id="new-button-action">

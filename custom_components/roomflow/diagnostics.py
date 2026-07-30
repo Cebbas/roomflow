@@ -68,22 +68,27 @@ async def async_get_config_entry_diagnostics(
         "room_count": len(config.get("rooms", [])),
         "button_count": len(config.get("buttons", [])),
         "default_transitions": config.get("default_transitions"),
+        "motion_sensors": [
+            {
+                "name": m.get("name"),
+                "trigger_count": len(m.get("triggers", [])),
+                "trigger_types": [t.get("type") for t in m.get("triggers", [])],
+                "timeout_minutes": m.get("timeout_minutes"),
+                "warn_enabled": m.get("warn_enabled", False),
+                "warn_minutes": m.get("warn_minutes"),
+                "warn_brightness": m.get("warn_brightness"),
+            }
+            for m in config.get("motion_sensors", [])
+        ],
         "rooms": [
             {
                 "name": room.get("name"),
                 "device_count": len(room.get("devices", [])),
                 "device_types": [d.get("type") for d in room.get("devices", [])],
-                "motion_enabled": room.get("motion", {}).get("enabled", False),
-                "motion_trigger_count": len(room.get("motion", {}).get("triggers", [])),
-                "motion_trigger_types": [
-                    t.get("type") for t in room.get("motion", {}).get("triggers", [])
-                ],
-                "motion_timeout_minutes": room.get("motion", {}).get("timeout_minutes"),
-                "motion_warn_enabled": room.get("motion", {}).get("warn_enabled", False),
-                "motion_warn_minutes": room.get("motion", {}).get("warn_minutes"),
-                "motion_warn_brightness": room.get("motion", {}).get("warn_brightness"),
                 "motion_controlled_device_count": sum(
-                    1 for d in room.get("devices", []) if d.get("motion", {}).get("enabled")
+                    1
+                    for d in room.get("devices", [])
+                    if any(p.get("mode") == "motion" for p in (d.get("control") or {}).values())
                 ),
                 "custom_condition_count": len(room.get("custom_conditions", [])),
             }

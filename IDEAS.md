@@ -334,19 +334,25 @@ RoomFlow needing its own notification/alerting system.
 ## Linked/synced rooms (shared open-plan spaces)
 
 Every room in the config store (`cfg.get("rooms", [])`, each with its own
-`devices`/`motion`/period behavior) is independent - there's no way to say
-two rooms are really one physical space, e.g. an open-plan kitchen +
-living room where you want both to always be in the same period and react
-to either room's motion sensors together, rather than configuring the
-same schedule twice and hoping they stay in sync.
+`devices`/period behavior) is independent - there's no way to say two
+rooms are really one physical space, e.g. an open-plan kitchen + living
+room where you want both to always be in the same period, rather than
+configuring the same schedule twice and hoping they stay in sync.
 
-Possible approach: an optional "linked room" reference so one room follows
-another's resolved period/motion-active state instead of computing its
-own from its own custom conditions and triggers (while still keeping its
-own device list, since the two spaces likely have different lights) -
-checked in `_apply_to_rooms`/`_handle_motion_change` by resolving the
-period/motion state from the room it's linked to before applying behavior
-to its own devices.
+Note: the motion-sensor half of this problem (reacting to the same
+sensors together) is already solved now that motion sensors are a
+shared, named library (`cfg.motion_sensors`, see `_control_mode`/
+`_handle_motion_change` in `__init__.py`) rather than a per-room list -
+devices in both rooms can already subscribe to the same definition. What
+remains here is purely the *period/schedule* half: keeping two rooms'
+resolved current period in sync.
+
+Possible approach: an optional "linked room" reference so one room's
+resolved period follows another's instead of computing its own from its
+own schedule/custom conditions (while still keeping its own device
+list, since the two spaces likely have different lights) - checked in
+`_apply_to_rooms` by resolving the period from the room it's linked to
+before applying behavior to its own devices.
 
 ## Continuous adaptive curve (sun-elevation-based), not just discrete periods
 

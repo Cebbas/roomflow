@@ -423,6 +423,7 @@ const STRINGS = {
   en: {
     tab_add_room: "+ Room",
     tab_buttons: "Buttons",
+    tab_motion_sensors: "Motion sensors",
     tab_settings: "Settings",
     tab_overview: "Overview",
     test_all: "Test all",
@@ -542,10 +543,16 @@ const STRINGS = {
     action_force_period: "Force a specific period",
     room_missing: "(room missing)",
 
+    motion_sensors_help:
+      "Build named, reusable motion-sensor definitions here once, then pick which one each device subscribes to (per period) from its own control-mode setting - not a room-wide switch, so two devices in the same room can react to two different sensors, and two rooms can share one.",
+    add_motion_sensor_header: "Add motion sensor",
+    motion_sensor_name_placeholder: "Name (e.g. Bathroom mirror)",
+    no_motion_sensors_hint: "No motion sensors yet - add one in the Motion sensors tab first.",
+    motion_sensor_which_label: "Which motion sensor:",
+    choose_motion_sensor_option: "Choose motion sensor…",
     motion_sensor_value_above: "Sensor value above",
     motion_label: "Motion",
-    motion_active_label: "Motion control active in this room",
-    motion_or_logic_help: 'The room counts as "active" if ANY condition below is currently true (OR logic).',
+    motion_or_logic_help: 'This counts as "active" if ANY condition below is currently true (OR logic).',
     add_motion_sensor: "+ Motion sensor",
     add_threshold: "+ Threshold (e.g. humidity)",
     turn_off_after: "Turn off after",
@@ -554,8 +561,6 @@ const STRINGS = {
     dim_to: "Dim to",
     brightness_for: "brightness for",
     minutes_before_off: "minutes before turning off - motion during this window restores full brightness instead.",
-    motion_footer_help:
-      'When active, the room\'s scheduled behavior runs immediately (like "Test now"). Pick which devices react to motion, and their own off-delay, on each device below.',
 
     condition_is: "is",
     custom_conditions_header: "Custom conditions",
@@ -608,6 +613,7 @@ const STRINGS = {
   sv: {
     tab_add_room: "+ Rum",
     tab_buttons: "Knappar",
+    tab_motion_sensors: "Rörelsevakter",
     tab_settings: "Inställningar",
     tab_overview: "Översikt",
     test_all: "Testa alla",
@@ -727,10 +733,16 @@ const STRINGS = {
     action_force_period: "Tvinga en specifik period",
     room_missing: "(rum saknas)",
 
+    motion_sensors_help:
+      "Bygg namngivna, återanvändbara rörelsevakter här en gång, välj sedan vilken varje enhet prenumererar på (per period) från dess egen styrningsinställning - inte en rumsomfattande brytare, så två enheter i samma rum kan reagera på olika sensorer, och två rum kan dela en.",
+    add_motion_sensor_header: "Lägg till rörelsevakt",
+    motion_sensor_name_placeholder: "Namn (t.ex. Badrumsspegel)",
+    no_motion_sensors_hint: "Inga rörelsevakter än - lägg till en i fliken Rörelsevakter först.",
+    motion_sensor_which_label: "Vilken rörelsevakt:",
+    choose_motion_sensor_option: "Välj rörelsevakt…",
     motion_sensor_value_above: "Sensorvärde över",
     motion_label: "Rörelse",
-    motion_active_label: "Rörelsekontroll aktiv i det här rummet",
-    motion_or_logic_help: 'Rummet räknas som "aktivt" om NÅGOT villkor nedan just nu är sant (ELLER-logik).',
+    motion_or_logic_help: 'Detta räknas som "aktivt" om NÅGOT villkor nedan just nu är sant (ELLER-logik).',
     add_motion_sensor: "+ Rörelsesensor",
     add_threshold: "+ Tröskelvärde (t.ex. luftfuktighet)",
     turn_off_after: "Stäng av efter",
@@ -739,8 +751,6 @@ const STRINGS = {
     dim_to: "Dimra till",
     brightness_for: "ljusstyrka i",
     minutes_before_off: "minuter innan avstängning - rörelse under det fönstret återställer full ljusstyrka istället.",
-    motion_footer_help:
-      'När aktivt körs rummets schemalagda beteende direkt (som "Testa nu"). Välj vilka enheter som reagerar på rörelse, och deras egen avstängningsfördröjning, på varje enhet nedan.',
 
     condition_is: "är",
     custom_conditions_header: "Egna villkor",
@@ -793,6 +803,7 @@ const STRINGS = {
   no: {
     tab_add_room: "+ Rom",
     tab_buttons: "Knapper",
+    tab_motion_sensors: "Bevegelsessensorer",
     tab_settings: "Innstillinger",
     test_all: "Test alle",
 
@@ -887,10 +898,16 @@ const STRINGS = {
     action_force_period: "Tving frem en bestemt periode",
     room_missing: "(rom mangler)",
 
+    motion_sensors_help:
+      "Bygg navngitte, gjenbrukbare bevegelsessensor-definisjoner her én gang, velg deretter hvilken hver enhet abonnerer på (per periode) fra sin egen styringsmodus - ikke en romomfattende bryter, så to enheter i samme rom kan reagere på forskjellige sensorer, og to rom kan dele én.",
+    add_motion_sensor_header: "Legg til bevegelsessensor",
+    motion_sensor_name_placeholder: "Navn (f.eks. Baderomsspeil)",
+    no_motion_sensors_hint: "Ingen bevegelsessensorer ennå - legg til én i fanen Bevegelsessensorer først.",
+    motion_sensor_which_label: "Hvilken bevegelsessensor:",
+    choose_motion_sensor_option: "Velg bevegelsessensor…",
     motion_sensor_value_above: "Sensorverdi over",
     motion_label: "Bevegelse",
-    motion_active_label: "Bevegelseskontroll aktiv i dette rommet",
-    motion_or_logic_help: 'Rommet regnes som "aktivt" hvis NOEN betingelse nedenfor for øyeblikket er sann (ELLER-logikk).',
+    motion_or_logic_help: 'Dette regnes som "aktivt" hvis NOEN betingelse nedenfor for øyeblikket er sann (ELLER-logikk).',
     add_motion_sensor: "+ Bevegelsessensor",
     add_threshold: "+ Terskel (f.eks. luftfuktighet)",
     turn_off_after: "Slå av etter",
@@ -899,8 +916,6 @@ const STRINGS = {
     dim_to: "Demp til",
     brightness_for: "lysstyrke i",
     minutes_before_off: "minutter før avslåing - bevegelse i det vinduet gjenoppretter full lysstyrke i stedet.",
-    motion_footer_help:
-      'Når aktivt kjøres rommets planlagte atferd umiddelbart (som "Test nå"). Velg hvilke enheter som reagerer på bevegelse, og deres egen avslåingsforsinkelse, på hver enhet nedenfor.',
 
     condition_is: "er",
     custom_conditions_header: "Egendefinerte betingelser",
@@ -953,6 +968,7 @@ const STRINGS = {
   da: {
     tab_add_room: "+ Rum",
     tab_buttons: "Knapper",
+    tab_motion_sensors: "Bevægelsessensorer",
     tab_settings: "Indstillinger",
     test_all: "Test alle",
 
@@ -1047,10 +1063,16 @@ const STRINGS = {
     action_force_period: "Gennemtving en bestemt periode",
     room_missing: "(rum mangler)",
 
+    motion_sensors_help:
+      "Byg navngivne, genbrugelige bevægelsessensor-definitioner her én gang, vælg derefter hvilken hver enhed abonnerer på (pr. periode) fra dens egen styretilstand - ikke en rumdækkende kontakt, så to enheder i samme rum kan reagere på forskellige sensorer, og to rum kan dele én.",
+    add_motion_sensor_header: "Tilføj bevægelsessensor",
+    motion_sensor_name_placeholder: "Navn (f.eks. Badeværelsesspejl)",
+    no_motion_sensors_hint: "Ingen bevægelsessensorer endnu - tilføj én under fanen Bevægelsessensorer først.",
+    motion_sensor_which_label: "Hvilken bevægelsessensor:",
+    choose_motion_sensor_option: "Vælg bevægelsessensor…",
     motion_sensor_value_above: "Sensorværdi over",
     motion_label: "Bevægelse",
-    motion_active_label: "Bevægelseskontrol aktiv i dette rum",
-    motion_or_logic_help: 'Rummet betragtes som "aktivt", hvis NOGEN betingelse nedenfor lige nu er sand (ELLER-logik).',
+    motion_or_logic_help: 'Dette betragtes som "aktivt", hvis NOGEN betingelse nedenfor lige nu er sand (ELLER-logik).',
     add_motion_sensor: "+ Bevægelsessensor",
     add_threshold: "+ Tærskel (f.eks. luftfugtighed)",
     turn_off_after: "Sluk efter",
@@ -1059,8 +1081,6 @@ const STRINGS = {
     dim_to: "Dæmp til",
     brightness_for: "lysstyrke i",
     minutes_before_off: "minutter før slukning - bevægelse i det vindue genopretter fuld lysstyrke i stedet.",
-    motion_footer_help:
-      'Når aktivt køres rummets planlagte adfærd med det samme (som "Test nu"). Vælg hvilke enheder der reagerer på bevægelse, og deres egen slukforsinkelse, på hver enhed nedenfor.',
 
     condition_is: "er",
     custom_conditions_header: "Brugerdefinerede betingelser",
@@ -1113,6 +1133,7 @@ const STRINGS = {
   fi: {
     tab_add_room: "+ Huone",
     tab_buttons: "Painikkeet",
+    tab_motion_sensors: "Liiketunnistimet",
     tab_settings: "Asetukset",
     test_all: "Testaa kaikki",
 
@@ -1207,10 +1228,16 @@ const STRINGS = {
     action_force_period: "Pakota tietty jakso",
     room_missing: "(huone puuttuu)",
 
+    motion_sensors_help:
+      "Rakenna nimettyjä, uudelleenkäytettäviä liiketunnistin-määrityksiä täällä kerran, valitse sitten kunkin laitteen kohdalla (jaksoittain) mihin se tilaa - ei huonekohtainen kytkin, joten kaksi laitetta samassa huoneessa voi reagoida eri antureihin, ja kaksi huonetta voi jakaa yhden.",
+    add_motion_sensor_header: "Lisää liiketunnistin",
+    motion_sensor_name_placeholder: "Nimi (esim. Kylpyhuoneen peili)",
+    no_motion_sensors_hint: "Ei vielä liiketunnistimia - lisää yksi Liiketunnistimet-välilehdellä ensin.",
+    motion_sensor_which_label: "Mikä liiketunnistin:",
+    choose_motion_sensor_option: "Valitse liiketunnistin…",
     motion_sensor_value_above: "Anturin arvo yli",
     motion_label: "Liike",
-    motion_active_label: "Liikeohjaus käytössä tässä huoneessa",
-    motion_or_logic_help: 'Huone lasketaan "aktiiviseksi", jos MIKÄ TAHANSA alla oleva ehto on juuri nyt tosi (TAI-logiikka).',
+    motion_or_logic_help: 'Tämä lasketaan "aktiiviseksi", jos MIKÄ TAHANSA alla oleva ehto on juuri nyt tosi (TAI-logiikka).',
     add_motion_sensor: "+ Liikeanturi",
     add_threshold: "+ Kynnysarvo (esim. ilmankosteus)",
     turn_off_after: "Sammuta",
@@ -1219,8 +1246,6 @@ const STRINGS = {
     dim_to: "Himmennä tasolle",
     brightness_for: "kirkkaus",
     minutes_before_off: "minuutiksi ennen sammutusta - liike tänä aikana palauttaa täyden kirkkauden sen sijaan.",
-    motion_footer_help:
-      'Kun aktiivinen, huoneen ajastettu toiminta käynnistyy heti (kuten "Testaa nyt"). Valitse, mitkä laitteet reagoivat liikkeeseen, ja niiden oma sammutusviive, kunkin laitteen kohdalla alla.',
 
     condition_is: "on",
     custom_conditions_header: "Omat ehdot",
@@ -1273,6 +1298,7 @@ const STRINGS = {
   de: {
     tab_add_room: "+ Raum",
     tab_buttons: "Tasten",
+    tab_motion_sensors: "Bewegungssensoren",
     tab_settings: "Einstellungen",
     test_all: "Alle testen",
 
@@ -1367,10 +1393,16 @@ const STRINGS = {
     action_force_period: "Bestimmten Zeitraum erzwingen",
     room_missing: "(Raum fehlt)",
 
+    motion_sensors_help:
+      "Erstelle hier einmal benannte, wiederverwendbare Bewegungssensor-Definitionen und wähle dann pro Gerät (und Zeitraum) in dessen eigener Steuerungsart, welche davon es abonniert - kein raumweiter Schalter, sodass zwei Geräte im selben Raum auf unterschiedliche Sensoren reagieren können und zwei Räume sich einen teilen können.",
+    add_motion_sensor_header: "Bewegungssensor hinzufügen",
+    motion_sensor_name_placeholder: "Name (z. B. Badezimmerspiegel)",
+    no_motion_sensors_hint: "Noch keine Bewegungssensoren - füge zuerst einen im Tab Bewegungssensoren hinzu.",
+    motion_sensor_which_label: "Welcher Bewegungssensor:",
+    choose_motion_sensor_option: "Bewegungssensor wählen…",
     motion_sensor_value_above: "Sensorwert über",
     motion_label: "Bewegung",
-    motion_active_label: "Bewegungssteuerung in diesem Raum aktiv",
-    motion_or_logic_help: 'Der Raum gilt als "aktiv", wenn IRGENDEINE Bedingung unten gerade wahr ist (ODER-Logik).',
+    motion_or_logic_help: 'Dies gilt als "aktiv", wenn IRGENDEINE Bedingung unten gerade wahr ist (ODER-Logik).',
     add_motion_sensor: "+ Bewegungssensor",
     add_threshold: "+ Schwellenwert (z. B. Luftfeuchtigkeit)",
     turn_off_after: "Ausschalten nach",
@@ -1379,8 +1411,6 @@ const STRINGS = {
     dim_to: "Dimmen auf",
     brightness_for: "Helligkeit für",
     minutes_before_off: "Minuten vor dem Ausschalten - Bewegung in diesem Fenster stellt stattdessen die volle Helligkeit wieder her.",
-    motion_footer_help:
-      'Wenn aktiv, wird das geplante Verhalten des Raums sofort ausgeführt (wie "Jetzt testen"). Wähle unten pro Gerät, welche Geräte auf Bewegung reagieren, und ihre eigene Ausschaltverzögerung.',
 
     condition_is: "ist",
     custom_conditions_header: "Benutzerdefinierte Bedingungen",
@@ -1433,6 +1463,7 @@ const STRINGS = {
   fr: {
     tab_add_room: "+ Pièce",
     tab_buttons: "Boutons",
+    tab_motion_sensors: "Détecteurs de mouvement",
     tab_settings: "Paramètres",
     test_all: "Tout tester",
 
@@ -1527,10 +1558,16 @@ const STRINGS = {
     action_force_period: "Forcer une période spécifique",
     room_missing: "(pièce manquante)",
 
+    motion_sensors_help:
+      "Créez ici, une seule fois, des définitions de détecteur de mouvement nommées et réutilisables, puis choisissez, pour chaque appareil (par période) dans son propre mode de contrôle, à laquelle il s'abonne - pas un interrupteur pour toute la pièce, donc deux appareils dans la même pièce peuvent réagir à des capteurs différents, et deux pièces peuvent en partager un.",
+    add_motion_sensor_header: "Ajouter un détecteur de mouvement",
+    motion_sensor_name_placeholder: "Nom (ex. Miroir de la salle de bain)",
+    no_motion_sensors_hint: "Aucun détecteur de mouvement pour l'instant - ajoutez-en un dans l'onglet Détecteurs de mouvement d'abord.",
+    motion_sensor_which_label: "Quel détecteur de mouvement :",
+    choose_motion_sensor_option: "Choisir un détecteur de mouvement…",
     motion_sensor_value_above: "Valeur du capteur supérieure à",
     motion_label: "Mouvement",
-    motion_active_label: "Contrôle par mouvement actif dans cette pièce",
-    motion_or_logic_help: "La pièce est considérée « active » si N'IMPORTE QUELLE condition ci-dessous est actuellement vraie (logique OU).",
+    motion_or_logic_help: "Ceci est considéré « actif » si N'IMPORTE QUELLE condition ci-dessous est actuellement vraie (logique OU).",
     add_motion_sensor: "+ Capteur de mouvement",
     add_threshold: "+ Seuil (par ex. humidité)",
     turn_off_after: "Éteindre après",
@@ -1539,8 +1576,6 @@ const STRINGS = {
     dim_to: "Tamiser à",
     brightness_for: "de luminosité pendant",
     minutes_before_off: "minutes avant extinction - un mouvement pendant cette fenêtre restaure la pleine luminosité à la place.",
-    motion_footer_help:
-      "Lorsqu'actif, le comportement programmé de la pièce s'exécute immédiatement (comme « Tester maintenant »). Choisissez quels appareils réagissent au mouvement, et leur propre délai d'extinction, sur chaque appareil ci-dessous.",
 
     condition_is: "est",
     custom_conditions_header: "Conditions personnalisées",
@@ -1593,6 +1628,7 @@ const STRINGS = {
   nl: {
     tab_add_room: "+ Kamer",
     tab_buttons: "Knoppen",
+    tab_motion_sensors: "Bewegingssensoren",
     tab_settings: "Instellingen",
     test_all: "Alles testen",
 
@@ -1687,10 +1723,16 @@ const STRINGS = {
     action_force_period: "Specifieke periode forceren",
     room_missing: "(kamer ontbreekt)",
 
+    motion_sensors_help:
+      "Bouw hier eenmalig benoemde, herbruikbare bewegingssensor-definities, en kies daarna per apparaat (per periode) in diens eigen besturingsmodus op welke het zich abonneert - geen schakelaar voor de hele kamer, dus twee apparaten in dezelfde kamer kunnen op verschillende sensoren reageren, en twee kamers kunnen er één delen.",
+    add_motion_sensor_header: "Bewegingssensor toevoegen",
+    motion_sensor_name_placeholder: "Naam (bijv. Badkamerspiegel)",
+    no_motion_sensors_hint: "Nog geen bewegingssensoren - voeg er eerst een toe op het tabblad Bewegingssensoren.",
+    motion_sensor_which_label: "Welke bewegingssensor:",
+    choose_motion_sensor_option: "Kies bewegingssensor…",
     motion_sensor_value_above: "Sensorwaarde boven",
     motion_label: "Beweging",
-    motion_active_label: "Bewegingsbesturing actief in deze kamer",
-    motion_or_logic_help: 'De kamer wordt als "actief" beschouwd als OM HET EVEN WELKE voorwaarde hieronder op dit moment waar is (OF-logica).',
+    motion_or_logic_help: 'Dit wordt als "actief" beschouwd als OM HET EVEN WELKE voorwaarde hieronder op dit moment waar is (OF-logica).',
     add_motion_sensor: "+ Bewegingssensor",
     add_threshold: "+ Drempelwaarde (bijv. vochtigheid)",
     turn_off_after: "Uitschakelen na",
@@ -1699,8 +1741,6 @@ const STRINGS = {
     dim_to: "Dimmen naar",
     brightness_for: "helderheid gedurende",
     minutes_before_off: "minuten vóór uitschakelen - beweging tijdens dat venster herstelt in plaats daarvan volledige helderheid.",
-    motion_footer_help:
-      'Indien actief wordt het geplande gedrag van de kamer onmiddellijk uitgevoerd (zoals "Nu testen"). Kies welke apparaten op beweging reageren, en hun eigen uitschakelvertraging, per apparaat hieronder.',
 
     condition_is: "is",
     custom_conditions_header: "Aangepaste voorwaarden",
@@ -2001,7 +2041,7 @@ class RoomFlowCard extends HTMLElement {
     this._activeTab = {}; // deviceKey -> period
     this._activeRoomPeriod = {}; // room.id -> period, drives every device's tab in that room at once
     this._openDevices = {}; // deviceKey -> bool, undefined defaults to open (matches pre-collapse behavior)
-    this._activeRoomId = null; // room.id | "__add__" | "__buttons__" | "__settings__"
+    this._activeRoomId = null; // room.id | "__add__" | "__buttons__" | "__motion__" | "__settings__"
     this._saveTimeout = null;
     this._lang = "en";
 
@@ -2092,6 +2132,7 @@ class RoomFlowCard extends HTMLElement {
     const cd = this._config_data;
     if (!cd.rooms) cd.rooms = [];
     if (!cd.buttons) cd.buttons = [];
+    if (!cd.motion_sensors) cd.motion_sensors = [];
 
     // Schedules: a named, independent periods list of its own (see
     // DEFAULT_SCHEDULE_ID docs above) - a room follows one via its
@@ -2146,18 +2187,31 @@ class RoomFlowCard extends HTMLElement {
       if (!room.schedule_id || !cd.schedules.some((s) => s.id === room.schedule_id)) {
         room.schedule_id = cd.schedules[0].id;
       }
-      if (!room.motion) {
-        room.motion = { enabled: false, timeout_minutes: 10, triggers: [] };
-      } else if (!room.motion.triggers) {
-        room.motion = {
-          enabled: !!room.motion.enabled,
+      // Motion moved from a room-scoped concept to a shared, named
+      // library (cd.motion_sensors) that devices subscribe to
+      // individually per period - a room no longer "has motion" itself.
+      // Migrate a legacy room.motion with real triggers into its own
+      // definition once, then point this room's motion-mode devices at
+      // it below (fresh control entries and any already-migrated ones
+      // from before motion_sensor_id existed alike), so nothing changes
+      // behavior until edited via the new Motion sensors tab. Runs once
+      // per room - room.motion is deleted afterward.
+      let migratedDefinitionId = null;
+      if (room.motion && room.motion.enabled && (room.motion.triggers || []).length) {
+        const definition = {
+          id: uid(),
+          name: room.name,
+          triggers: room.motion.triggers,
           timeout_minutes: room.motion.timeout_minutes || 10,
-          triggers: [],
+          warn_enabled: !!room.motion.warn_enabled,
+          warn_minutes: room.motion.warn_minutes ?? 3,
+          warn_brightness: room.motion.warn_brightness ?? 25,
         };
+        cd.motion_sensors.push(definition);
+        migratedDefinitionId = definition.id;
       }
-      if (room.motion.warn_enabled === undefined) room.motion.warn_enabled = false;
-      if (room.motion.warn_minutes === undefined) room.motion.warn_minutes = 3;
-      if (room.motion.warn_brightness === undefined) room.motion.warn_brightness = 25;
+      delete room.motion;
+
       if (!room.custom_conditions) room.custom_conditions = [];
       const roomPeriods = this._roomPeriods(room);
       (room.devices || []).forEach((device) => {
@@ -2205,7 +2259,14 @@ class RoomFlowCard extends HTMLElement {
             let mode = "schedule";
             if (device.motion.enabled) mode = "motion";
             else if (!defaultEnabled) mode = "button";
-            device.control[p.id] = { mode, motion_on: true, motion_off: true };
+            device.control[p.id] = { mode, motion_sensor_id: null, motion_on: true, motion_off: true };
+          }
+          // Backfill motion_sensor_id for any "motion" mode entry that
+          // predates shared motion-sensor definitions - fresh (just
+          // created above) or already-migrated from an earlier session
+          // alike.
+          if (device.control[p.id].mode === "motion" && !device.control[p.id].motion_sensor_id && migratedDefinitionId) {
+            device.control[p.id].motion_sensor_id = migratedDefinitionId;
           }
         });
         device.behaviors = behaviors;
@@ -2241,7 +2302,7 @@ class RoomFlowCard extends HTMLElement {
         weekend: emptyVariant(base, true),
         away: emptyVariant(base, true),
       };
-      control[p.id] = { mode: "schedule", motion_on: true, motion_off: true };
+      control[p.id] = { mode: "schedule", motion_sensor_id: null, motion_on: true, motion_off: true };
     });
 
     const awayDefault = { enabled: false, state: "off" };
@@ -2321,35 +2382,59 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
-  _updateMotion(roomId, field, value) {
-    const room = this._config_data.rooms.find((r) => r.id === roomId);
-    if (!room) return;
-    room.motion[field] = value;
+  _findMotionSensor(definitionId) {
+    return (this._config_data.motion_sensors || []).find((m) => m.id === definitionId);
+  }
+
+  _addMotionSensorDefinition(name) {
+    this._config_data.motion_sensors.push({
+      id: uid(),
+      name: name || this._t("motion_sensor_name_placeholder"),
+      triggers: [],
+      timeout_minutes: 10,
+      warn_enabled: false,
+      warn_minutes: 3,
+      warn_brightness: 25,
+    });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removeMotionSensorDefinition(definitionId) {
+    this._config_data.motion_sensors = this._config_data.motion_sensors.filter((m) => m.id !== definitionId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  _updateMotion(definitionId, field, value) {
+    const definition = this._findMotionSensor(definitionId);
+    if (!definition) return;
+    definition[field] = value;
     this._scheduleSave();
   }
 
-  _addMotionTrigger(roomId, type) {
-    const room = this._config_data.rooms.find((r) => r.id === roomId);
-    if (!room) return;
+  _addMotionTrigger(definitionId, type) {
+    const definition = this._findMotionSensor(definitionId);
+    if (!definition) return;
     const trigger = { id: uid(), type: type, entity_id: "" };
     if (type === "threshold_above") trigger.threshold = 60;
-    room.motion.triggers.push(trigger);
+    definition.triggers.push(trigger);
     this._scheduleSave();
     this._render();
   }
 
-  _removeMotionTrigger(roomId, triggerId) {
-    const room = this._config_data.rooms.find((r) => r.id === roomId);
-    if (!room) return;
-    room.motion.triggers = room.motion.triggers.filter((t) => t.id !== triggerId);
+  _removeMotionTrigger(definitionId, triggerId) {
+    const definition = this._findMotionSensor(definitionId);
+    if (!definition) return;
+    definition.triggers = definition.triggers.filter((t) => t.id !== triggerId);
     this._scheduleSave();
     this._render();
   }
 
-  _updateMotionTrigger(roomId, triggerId, field, value) {
-    const room = this._config_data.rooms.find((r) => r.id === roomId);
-    if (!room) return;
-    const trigger = room.motion.triggers.find((t) => t.id === triggerId);
+  _updateMotionTrigger(definitionId, triggerId, field, value) {
+    const definition = this._findMotionSensor(definitionId);
+    if (!definition) return;
+    const trigger = definition.triggers.find((t) => t.id === triggerId);
     if (!trigger) return;
     trigger[field] = value;
     this._scheduleSave();
@@ -2785,15 +2870,28 @@ class RoomFlowCard extends HTMLElement {
 
     const removeTriggerBtn = e.target.closest("[data-remove-motion-trigger]");
     if (removeTriggerBtn) {
-      const [roomId, triggerId] = removeTriggerBtn.getAttribute("data-remove-motion-trigger").split("|");
-      this._removeMotionTrigger(roomId, triggerId);
+      const [definitionId, triggerId] = removeTriggerBtn.getAttribute("data-remove-motion-trigger").split("|");
+      this._removeMotionTrigger(definitionId, triggerId);
       return;
     }
 
     const addMotionBtn = e.target.closest("[data-add-motion-trigger]");
     if (addMotionBtn) {
-      const [roomId, type] = addMotionBtn.getAttribute("data-add-motion-trigger").split("|");
-      this._addMotionTrigger(roomId, type);
+      const [definitionId, type] = addMotionBtn.getAttribute("data-add-motion-trigger").split("|");
+      this._addMotionTrigger(definitionId, type);
+      return;
+    }
+
+    const removeMotionSensorBtn = e.target.closest("[data-remove-motion-sensor]");
+    if (removeMotionSensorBtn) {
+      this._removeMotionSensorDefinition(removeMotionSensorBtn.getAttribute("data-remove-motion-sensor"));
+      return;
+    }
+
+    if (e.target.closest("#add-motion-sensor-btn")) {
+      const nameInput = this.querySelector("#new-motion-sensor-name");
+      const name = nameInput ? nameInput.value.trim() : "";
+      this._addMotionSensorDefinition(name);
       return;
     }
 
@@ -3033,25 +3131,28 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
-    const motionEnabled = e.target.closest("[data-motion-enabled]");
-    if (motionEnabled) {
-      this._updateMotion(motionEnabled.getAttribute("data-motion-enabled"), "enabled", motionEnabled.checked);
-      this._render();
+    const motionSensorName = e.target.closest("[data-motion-sensor-name]");
+    if (motionSensorName) {
+      this._updateMotion(
+        motionSensorName.getAttribute("data-motion-sensor-name"),
+        "name",
+        motionSensorName.value.trim() || this._t("motion_sensor_name_placeholder")
+      );
       return;
     }
 
     const motionEntity = e.target.closest("[data-motion-trigger-entity]");
     if (motionEntity) {
-      const [roomId, triggerId] = motionEntity.getAttribute("data-motion-trigger-entity").split("|");
-      this._updateMotionTrigger(roomId, triggerId, "entity_id", motionEntity.value.trim());
+      const [definitionId, triggerId] = motionEntity.getAttribute("data-motion-trigger-entity").split("|");
+      this._updateMotionTrigger(definitionId, triggerId, "entity_id", motionEntity.value.trim());
       return;
     }
 
     const motionThreshold = e.target.closest("[data-motion-trigger-threshold]");
     if (motionThreshold) {
-      const [roomId, triggerId] = motionThreshold.getAttribute("data-motion-trigger-threshold").split("|");
+      const [definitionId, triggerId] = motionThreshold.getAttribute("data-motion-trigger-threshold").split("|");
       const val = parseFloat(motionThreshold.value);
-      this._updateMotionTrigger(roomId, triggerId, "threshold", isNaN(val) ? 0 : val);
+      this._updateMotionTrigger(definitionId, triggerId, "threshold", isNaN(val) ? 0 : val);
       return;
     }
 
@@ -3127,10 +3228,24 @@ class RoomFlowCard extends HTMLElement {
       const device = this._findDevice(roomId, entityId);
       if (device) {
         if (!device.control) device.control = {};
-        if (!device.control[period]) device.control[period] = { mode: "schedule", motion_on: true, motion_off: true };
+        if (!device.control[period]) {
+          device.control[period] = { mode: "schedule", motion_sensor_id: null, motion_on: true, motion_off: true };
+        }
         device.control[period].mode = controlMode.value;
         this._scheduleSave();
         this._render();
+      }
+      return;
+    }
+
+    const controlMotionSensor = e.target.closest("[data-control-motion-sensor]");
+    if (controlMotionSensor) {
+      const [deviceKey, period] = controlMotionSensor.getAttribute("data-control-motion-sensor").split("|");
+      const { roomId, entityId } = parseDeviceKey(deviceKey);
+      const device = this._findDevice(roomId, entityId);
+      if (device && device.control && device.control[period]) {
+        device.control[period].motion_sensor_id = controlMotionSensor.value || null;
+        this._scheduleSave();
       }
       return;
     }
@@ -3411,6 +3526,7 @@ class RoomFlowCard extends HTMLElement {
       this._activeRoomId !== "__add__" &&
       this._activeRoomId !== "__settings__" &&
       this._activeRoomId !== "__buttons__" &&
+      this._activeRoomId !== "__motion__" &&
       this._activeRoomId !== "__overview__" &&
       !rooms.some((r) => r.id === this._activeRoomId)
     ) {
@@ -3434,6 +3550,8 @@ class RoomFlowCard extends HTMLElement {
       contentHtml = this._renderSettingsForm();
     } else if (this._activeRoomId === "__buttons__") {
       contentHtml = this._renderButtonsTab();
+    } else if (this._activeRoomId === "__motion__") {
+      contentHtml = this._renderMotionSensorsTab();
     } else if (activeRoom) {
       contentHtml = this._renderRoom(activeRoom);
     } else {
@@ -3456,6 +3574,7 @@ class RoomFlowCard extends HTMLElement {
             ${roomTabsHtml}
             ${tabBtn("__add__", this._t("tab_add_room").replace(/^\+\s*/, ""), "mdi:plus")}
             ${tabBtn("__buttons__", this._t("tab_buttons"), "mdi:gesture-tap-button")}
+            ${tabBtn("__motion__", this._t("tab_motion_sensors"), "mdi:motion-sensor")}
             ${tabBtn("__settings__", this._t("tab_settings"), "mdi:cog-outline")}
           </div>
           <button id="apply-all-btn" class="rf-btn" style="margin:6px">${icon("mdi:play-outline")}${this._t("test_all")}</button>
@@ -3902,9 +4021,8 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
-  _renderMotionBox(room) {
-    const motion = room.motion || { enabled: false, timeout_minutes: 10, triggers: [] };
-    const triggers = motion.triggers || [];
+  _renderMotionSensorDefinition(definition) {
+    const triggers = definition.triggers || [];
 
     const triggerRows = triggers
       .map((t) => {
@@ -3913,57 +4031,76 @@ class RoomFlowCard extends HTMLElement {
           <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
             ${icon("mdi:gauge")}
             <span style="opacity:0.7;font-size:0.9em;width:120px">${this._t("motion_sensor_value_above")}</span>
-            <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
+            <input list="all-entities-list" data-motion-trigger-entity="${definition.id}|${t.id}"
               value="${t.entity_id || ""}" placeholder="sensor.humidity_..." style="width:180px" />
-            ${textField(`type="number" step="1" data-motion-trigger-threshold="${room.id}|${t.id}" value="${t.threshold ?? 60}" style="width:55px"`)}
-            <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${room.id}|${t.id}">${icon("mdi:close")}</button>
+            ${textField(`type="number" step="1" data-motion-trigger-threshold="${definition.id}|${t.id}" value="${t.threshold ?? 60}" style="width:55px"`)}
+            <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${definition.id}|${t.id}">${icon("mdi:close")}</button>
           </div>`;
         }
         return `
         <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
           ${icon("mdi:motion-sensor")}
           <span style="opacity:0.7;font-size:0.9em;width:120px">${this._t("motion_label")}</span>
-          <input list="all-entities-list" data-motion-trigger-entity="${room.id}|${t.id}"
+          <input list="all-entities-list" data-motion-trigger-entity="${definition.id}|${t.id}"
             value="${t.entity_id || ""}" placeholder="binary_sensor.motion_..." style="width:220px" />
-          <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${room.id}|${t.id}">${icon("mdi:close")}</button>
+          <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${definition.id}|${t.id}">${icon("mdi:close")}</button>
         </div>`;
       })
       .join("");
 
     return `
-      <div class="rf-card">
-        <label class="rf-card-title" style="cursor:pointer">
-          ${switchEl(`data-motion-enabled="${room.id}" ${motion.enabled ? "checked" : ""}`)}
-          ${icon("mdi:motion-sensor")} ${this._t("motion_active_label")}
-        </label>
-        <div style="margin-top:6px${motion.enabled ? "" : ";opacity:0.5;pointer-events:none"}">
+      <div class="rf-card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          ${textField(`data-motion-sensor-name="${definition.id}" value="${definition.name || ""}" placeholder="${this._t("motion_sensor_name_placeholder")}" style="font-weight:600;flex:1"`)}
+          <button class="rf-icon-btn rf-danger" data-remove-motion-sensor="${definition.id}">${icon("mdi:delete-outline")}</button>
+        </div>
+        <div style="margin-top:8px">
           <div class="rf-help" style="margin-top:0">
             ${this._t("motion_or_logic_help")}
           </div>
           ${triggerRows}
           <div style="margin-top:8px">
-            <button class="rf-btn rf-btn-flat" data-add-motion-trigger="${room.id}|motion">${icon("mdi:motion-sensor")}${this._t("add_motion_sensor")}</button>
-            <button class="rf-btn rf-btn-flat" data-add-motion-trigger="${room.id}|threshold_above">${icon("mdi:gauge")}${this._t("add_threshold")}</button>
+            <button class="rf-btn rf-btn-flat" data-add-motion-trigger="${definition.id}|motion">${icon("mdi:motion-sensor")}${this._t("add_motion_sensor")}</button>
+            <button class="rf-btn rf-btn-flat" data-add-motion-trigger="${definition.id}|threshold_above">${icon("mdi:gauge")}${this._t("add_threshold")}</button>
           </div>
           <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${icon("mdi:timer-off-outline")}
             ${this._t("turn_off_after")}
-            ${textField(`type="number" min="1" data-motion-timeout="${room.id}" value="${motion.timeout_minutes || 10}" style="width:55px"`)}
+            ${textField(`type="number" min="1" data-motion-timeout="${definition.id}" value="${definition.timeout_minutes || 10}" style="width:55px"`)}
             ${this._t("turn_off_after_suffix")}
           </div>
           <div style="margin-top:10px">
             <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
-              ${switchEl(`data-motion-warn-enabled="${room.id}" ${motion.warn_enabled ? "checked" : ""}`)}
+              ${switchEl(`data-motion-warn-enabled="${definition.id}" ${definition.warn_enabled ? "checked" : ""}`)}
               ${icon("mdi:brightness-4")} ${this._t("dim_warning_label")}
             </label>
-            <div style="margin-top:4px${motion.warn_enabled ? "" : ";opacity:0.5;pointer-events:none"}">
-              ${this._t("dim_to")} ${textField(`type="number" min="1" max="255" data-motion-warn-brightness="${room.id}" value="${motion.warn_brightness ?? 25}" style="width:55px"`)} ${this._t("brightness_for")}
-              ${textField(`type="number" min="1" data-motion-warn-minutes="${room.id}" value="${motion.warn_minutes ?? 3}" style="width:55px"`)} ${this._t("minutes_before_off")}
+            <div style="margin-top:4px${definition.warn_enabled ? "" : ";opacity:0.5;pointer-events:none"}">
+              ${this._t("dim_to")} ${textField(`type="number" min="1" max="255" data-motion-warn-brightness="${definition.id}" value="${definition.warn_brightness ?? 25}" style="width:55px"`)} ${this._t("brightness_for")}
+              ${textField(`type="number" min="1" data-motion-warn-minutes="${definition.id}" value="${definition.warn_minutes ?? 3}" style="width:55px"`)} ${this._t("minutes_before_off")}
             </div>
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  _renderMotionSensorsTab() {
+    const definitions = this._config_data.motion_sensors || [];
+    const definitionsHtml = definitions.map((d) => this._renderMotionSensorDefinition(d)).join("");
+
+    return `
+      <div>
+        <div class="rf-section-title">${icon("mdi:motion-sensor")}${this._t("tab_motion_sensors")}</div>
         <div class="rf-help">
-          ${this._t("motion_footer_help")}
+          ${this._t("motion_sensors_help")}
+        </div>
+        <div style="margin-top:12px">${definitionsHtml}</div>
+        <div class="rf-card">
+          <div class="rf-card-title">${icon("mdi:plus-circle-outline")}${this._t("add_motion_sensor_header")}</div>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <input id="new-motion-sensor-name" placeholder="${this._t("motion_sensor_name_placeholder")}" style="width:220px" />
+            <button id="add-motion-sensor-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
+          </div>
         </div>
       </div>
     `;
@@ -4044,7 +4181,6 @@ class RoomFlowCard extends HTMLElement {
             <button class="rf-btn rf-btn-danger" data-remove-room="${room.id}">${icon("mdi:delete-outline")}${this._t("remove_room")}</button>
           </div>
         </div>
-        ${this._renderMotionBox(room)}
         ${this._renderCustomConditionsBox(room)}
         ${this._renderRoomPeriodTabs(room)}
         <div>${devicesHtml}</div>
@@ -4111,13 +4247,15 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
-  _renderControlMode(deviceKey, device, period, room) {
+  _renderControlMode(deviceKey, device, period) {
     const control = (device.control && device.control[period]) || {
       mode: "schedule",
+      motion_sensor_id: null,
       motion_on: true,
       motion_off: true,
     };
-    const motionAvailable = !!(room.motion && room.motion.enabled);
+    const motionSensors = this._config_data.motion_sensors || [];
+    const motionAvailable = motionSensors.length > 0;
     const fieldPrefix = `${deviceKey}|${period}`;
     const groupName = `rf-control-mode|${fieldPrefix}`;
 
@@ -4133,9 +4271,20 @@ class RoomFlowCard extends HTMLElement {
     let motionSubHtml = "";
     if (control.mode === "motion") {
       const deviceMotion = device.motion || { enabled: false, off_delay_minutes: null };
+      const selectedDefinition = motionSensors.find((m) => m.id === control.motion_sensor_id);
+      const definitionOptions = motionSensors
+        .map((m) => `<option value="${m.id}" ${m.id === control.motion_sensor_id ? "selected" : ""}>${m.name}</option>`)
+        .join("");
       motionSubHtml = `
         <div style="margin-top:6px;margin-left:24px;font-size:0.9em">
-          <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+          <div>
+            <span style="opacity:0.7">${this._t("motion_sensor_which_label")}</span>
+            <select data-control-motion-sensor="${fieldPrefix}">
+              <option value="">${this._t("choose_motion_sensor_option")}</option>
+              ${definitionOptions}
+            </select>
+          </div>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:6px">
             ${switchEl(`data-control-motion-on="${fieldPrefix}" ${control.motion_on !== false ? "checked" : ""}`)}
             ${this._t("motion_turns_on")}
           </label>
@@ -4145,7 +4294,7 @@ class RoomFlowCard extends HTMLElement {
           </label>
           <div style="margin-top:4px">
             ${this._t("device_off_after")}
-            ${textField(`type="number" min="1" placeholder="${room.motion.timeout_minutes || 10}" value="${
+            ${textField(`type="number" min="1" placeholder="${(selectedDefinition && selectedDefinition.timeout_minutes) || 10}" value="${
                 deviceMotion.off_delay_minutes !== null && deviceMotion.off_delay_minutes !== undefined
                   ? deviceMotion.off_delay_minutes
                   : ""
@@ -4164,6 +4313,7 @@ class RoomFlowCard extends HTMLElement {
           ${motionAvailable ? modeOption("motion", "mdi:motion-sensor", this._t("control_mode_motion")) : ""}
           ${modeOption("button", "mdi:gesture-tap-button", this._t("control_mode_button"))}
         </div>
+        ${!motionAvailable ? `<div class="rf-help" style="margin-top:4px">${this._t("no_motion_sensors_hint")}</div>` : ""}
         ${motionSubHtml}
       </div>
     `;
@@ -4234,7 +4384,7 @@ class RoomFlowCard extends HTMLElement {
         )
         .join("");
 
-      let controlsHtml = this._renderControlMode(deviceKey, device, activePeriod, room);
+      let controlsHtml = this._renderControlMode(deviceKey, device, activePeriod);
       controlsHtml += this._renderVariantControls(
         deviceKey, device, activePeriod, "default", this._t("variant_default"), false
       );

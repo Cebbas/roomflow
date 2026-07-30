@@ -122,26 +122,29 @@ def _pick_behavior(
 def _control_mode(device: dict, period: str) -> dict:
     """Per-period control mode for a device: which mechanism is allowed to
     act on it this period - "schedule" (ambient time/day-type/home-state
-    ticks), "motion" (only the room's motion trigger, optionally split
-    into separate on/off reactions via motion_on/motion_off), or "button"
-    (left alone by both; only touched by an explicit bound button/Test-now/
-    force_period call). Falls back to inferring from the pre-control-mode
-    fields (device-wide motion.enabled, per-period behaviors.default.
-    enabled) for configs the card hasn't resaved with an explicit
-    "control" block yet."""
+    ticks), "motion" (only the motion-sensor definition referenced by
+    motion_sensor_id, optionally split into separate on/off reactions via
+    motion_on/motion_off), or "button" (left alone by both; only touched
+    by an explicit bound button/Test-now/force_period call). Falls back to
+    inferring from the pre-control-mode fields (device-wide motion.enabled,
+    per-period behaviors.default.enabled) for configs the card hasn't
+    resaved with an explicit "control" block yet - such configs have no
+    definition to reference, so motion_sensor_id is None until the device
+    is re-pointed at one in the card."""
     control = (device.get("control") or {}).get(period)
     if control:
         return {
             "mode": control.get("mode", "schedule"),
+            "motion_sensor_id": control.get("motion_sensor_id"),
             "motion_on": control.get("motion_on", True),
             "motion_off": control.get("motion_off", True),
         }
     if device.get("motion", {}).get("enabled"):
-        return {"mode": "motion", "motion_on": True, "motion_off": True}
+        return {"mode": "motion", "motion_sensor_id": None, "motion_on": True, "motion_off": True}
     default_cfg = _normalize_behaviors(device.get("behaviors", {}).get(period)).get("default")
     if default_cfg and default_cfg.get("enabled", True) is False:
-        return {"mode": "button", "motion_on": True, "motion_off": True}
-    return {"mode": "schedule", "motion_on": True, "motion_off": True}
+        return {"mode": "button", "motion_sensor_id": None, "motion_on": True, "motion_off": True}
+    return {"mode": "schedule", "motion_sensor_id": None, "motion_on": True, "motion_off": True}
 
 
 def _behavior_signature(behavior: dict) -> tuple:
@@ -852,28 +855,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return value > threshold
         return False
 
-    def _is_room_active(room: dict) -> bool:
-        triggers = room.get("motion", {}).get("triggers", [])
+    def _is_definition_active(definition: dict) -> bool:
+        triggers = definition.get("triggers", [])
         return any(_is_trigger_active(t) for t in triggers)
 
-    def _motion_on_devices(room: dict, period: str) -> list:
-        """Devices to turn on when this room's motion becomes active this
-        period - control mode "motion" with motion_on enabled."""
+    def _motion_on_devices(room: dict, period: str, definition_id: str) -> list:
+        """Devices to turn on when the given motion-sensor definition
+        becomes active this period - control mode "motion", subscribed to
+        this specific definition, with motion_on enabled."""
         result = []
         for device in room.get("devices", []):
             control = _control_mode(device, period)
-            if control["mode"] == "motion" and control["motion_on"]:
+            if (
+                control["mode"] == "motion"
+                and control["motion_sensor_id"] == definition_id
+                and control["motion_on"]
+            ):
                 result.append(device)
         return result
 
-    def _motion_off_devices(room: dict, period: str) -> list:
-        """Devices to schedule off when this room's motion becomes
-        inactive this period - control mode "motion" with motion_off
-        enabled."""
+    def _motion_off_devices(room: dict, period: str, definition_id: str) -> list:
+        """Devices to schedule off when the given motion-sensor definition
+        becomes inactive this period - control mode "motion", subscribed
+        to this specific definition, with motion_off enabled."""
         result = []
         for device in room.get("devices", []):
             control = _control_mode(device, period)
-            if control["mode"] == "motion" and control["motion_off"]:
+            if control["mode"] != "motion" or control["motion_sensor_id"] != definition_id:
+                continue
+            if control["motion_off"]:
                 result.append(device)
         return result
 
@@ -964,39 +974,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cancel = async_call_later(hass, off_delay * 60, _after_off_delay)
         hass.data[DOMAIN]["motion_off_timers"][key] = cancel
 
-    async def _handle_motion_change(room_id: str, event: Event) -> None:
-        room = _get_room(room_id)
-        if not room:
-            return
-        motion_cfg = room.get("motion", {})
-        if not motion_cfg.get("enabled"):
+    async def _handle_motion_change(definition_id: str, event: Event) -> None:
+        cfg = hass.data[DOMAIN]["config"]
+        definition = next(
+            (m for m in cfg.get("motion_sensors", []) if m.get("id") == definition_id), None
+        )
+        if not definition:
             return
 
-        new_active = _is_room_active(room)
-        previous_active = hass.data[DOMAIN]["motion_active_state"].get(room_id, False)
+        new_active = _is_definition_active(definition)
+        previous_active = hass.data[DOMAIN]["motion_active_state"].get(definition_id, False)
         if new_active == previous_active:
             return
-        hass.data[DOMAIN]["motion_active_state"][room_id] = new_active
+        hass.data[DOMAIN]["motion_active_state"][definition_id] = new_active
 
-        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
-        period = _get_period(schedule_id)
-        if period is None:
-            return
+        # A definition can be subscribed to by devices scattered across
+        # several rooms (that's the point - a shared, reusable trigger set)
+        # so every room needs checking, not just one.
+        for room in cfg.get("rooms", []):
+            schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+            period = _get_period(schedule_id)
+            if period is None:
+                continue
 
-        if new_active:
-            for device in _motion_on_devices(room, period):
-                key = _motion_key(room_id, device["entity_id"])
-                # A fresh motion cycle always releases any manual-mode lock
-                # from a prior button press, per RoomFlow's design.
-                hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
-                _cancel_motion_timer(key)
-                await _apply_motion_device_on(room, device)
-        else:
-            for device in _motion_off_devices(room, period):
-                key = _motion_key(room_id, device["entity_id"])
-                if hass.data[DOMAIN]["motion_manual_override"].get(key):
-                    continue
-                _schedule_motion_off(room_id, device, motion_cfg)
+            if new_active:
+                for device in _motion_on_devices(room, period, definition_id):
+                    key = _motion_key(room["id"], device["entity_id"])
+                    # A fresh motion cycle always releases any manual-mode
+                    # lock from a prior button press, per RoomFlow's design.
+                    hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
+                    _cancel_motion_timer(key)
+                    await _apply_motion_device_on(room, device)
+            else:
+                for device in _motion_off_devices(room, period, definition_id):
+                    key = _motion_key(room["id"], device["entity_id"])
+                    if hass.data[DOMAIN]["motion_manual_override"].get(key):
+                        continue
+                    _schedule_motion_off(room["id"], device, definition)
 
     def _setup_motion_listeners() -> None:
         for unsub in hass.data[DOMAIN].get("motion_unsubs", []):
@@ -1008,26 +1022,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["motion_manual_override"] = {}
 
         unsubs = []
-        rooms = hass.data[DOMAIN]["config"].get("rooms", [])
-        for room in rooms:
-            motion_cfg = room.get("motion", {})
-            if not motion_cfg.get("enabled"):
-                continue
-            triggers = motion_cfg.get("triggers", [])
+        definitions = hass.data[DOMAIN]["config"].get("motion_sensors", [])
+        for definition in definitions:
+            triggers = definition.get("triggers", [])
             entity_ids = [t.get("entity_id") for t in triggers if t.get("entity_id")]
             if not entity_ids:
                 continue
 
-            hass.data[DOMAIN]["motion_active_state"][room["id"]] = _is_room_active(room)
+            hass.data[DOMAIN]["motion_active_state"][definition["id"]] = _is_definition_active(definition)
 
-            def _make_handler(room_id):
+            def _make_handler(definition_id):
                 async def _handler(event: Event) -> None:
-                    await _handle_motion_change(room_id, event)
+                    await _handle_motion_change(definition_id, event)
 
                 return _handler
 
             unsubs.append(
-                async_track_state_change_event(hass, entity_ids, _make_handler(room["id"]))
+                async_track_state_change_event(hass, entity_ids, _make_handler(definition["id"]))
             )
         hass.data[DOMAIN]["motion_unsubs"] = unsubs
 

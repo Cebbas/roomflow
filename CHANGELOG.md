@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Motion sensors are now a shared, named library instead of a
+  per-room setting.** A new "Motion sensors" tab lets you build named,
+  reusable motion-sensor definitions (sensors, timeout, dim-warning)
+  once. Each device's control mode now picks *which* definition it
+  subscribes to, per period - not a room-wide switch, so two devices in
+  the same room can react to two different sensors, and two rooms can
+  share one. Existing per-room motion setups migrate automatically into
+  their own definition with no behavior change.
 - **Button bindings can target one specific device, not just the whole
   room.** `toggle`/`off` button actions used to always act on every
   device in the room together (`toggle` even picked on-vs-off by majority

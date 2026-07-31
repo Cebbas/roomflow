@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "RoomFlow",
-        "description": "Siinä kaikki - täällä ei ole mitään määritettävää. Vuorokaudenajan lähteet, arki/viikonloppu, koti/poissa, huoneet, laitteet, painikkeet ja liike määritetään kaikki jälkeenpäin RoomFlow-kortista (sivupaneeli) → Asetukset-välilehdeltä, ja ne tulevat voimaan heti."
+        "description": "Siinä kaikki - täällä ei ole mitään määritettävää. Vuorokaudenajan lähteet, arki/viikonloppu, koti/poissa, huoneet, laitteet, painikkeet ja liike määritetään kaikki jälkeenpäin RoomFlow-kortista (sivupaneeli) → Asetukset-välilehdeltä, ja ne tulevat voimaan heti.\n\n⚠️ Varhainen vaihe: RoomFlow on aktiivisen kehityksen alla, odota joitakin kulmikkuuksia ja satunnaisia rikkovia muutoksia versioiden välillä."
       }
     },
     "abort": {

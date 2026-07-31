@@ -10,6 +10,10 @@
 
 # RoomFlow
 
+> ⚠️ **Frühes Stadium:** diese Integration befindet sich in aktiver
+> Entwicklung — erwarte einige raue Kanten und gelegentliche Breaking
+> Changes zwischen Releases.
+
 Steuert Lampen und Steckdosen raumweise basierend auf der Tageszeit — mit
 optionalen Wochenend-/Abwesenheits-Ausnahmen, Übergangszeiten, physischen
 Tastenbindungen und bewegungs-/schwellenwertbasierter Automatisierung. Für

@@ -23,6 +23,7 @@ async def async_load_logs(hass: HomeAssistant) -> None:
     hass.data[DOMAIN]["log_store"] = store
     hass.data[DOMAIN]["device_log"] = data.get("device_log", [])
     hass.data[DOMAIN]["period_log"] = data.get("period_log", [])
+    hass.data[DOMAIN]["button_log"] = data.get("button_log", [])
 
 
 def _persist(hass: HomeAssistant) -> None:
@@ -31,6 +32,7 @@ def _persist(hass: HomeAssistant) -> None:
         lambda: {
             "device_log": hass.data[DOMAIN]["device_log"],
             "period_log": hass.data[DOMAIN]["period_log"],
+            "button_log": hass.data[DOMAIN]["button_log"],
         },
         5,
     )
@@ -86,6 +88,35 @@ def log_period_change(
             "period_id": period_id,
             "period_name": period_name,
             "source": source,
+        }
+    )
+    del entries[: max(0, len(entries) - MAX_LOG_ENTRIES)]
+    _persist(hass)
+
+
+def log_button_press(
+    hass: HomeAssistant,
+    *,
+    trigger_name: str,
+    entity_id: str | None,
+    state_label: str,
+    outcome: str,
+    detail: str | None = None,
+) -> None:
+    """Record a button trigger's entity changing state, whether or not it
+    ended up running anything - "did Home Assistant even see this press"
+    is exactly what's hard to tell from outside, so every recognized state
+    change is logged here regardless of outcome (`outcome`: "ran" /
+    "no_attachments" / "click_type_mismatch"), not just successful ones."""
+    entries = hass.data[DOMAIN]["button_log"]
+    entries.append(
+        {
+            "time": dt_util.now().isoformat(),
+            "trigger_name": trigger_name,
+            "entity_id": entity_id,
+            "state_label": state_label,
+            "outcome": outcome,
+            "detail": detail,
         }
     )
     del entries[: max(0, len(entries) - MAX_LOG_ENTRIES)]

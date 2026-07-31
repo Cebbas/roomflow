@@ -10,6 +10,10 @@
 
 # RoomFlow
 
+> ⚠️ **Premiers pas :** cette intégration est en développement actif —
+> attendez-vous à quelques aspérités et à d'occasionnels changements non
+> rétrocompatibles entre les versions.
+
 Contrôlez les lumières et prises par pièce en fonction de l'heure de la
 journée — avec des dérogations week-end/absence optionnelles, des temps de
 transition, des liaisons de boutons physiques et une automatisation basée

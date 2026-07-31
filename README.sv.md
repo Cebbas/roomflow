@@ -10,6 +10,10 @@
 
 # RoomFlow
 
+> ⚠️ **Tidigt skede:** den här integrationen är under aktiv utveckling —
+> förvänta dig en del skavanker och enstaka brytande ändringar mellan
+> releaser.
+
 Styr lampor och uttag per rum baserat på tid på dygnet — med valfria
 helg-/borta-undantag, transitionstider, fysiska knappbindningar och
 rörelse-/tröskelvärdesbaserad automation. Byggd för Home Assistant som en

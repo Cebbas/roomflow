@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "RoomFlow",
-        "description": "Dat is alles - hier hoeft niets geconfigureerd te worden. Tijdstip-van-de-dag-bronnen, doordeweeks/weekend, thuis/afwezig, kamers, apparaten, knoppen en beweging worden allemaal achteraf geconfigureerd vanuit de RoomFlow-kaart (zijpaneel) → tabblad Instellingen, en gelden onmiddellijk."
+        "description": "Dat is alles - hier hoeft niets geconfigureerd te worden. Tijdstip-van-de-dag-bronnen, doordeweeks/weekend, thuis/afwezig, kamers, apparaten, knoppen en beweging worden allemaal achteraf geconfigureerd vanuit de RoomFlow-kaart (zijpaneel) → tabblad Instellingen, en gelden onmiddellijk.\n\n⚠️ Vroege fase: RoomFlow is in actieve ontwikkeling, verwacht wat ruwe randjes en af en toe breaking changes tussen releases."
       }
     },
     "abort": {

@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+- **Physical buttons can now bind directly to a raw device event, not
+  just an entity - Shelly (gen1) built in.** Some button hardware (e.g.
+  Shelly gen1 relays/inputs) fires a raw Home Assistant event
+  (`shelly.click`) with no backing entity at all, so it previously
+  couldn't be bound without hand-writing an external template-sensor
+  package to bridge it into something RoomFlow could see. The Buttons
+  tab's "Add button trigger" form now offers a "Device event" option
+  alongside "Entity": pick a built-in device profile (Shelly gen1 to
+  start), enter its device ID/channel (found via Developer Tools →
+  Events), and RoomFlow listens for and matches the raw event itself -
+  same click-type (single/double/long) support as an entity-based
+  trigger. Every button trigger can also be copied (as a small JSON
+  snippet) and pasted into another RoomFlow install, so a working
+  Shelly/Zigbee button setup can be shared with someone who has the same
+  hardware. See `BUTTON_PROFILES.md` for the Shelly gen1 profile details
+  and a community "tested against" hardware list, and for how to add a
+  new device profile.
+- **Button presses are now logged.** The Buttons tab has a new "Button
+  activity" log showing every recognized press of a bound button,
+  whether or not it ended up attached to anything - so a press that
+  doesn't do what's expected is answerable from the card itself ("is
+  Home Assistant even seeing this?") instead of only from server logs.
+- **Fixed: the card could keep running a stale cached copy of itself
+  after an update.** The card's JS module URL now includes a
+  `?v=<version>` query string that changes on every release, so the
+  browser's own module cache can't silently keep serving an old version
+  against a newer backend until a hard refresh.
+- **Fixed: a failed config save could fail silently.** If the
+  `roomflow/save_config` websocket call was rejected (backend exception,
+  connection dropped mid-request), the change stayed only in the card's
+  in-memory state with no indication anything went wrong until the next
+  reload quietly dropped it - now logged to the browser console.
+- **Button-driven "on" now applies the device's real per-period
+  brightness/color, and devices can be bound to dim up/down.** Pressing a
+  toggle/on button used to call a bare `light.turn_on`/`switch.turn_on`
+  with no brightness or color - the light just came back at whatever it
+  last had, ignoring RoomFlow's configured Default/Weekend/Away/condition
+  value for the current period, even though motion-driven "on" already
+  resolved this correctly. Fixed by resolving the same behavior a manual
+  press should apply (still working for "button" control-mode devices,
+  which schedule/motion ticks deliberately leave alone - a manual press
+  is the only trigger those ever get). "Off" is unchanged - a bare
+  turn off. Also new: a device's Buttons section can bind a trigger to
+  "Dim up"/"Dim down" (light devices only), stepping brightness by 10% per
+  press.
 - **Fixed: adding a button trigger did nothing.** The new shared
   `button_triggers` catalog was never initialized to an empty list for
   existing configs (unlike `motion_sensors`/`rooms`/`buttons`), so both

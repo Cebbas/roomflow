@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "RoomFlow",
-        "description": "That's it - nothing to configure here. Time-of-day sources, weekday/weekend, home/away, rooms, devices, buttons and motion are all configured afterward from the RoomFlow card (sidebar) → Settings tab, and apply instantly."
+        "description": "That's it - nothing to configure here. Time-of-day sources, weekday/weekend, home/away, rooms, devices, buttons and motion are all configured afterward from the RoomFlow card (sidebar) → Settings tab, and apply instantly.\n\n⚠️ Early days: RoomFlow is under active development, expect rough edges and occasional breaking changes between releases."
       }
     },
     "abort": {

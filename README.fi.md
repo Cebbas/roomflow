@@ -10,6 +10,10 @@
 
 # RoomFlow
 
+> ⚠️ **Varhainen vaihe:** tämä integraatio on aktiivisen kehityksen alla —
+> odota joitakin kulmikkuuksia ja satunnaisia rikkovia muutoksia versioiden
+> välillä.
+
 Ohjaa valoja ja pistorasioita huoneittain vuorokaudenajan perusteella —
 valinnaisilla viikonloppu-/poissa-poikkeuksilla, siirtymäajoilla, fyysisillä
 painikesidonnoilla ja liike-/kynnysarvopohjaisella automaatiolla. Rakennettu

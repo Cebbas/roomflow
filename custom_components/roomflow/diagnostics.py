@@ -81,7 +81,12 @@ async def async_get_config_entry_diagnostics(
             for m in config.get("motion_sensors", [])
         ],
         "button_triggers": [
-            {"name": t.get("name"), "click_type": t.get("click_type", "any")}
+            {
+                "name": t.get("name"),
+                "click_type": t.get("click_type", "any"),
+                "source": t.get("source", "entity"),
+                "profile": t.get("profile"),
+            }
             for t in config.get("button_triggers", [])
         ],
         "rooms": [

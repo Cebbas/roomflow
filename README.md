@@ -10,6 +10,9 @@
 
 # RoomFlow
 
+> ⚠️ **Early days:** this integration is under active development — expect
+> some rough edges and occasional breaking changes between releases.
+
 Control lights and outlets per room based on time of day — with optional
 weekend/away overrides, transition times, physical button bindings, and
 motion/threshold-based automation. Built for Home Assistant as a custom
@@ -177,7 +180,10 @@ you've configured.
 Issues and pull requests are welcome. This is a relatively young project —
 expect some rough edges, especially around more advanced condition
 combinations and additional device types (climate, media_player, etc. are
-natural next steps).
+natural next steps). If you've confirmed a raw-event button profile (e.g.
+Shelly gen1) against your own hardware, see
+[BUTTON_PROFILES.md](BUTTON_PROFILES.md) for how to add it to the tested-
+hardware list.
 
 ## Supported languages
 

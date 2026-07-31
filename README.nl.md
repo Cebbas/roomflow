@@ -10,6 +10,9 @@
 
 # RoomFlow
 
+> ⚠️ **Vroege fase:** deze integratie is in actieve ontwikkeling — verwacht
+> wat ruwe randjes en af en toe breaking changes tussen releases.
+
 Bedien verlichting en stopcontacten per kamer op basis van het tijdstip van
 de dag — met optionele weekend-/afwezigheidsoverrides, overgangstijden,
 fysieke knopkoppelingen en beweging-/drempelwaardegebaseerde automatisering.

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "RoomFlow",
-        "description": "Das war's - hier gibt es nichts zu konfigurieren. Tageszeit-Quellen, Werktag/Wochenende, Zuhause/Abwesend, Räume, Geräte, Tasten und Bewegung werden alle anschließend über die RoomFlow-Karte (Seitenleiste) → Einstellungen-Tab konfiguriert und gelten sofort."
+        "description": "Das war's - hier gibt es nichts zu konfigurieren. Tageszeit-Quellen, Werktag/Wochenende, Zuhause/Abwesend, Räume, Geräte, Tasten und Bewegung werden alle anschließend über die RoomFlow-Karte (Seitenleiste) → Einstellungen-Tab konfiguriert und gelten sofort.\n\n⚠️ Frühes Stadium: RoomFlow befindet sich in aktiver Entwicklung, erwarte einige raue Kanten und gelegentliche Breaking Changes zwischen Releases."
       }
     },
     "abort": {

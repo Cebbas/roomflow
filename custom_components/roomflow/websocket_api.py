@@ -130,7 +130,7 @@ async def ws_list_entities(hass: HomeAssistant, connection, msg):
 async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
     """Overview tab data: each schedule's currently resolved period (forced
     override wins if one is active, same precedence the sensors use - see
-    sensor.py/binary_sensor.py), plus the two persisted logs, newest first."""
+    sensor.py/binary_sensor.py), plus the persisted logs, newest first."""
     domain_data = hass.data[DOMAIN]
     cfg = domain_data["config"]
     get_period_fn = domain_data.get("get_period_fn")
@@ -156,6 +156,7 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
             "schedules": schedules,
             "device_log": list(reversed(domain_data.get("device_log", []))),
             "period_log": list(reversed(domain_data.get("period_log", []))),
+            "button_log": list(reversed(domain_data.get("button_log", []))),
         },
     )
 

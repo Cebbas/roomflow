@@ -25,6 +25,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
+    VERSION,
     STORAGE_KEY,
     STORAGE_VERSION,
     CONF_TIME_SENSOR,
@@ -61,6 +62,7 @@ from .const import (
     LEGACY_PERIOD_KEY_MAP,
     DEVICE_TYPE_LIGHT,
     DEVICE_TYPE_OUTLET,
+    EVENT_DEVICE_PROFILES,
     WEEKEND_STATES,
     HOME_STATES,
     DEFAULT_TRANSITIONS,
@@ -72,7 +74,7 @@ from .const import (
     infer_day_type_mode,
     infer_home_mode,
 )
-from .logs import async_load_logs, log_device_change, log_period_change
+from .logs import async_load_logs, log_button_press, log_device_change, log_period_change
 from .websocket_api import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,7 +85,13 @@ PLATFORMS: list[str] = ["sensor", "binary_sensor"]
 # copying just this one folder is enough - no separate copy into config/www
 # and no manual Lovelace resource registration.
 _CARD_URL_PATH = "/roomflow_static"
-_CARD_JS_URL = f"{_CARD_URL_PATH}/roomflow-card.js"
+# ?v=<version> busts the browser's own cache of the module on every release -
+# StaticPathConfig's cache_headers=False below only controls what the HA
+# server sends, it doesn't stop a browser (or its ES-module cache) from
+# reusing a previously-fetched copy of this exact URL for the rest of the
+# tab's session, which otherwise silently runs stale card JS against a
+# newer backend until the user manually hard-refreshes.
+_CARD_JS_URL = f"{_CARD_URL_PATH}/roomflow-card.js?v={VERSION}"
 
 
 def _pick_behavior(
@@ -160,25 +168,50 @@ def _behavior_signature(behavior: dict) -> tuple:
     return ("on", behavior.get("brightness"), behavior.get("color_temp_kelvin"))
 
 
-def _click_type_matches(trigger: dict, event: Event) -> bool:
-    """True if a button-trigger definition's click_type matches what this
-    state-change event reports. "any" (or unset) always matches - today's
-    behavior, right for a simple binary/toggle-style button entity. For a
-    specific click_type ("single"/"double"/"long"), checked as a
-    case-insensitive substring against either the new state's plain state
-    string (covers e.g. a derived "single_press" sensor) or its event_type
-    attribute (covers native event.* entities, e.g. Zigbee2MQTT/ZHA
-    reporting "single_push"/"1_single") - integrations don't agree on
-    exact vocabulary, so a substring match covers more real-world button
-    hardware than an exact-value comparison would."""
-    click_type = trigger.get("click_type") or "any"
+def _click_type_value_matches(click_type: str | None, *candidates: str | None) -> bool:
+    """True if a button-trigger's click_type ("single"/"double"/"long", or
+    "any"/unset to always match) is a case-insensitive substring of any of
+    the given candidate strings. Shared by both button-trigger mechanisms
+    (entity state-change and raw HA bus event) so "single" matching a
+    derived "single_press" value means the same thing either way -
+    integrations/devices don't agree on exact vocabulary, so a substring
+    match covers more real-world button hardware than an exact comparison
+    would."""
+    click_type = click_type or "any"
     if click_type == "any":
         return True
+    return any(click_type.lower() in (candidate or "").lower() for candidate in candidates)
+
+
+def _click_type_matches(trigger: dict, event: Event) -> bool:
+    """True if a button-trigger definition's click_type matches what this
+    entity state-change event reports - checked against either the new
+    state's plain state string (covers e.g. a derived "single_press"
+    sensor) or its event_type attribute (covers native event.* entities,
+    e.g. Zigbee2MQTT/ZHA reporting "single_push"/"1_single")."""
     new_state = event.data.get("new_state")
     if new_state is None:
         return False
-    candidates = [new_state.state or "", (new_state.attributes or {}).get("event_type") or ""]
-    return any(click_type.lower() in candidate.lower() for candidate in candidates)
+    return _click_type_value_matches(
+        trigger.get("click_type"), new_state.state, (new_state.attributes or {}).get("event_type")
+    )
+
+
+def _event_match_ok(trigger: dict, profile: dict, event: Event) -> bool:
+    """True if a raw-bus-event trigger's event_match filters (e.g. a
+    specific Shelly device_id/channel) all agree with what this event
+    reports - a blank/unset field in event_match means "don't filter on
+    this one". Compared as trimmed strings since the frontend may store
+    some fields (e.g. channel) as numbers while the event itself may report
+    them as int or str depending on the integration that fired it."""
+    match = trigger.get("event_match") or {}
+    for key in profile["match_fields"]:
+        expected = match.get(key)
+        if expected in (None, ""):
+            continue
+        if str(event.data.get(key)).strip() != str(expected).strip():
+            return False
+    return True
 
 
 def _button_attachments_for_trigger(cfg: dict, trigger_id: str) -> list[tuple[dict, dict | None, dict]]:
@@ -734,6 +767,67 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if cancel:
             cancel()
 
+    def _resolve_manual_on_behavior(
+        room: dict, device: dict
+    ) -> tuple[dict | None, str, str | None, float | None]:
+        """What a manual "on" (button toggle) should apply to this device
+        right now - the same Default/Weekend/Away/condition precedence
+        _apply_single_device uses, except always with default_enabled=True.
+        Ambient/motion ticks deliberately skip a "button" control-mode
+        device's Default variant (see _control_mode), but a manual button
+        press is the *only* trigger such a device ever gets - if this also
+        gated on control mode, a button-controlled light's configured
+        brightness/color would never actually be reachable, only a bare
+        on/off."""
+        cfg = hass.data[DOMAIN]["config"]
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        period = _get_period(schedule_id)
+        if period is None:
+            return None, schedule_id, None, None
+        raw_behaviors = device.get("behaviors", {}).get(period)
+        if not raw_behaviors:
+            return None, schedule_id, period, None
+        behaviors = _normalize_behaviors(raw_behaviors)
+        behavior = _pick_behavior(
+            behaviors,
+            _active_room_conditions(hass, room),
+            _get_day_type(),
+            _get_home_state(),
+            default_enabled=True,
+            away_default=device.get("away_default"),
+        )
+        if not behavior:
+            return None, schedule_id, period, None
+        device_transitions = device.get("transitions", {}) or {}
+        transition = device_transitions.get(period)
+        if transition is None:
+            transition = transitions_for_schedule(cfg, schedule_id).get(period)
+        return behavior, schedule_id, period, transition
+
+    _DIM_STEP_PERCENT = 10
+
+    async def _dim_device(room: dict, device: dict, direction: str, source: str) -> None:
+        if _device_domain(device) != "light":
+            return
+        key = _motion_key(room["id"], device["entity_id"])
+        hass.data[DOMAIN]["motion_manual_override"][key] = True
+        _cancel_motion_timer(key)
+        state = hass.states.get(device["entity_id"])
+        current = (state.attributes.get("brightness") if state and state.state == "on" else 0) or 0
+        step = round(255 * _DIM_STEP_PERCENT / 100)
+        delta = step if direction == "up" else -step
+        new_brightness = max(1, min(255, current + delta))
+        try:
+            await hass.services.async_call(
+                "light", "turn_on", {"entity_id": device["entity_id"], "brightness": new_brightness}
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("RoomFlow: could not dim %s: %s", device.get("entity_id"), err)
+            return
+        schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        pct = round(new_brightness / 255 * 100)
+        _log_device_action(room, device, f"on {pct}%", schedule_id, _get_period(schedule_id), source)
+
     async def _turn_off_room(room: dict) -> None:
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         for device in room.get("devices", []):
@@ -762,34 +856,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if state and state.state == "on":
                 on_count += 1
         turn_on = on_count < (len(devices) / 2)
-        service = "turn_on" if turn_on else "turn_off"
         for device in devices:
             key = _motion_key(room["id"], device["entity_id"])
             hass.data[DOMAIN]["motion_manual_override"][key] = True
             _cancel_motion_timer(key)
+            if turn_on:
+                behavior, dev_schedule_id, period, transition = _resolve_manual_on_behavior(room, device)
+                await _apply_device(
+                    room, device, behavior or {"state": "on"}, transition, dev_schedule_id, period, "button_toggle"
+                )
+                continue
             try:
                 await hass.services.async_call(
-                    _device_domain(device), service, {"entity_id": device["entity_id"]}
+                    _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning(
                     "RoomFlow: could not toggle %s: %s", device.get("entity_id"), err
                 )
                 continue
-            _log_device_action(
-                room, device, "on" if turn_on else "off", schedule_id, _get_period(schedule_id), "button_toggle"
-            )
+            _log_device_action(room, device, "off", schedule_id, _get_period(schedule_id), "button_toggle")
 
     async def _toggle_device(room: dict, device: dict, source: str = "button_toggle") -> None:
         state = hass.states.get(device["entity_id"])
         turn_on = not (state and state.state == "on")
-        service = "turn_on" if turn_on else "turn_off"
         key = _motion_key(room["id"], device["entity_id"])
         hass.data[DOMAIN]["motion_manual_override"][key] = True
         _cancel_motion_timer(key)
+        if turn_on:
+            behavior, schedule_id, period, transition = _resolve_manual_on_behavior(room, device)
+            await _apply_device(room, device, behavior or {"state": "on"}, transition, schedule_id, period, source)
+            return
         try:
             await hass.services.async_call(
-                _device_domain(device), service, {"entity_id": device["entity_id"]}
+                _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
@@ -797,9 +897,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             return
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
-        _log_device_action(
-            room, device, "on" if turn_on else "off", schedule_id, _get_period(schedule_id), source
-        )
+        _log_device_action(room, device, "off", schedule_id, _get_period(schedule_id), source)
 
     hass.data[DOMAIN]["apply_fn"] = apply_current_period
     hass.data[DOMAIN]["apply_room_fn"] = apply_room
@@ -811,12 +909,79 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if old_state is None:
             # Avoid triggering on HA restart / entity just appearing
             return
+        new_state = event.data.get("new_state")
+        state_label = new_state.state if new_state else "?"
+        trigger_name = trigger.get("name") or trigger.get("entity_id") or "?"
+
+        # Log every recognized state change on this entity regardless of
+        # outcome - not just successful runs - so "is Home Assistant even
+        # seeing this press" is answerable from the card's Buttons tab
+        # instead of only from server logs.
         if not _click_type_matches(trigger, event):
+            log_button_press(
+                hass,
+                trigger_name=trigger_name,
+                entity_id=trigger.get("entity_id"),
+                state_label=state_label,
+                outcome="click_type_mismatch",
+                detail=trigger.get("click_type"),
+            )
             return
 
         cfg = hass.data[DOMAIN]["config"]
-        for room, device, attachment in _button_attachments_for_trigger(cfg, trigger.get("id")):
+        attachments = _button_attachments_for_trigger(cfg, trigger.get("id"))
+        for room, device, attachment in attachments:
             await _run_button_attachment(room, device, attachment, trigger)
+
+        log_button_press(
+            hass,
+            trigger_name=trigger_name,
+            entity_id=trigger.get("entity_id"),
+            state_label=state_label,
+            outcome="ran" if attachments else "no_attachments",
+            detail=str(len(attachments)) if attachments else None,
+        )
+
+    async def _handle_button_raw_event(trigger: dict, profile: dict, event: Event) -> None:
+        # Unlike the entity path above, a raw bus event only ever fires
+        # from an actual physical action - HA never replays one
+        # synthetically on restart/entity-registration - so there's no
+        # analogous "old_state is None" startup guard needed here.
+        if not _event_match_ok(trigger, profile, event):
+            # Different physical device/channel sharing the same event
+            # type (e.g. a second Shelly button elsewhere in the house) -
+            # stay silent here, not a click_type_mismatch, to avoid a
+            # confusing log row every time an unrelated button is pressed.
+            return
+
+        click_value = event.data.get(profile["click_type_field"])
+        state_label = str(click_value) if click_value is not None else "?"
+        trigger_name = trigger.get("name") or "?"
+
+        if not _click_type_value_matches(trigger.get("click_type"), click_value):
+            log_button_press(
+                hass,
+                trigger_name=trigger_name,
+                entity_id=None,
+                state_label=state_label,
+                outcome="click_type_mismatch",
+                detail=trigger.get("click_type"),
+            )
+            return
+
+        cfg = hass.data[DOMAIN]["config"]
+        attachments = _button_attachments_for_trigger(cfg, trigger.get("id"))
+        for room, device, attachment in attachments:
+            await _run_button_attachment(room, device, attachment, trigger)
+
+        log_button_press(
+            hass,
+            trigger_name=trigger_name,
+            entity_id=None,
+            state_label=state_label,
+            outcome="ran" if attachments else "no_attachments",
+            detail=str(len(attachments)) if attachments else None,
+        )
 
     async def _run_button_attachment(
         room: dict, device: dict | None, attachment: dict, trigger: dict
@@ -840,6 +1005,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await apply_room(room["id"])
             elif action == "force_period":
                 await _apply_to_rooms([room], forced_period=attachment.get("force_period"))
+            elif action in ("dim_up", "dim_down"):
+                # Device-only, like the per-device toggle/off attachment -
+                # dimming a whole room in lockstep isn't useful, so this
+                # action simply doesn't exist on a room-level attachment.
+                if device:
+                    await _dim_device(room, device, "up" if action == "dim_up" else "down", "button_dim")
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
                 "RoomFlow: error handling button press (%s): %s",
@@ -853,6 +1024,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         unsubs = []
         triggers = hass.data[DOMAIN]["config"].get("button_triggers", [])
         for trigger in triggers:
+            if trigger.get("source") == "event":
+                profile = EVENT_DEVICE_PROFILES.get(trigger.get("profile"))
+                if not profile:
+                    _LOGGER.warning(
+                        "RoomFlow: unknown button event profile '%s' for trigger '%s'",
+                        trigger.get("profile"),
+                        trigger.get("name"),
+                    )
+                    continue
+
+                def _make_event_handler(trg, prof):
+                    async def _handler(event: Event) -> None:
+                        await _handle_button_raw_event(trg, prof, event)
+
+                    return _handler
+
+                unsubs.append(
+                    hass.bus.async_listen(profile["event_type"], _make_event_handler(trigger, profile))
+                )
+                continue
+
             entity_id = trigger.get("entity_id")
             if not entity_id:
                 continue

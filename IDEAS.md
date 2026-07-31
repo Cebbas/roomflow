@@ -2,8 +2,53 @@
 
 Things identified during development that aren't built yet, kept here so
 they don't get lost. Not a roadmap or a promise — just notes for later.
+Grouped by rough priority (High → Medium → Low) — re-sort an entry if
+priorities shift, and delete an idea's entry once that feature is
+actually built.
 
-## Threshold-based (numeric) room custom conditions
+## High priority
+
+### Native midnight-spanning time condition
+
+A period's `time` condition (`CONDITION_TYPE_TIME` in `const.py`, evaluated
+by `_condition_ok` in `__init__.py`) only supports a single `after`/`before`
+boundary compared against the current time-of-day - there's no condition
+that natively expresses a range like "22:00 to 06:00". Today the only way
+to cover a window that crosses midnight is two separate OR'd condition
+groups (one `after 22:00`, one `before 06:00`), which is exactly the
+pattern `_default_condition_groups` already generates for the last default
+period, and works correctly, but has to be built by hand for any
+custom period a user adds (e.g. a "Night" period covering 22:00-06:00) -
+hit on every room migration that has an evening/night period.
+
+Possible approach: add a `between` operator (or a dedicated condition type)
+that takes two clock values and, when the "start" is later than the "end",
+treats the range as wrapping past midnight (`now >= start or now < end`)
+instead of requiring the user to construct two OR'd groups manually. Purely
+a UX simplification over what two condition groups already accomplish -
+not a new capability.
+
+### Holidays / specific dates and seasons
+
+Today's overrides are limited to away/weekend and per-room custom
+conditions driven by entity state - there's no notion of a *date-based*
+override, e.g. different behavior on public holidays (Christmas Eve,
+Midsummer, etc.), a custom date range (holiday/vacation weeks), or a
+recurring season of the year (summer vs. winter lighting). Concretely
+blocks a full migration of at least one real device (a seasonal advent/
+Christmas light left out of the kitchen migration for exactly this
+reason).
+
+Possible approach: a new override tier (checked in precedence alongside/
+above weekend, similar to how away/weekend/default already stack) driven
+by either a `calendar.*` entity (Home Assistant's built-in calendar
+integrations, including holiday calendars, already expose "is today an
+event" as entity state) or a built-in date-range/recurring-date picker in
+the card, so it works without requiring a separate calendar integration.
+Each period's behavior would need its own holiday variant, mirroring how
+weekend/away overrides are defined per device/period today.
+
+### Threshold-based (numeric) room custom conditions
 
 Room-level custom conditions (`room.custom_conditions` in the config store,
 resolved by `_active_room_conditions` in `custom_components/roomflow/
@@ -23,7 +68,91 @@ have `_active_room_conditions` branch on it the same way `_is_trigger_active`
 already does for motion triggers. The card's condition-row UI would need an
 operator `<select>` alongside the existing state-value `<input>`.
 
-## Continuous hold-to-dim button action
+### Config export / import
+
+There's no way to back up or move a RoomFlow configuration other than the
+existing diagnostics download (which intentionally strips entity_ids) or
+manually recreating every room/device/period/button/condition through the
+card. Useful both for backups and for migrating to a new Home Assistant
+instance - increasingly risky the more rooms get hand-configured with no
+way to snapshot the result.
+
+Possible approach: a "download config" / "upload config" pair in the
+card's Settings tab that reads/writes the same config-store shape
+diagnostics already partially exposes, but with entity_ids intact -
+essentially a raw dump/restore of the integration's config entry data.
+
+### Room templates / duplicate room
+
+Setting up several similar rooms (e.g. multiple bedrooms with the same
+period/device layout) means rebuilding the whole structure - periods,
+devices, transitions, buttons, motion triggers - from scratch each time.
+Directly slows down migrating a house room-by-room when several rooms
+share close to the same layout.
+
+Possible approach: a "duplicate room" action in the card that copies an
+existing room's full configuration (devices, per-period behavior,
+overrides, buttons, motion triggers) into a new room with a new name,
+leaving entity_ids blank/unset for the user to fill in per device rather
+than pointing at the same physical entities.
+
+## Medium priority
+
+### Get into the HACS default store (no more "add as custom repository")
+
+Confirmed (checked live, 2026-07-31): RoomFlow isn't in `home-assistant/brands`
+yet (`gh api repos/home-assistant/brands/contents/custom_integrations/roomflow`
+→ 404) and there's no open PR for it. Everything else HACS requires is
+already in place - public repo, description, topics, MIT `LICENSE`,
+README, `hacs.json`, `manifest.json` with all mandatory keys, an in-repo
+`custom_components/roomflow/brand/` directory, `.github/workflows/
+validate.yml` running both `hacs/action` (category: integration) and
+`home-assistant/actions/hassfest` clean, and real GitHub Releases (not
+just tags) via `release.yml` on every version bump.
+
+Two remaining steps, both external PRs against repos RoomFlow doesn't
+own - do deliberately, not as a routine push:
+
+1. Submit the icon/logo to `home-assistant/brands`. The exact folder
+   HACS/brands expects already exists locally at
+   `brands/custom_integrations/roomflow/` (icon.png, icon@2x.png,
+   logo.png, logo@2x.png) - fork `home-assistant/brands`, drop that
+   folder in as-is, PR it.
+2. Once (1) is merged, submit a PR against `hacs/default` adding
+   `Cebbas/roomflow` alphabetically to the `./integration` file - the
+   automated checks re-verify the brands entry, manifest validity, and
+   hacs.json, all of which already pass locally.
+
+### Simple on/off schedule type (e.g. outdoor lighting)
+
+Multiple independent schedules (v0.0.10, `cd.schedules`) already let a
+room follow its own periods instead of the shared indoor one, and the
+condition-list period builder (v0.0.9 - `condition_groups`, matched by
+`_period_condition_groups_match`/`_condition_ok` in `__init__.py`)
+already has every building block needed for simple on/off lighting: time,
+sun position, numeric sensor, sensor state, weekday/weekend, and
+home/away conditions, combined with AND-within-group/OR-between-groups
+logic. You can already build a simple on/off outdoor-lighting schedule
+with these today - e.g. a 2-period schedule: "På" (top priority, your
+own AND-conditions - say, after sunset AND an illuminance sensor below a
+threshold, once threshold-based conditions exist too) then a catch-all
+"Av" below it - but doing so means knowing to build it that way, with the
+same period-naming/sequencing ceremony as a full multi-period indoor
+schedule, for what's conceptually just "on when X, off otherwise."
+
+Possible approach: a dedicated "simple on/off" schedule type, chosen
+alongside today's schedule type when creating a new one (`_addSchedule`
+in the card), that skips period-naming/sequencing entirely and just asks
+for one condition group - reusing the exact same condition-type building
+blocks periods already use - describing when the device(s) should be ON;
+everything else resolves to off. Under the hood this could literally
+generate today's existing 2-period shape (an "on" period plus an
+implicit catch-all "off" one) automatically from that single condition
+group, rather than requiring the user to build both halves by hand -
+purely a UX simplification over what's already buildable today, in the
+same spirit as the midnight-wrap idea above.
+
+### Continuous hold-to-dim button action
 
 Button triggers (`cd.button_triggers`, matched in `_handle_button_press`/
 `_click_type_matches` in `__init__.py`) can already be scoped to a
@@ -50,41 +179,50 @@ existing per-device attachment shape rather than needing a new one, but
 is still a meaningfully different trigger model than every other button
 action today.
 
-## Floors
+### Live-listen auto-detect for raw-event button triggers
 
-Rooms aren't grouped under anything larger today - there's no notion of a
-floor. Adding floors would let the card organize/filter rooms by floor, and
-would be a prerequisite for floor-level scenes (see below) and any future
-floor-level settings.
+Raw-event button triggers (`source: "event"`, `EVENT_DEVICE_PROFILES` in
+`const.py`, matched by `_event_match_ok`/`_handle_button_raw_event` in
+`__init__.py` - built for the Shelly gen1 `shelly.click` case) require the
+user to type in the profile's match fields (e.g. `device_id`/`channel`) by
+hand, found via Developer Tools → Events. A much friendlier flow: a
+"press your button now" button in the card that asks the backend to
+listen for the next matching event and report its fields back, auto-
+filling the form. This needs a genuinely new streaming/subscribe-style
+websocket command (`connection.subscriptions`/`send_event`,
+`@websocket_api.async_response` with a live push) - no such pattern
+exists anywhere in `websocket_api.py` today (every command there is
+plain request/response), so it's a meaningfully bigger, separate effort
+from adding the raw-event trigger mechanism itself.
 
-## Scenes (house / floor / room level)
+### Expose raw-event button click state as a real entity
 
-No concept of a reusable "scene" exists yet - only per-period device
-behavior. Add scenes that can be triggered at three scopes: the whole
-house, a single floor (once floors exist, see above), or an individual
+Raw-event button triggers match directly off the HA event bus
+(`hass.bus.async_listen` in `_setup_button_listeners`) and never create a
+backing entity, unlike the old hand-written template-sensor bridges they
+replace. That's sufficient for RoomFlow's own matching, but means there's
+no entity to glance at in Developer Tools/a dashboard to confirm "did my
+button just fire" outside of the Buttons tab's own activity log. Possible
+approach: optionally register a small diagnostic sensor per event-sourced
+trigger (idle/single_press/double_press/long_press, mirroring what the old
+template sensors exposed) so the click state stays inspectable/reusable
+elsewhere for those who want it - purely a visibility nice-to-have, not
+required for the trigger to work.
+
+### Scenes (house / floor / room level)
+
+No concept of a reusable, on-demand "scene" exists yet - custom
+conditions can approximate one (e.g. a "Städning"/cleaning override
+driven by an `input_boolean`), but only when backed by a real entity's
+state, not a plain "trigger this now" action independent of any
+condition. Add scenes that can be triggered at three scopes: the whole
+house, a single floor (once floors exist, see below), or an individual
 room. A scene would capture a target state per device (similar to what a
 period already defines) and be triggerable on demand (button binding, card
 action, or exposed as a service) independent of the current time-of-day
 period.
 
-## Holidays / specific dates and seasons
-
-Today's overrides are limited to away/weekend and per-room custom
-conditions driven by entity state - there's no notion of a *date-based*
-override, e.g. different behavior on public holidays (Christmas Eve,
-Midsummer, etc.), a custom date range (holiday/vacation weeks), or a
-recurring season of the year (summer vs. winter lighting).
-
-Possible approach: a new override tier (checked in precedence alongside/
-above weekend, similar to how away/weekend/default already stack) driven
-by either a `calendar.*` entity (Home Assistant's built-in calendar
-integrations, including holiday calendars, already expose "is today an
-event" as entity state) or a built-in date-range/recurring-date picker in
-the card, so it works without requiring a separate calendar integration.
-Each period's behavior would need its own holiday variant, mirroring how
-weekend/away overrides are defined per device/period today.
-
-## More device types (climate, media_player, cover)
+### More device types (climate, media_player, cover)
 
 RoomFlow only controls `light` and `switch` entities today - `_device_domain`
 in `__init__.py` hardcodes the choice (`"light" if device.get("type") ==
@@ -111,21 +249,7 @@ temperature/hvac_mode *or* fully off (`hvac_mode: "off"`), and same for
 media_player (a target source/volume *or* `media_player.turn_off`) -
 not every period necessarily wants the device actively doing something.
 
-## Presence simulation while away
-
-Today's away override (see weekend/away overrides above) sets one fixed
-behavior for the whole "away" duration. A common complementary use case:
-while home/away reports "away", randomize on/off timing for selected lights
-(varying by a few minutes each day) to make the house look occupied for
-security, instead of a static on/off state or none at all.
-
-Possible approach: an optional per-device "presence simulation" flag,
-usable only when an away override is defined, that replaces the fixed
-away behavior with a randomized on/off schedule generated within a
-configurable window (e.g. "on sometime between 19:00-19:30, off sometime
-between 22:30-23:15"), re-rolled once a day.
-
-## Explicit pause/resume for a room or device
+### Explicit pause/resume for a room or device
 
 `_apply_single_device` in `__init__.py` now skips an ambient re-apply
 (`respect_manual_override=True`, only set by `apply_current_period`)
@@ -149,65 +273,7 @@ device unconditionally until explicitly resumed or a fixed expiry (end of
 day, next period change, or a chosen duration) - a deliberate override on
 top of the automatic one, not a replacement for it.
 
-## Scheduled ramping between periods
-
-Transition times today are just the `transition` parameter passed straight
-through to `light.turn_on` (`_apply_behavior` in `__init__.py`) - a smooth
-fade at the moment a period boundary is crossed, not a ramp that happens
-*before* the boundary. There's no way to, say, have brightness/color
-temperature gradually drift from the morning target to the day target over
-the 30 minutes leading up to the switch, the way a sunrise/sunset alarm
-clock does.
-
-Possible approach: an optional per-period "ramp duration" that, instead of
-snapping to the next period's behavior at its boundary, interpolates
-brightness/color_temp between the current and next period's target values
-over that window, recomputing on a timer tick rather than only on the
-period-change event.
-
-## Config export / import
-
-There's no way to back up or move a RoomFlow configuration other than the
-existing diagnostics download (which intentionally strips entity_ids) or
-manually recreating every room/device/period/button/condition through the
-card. Useful both for backups and for migrating to a new Home Assistant
-instance.
-
-Possible approach: a "download config" / "upload config" pair in the
-card's Settings tab that reads/writes the same config-store shape
-diagnostics already partially exposes, but with entity_ids intact -
-essentially a raw dump/restore of the integration's config entry data.
-
-## Room templates / duplicate room
-
-Setting up several similar rooms (e.g. multiple bedrooms with the same
-period/device layout) means rebuilding the whole structure - periods,
-devices, transitions, buttons, motion triggers - from scratch each time.
-
-Possible approach: a "duplicate room" action in the card that copies an
-existing room's full configuration (devices, per-period behavior,
-overrides, buttons, motion triggers) into a new room with a new name,
-leaving entity_ids blank/unset for the user to fill in per device rather
-than pointing at the same physical entities.
-
-## Expose actions as Home Assistant services
-
-`apply_now` and `force_period` (the same two actions a physical button can
-be bound to, handled in `_handle_button_press` in `__init__.py`) are only
-reachable via a bound button entity or the card's own websocket commands
-(`ws_apply_now`/`ws_apply_room` in `websocket_api.py`) - there's no
-`roomflow.*` service registered, so scripts, automations, and Home
-Assistant's Assist voice pipeline can't trigger "run room X's scheduled
-behavior now" or "force room X into period Y" directly.
-
-Possible approach: register these as real services (`roomflow.apply_now`,
-`roomflow.force_period`, and similarly a `roomflow.pause`/`roomflow.resume`
-pair once the manual-override idea above exists) via
-`hass.services.async_register`, targeting a room by area or entity, so
-they compose with the rest of Home Assistant instead of being locked
-inside button bindings and the card.
-
-## Preview / simulate resolved behavior
+### Preview / simulate resolved behavior
 
 There's no way to see what RoomFlow *would* do without actually waiting
 for or forcing a real state change - e.g. "what would the living room do
@@ -222,7 +288,7 @@ through the same resolution logic `_apply_to_rooms` already uses to pick a
 behavior per device, and displays the result - without calling any
 `light`/`switch` service.
 
-## Walk-through test button (cycle every period on real devices)
+### Walk-through test button (cycle every period on real devices)
 
 Today's per-room "Test now" button (`test_now` in the card, `ws_apply_now`/
 `apply_room` in websocket_api.py/`__init__.py`) only re-applies whatever
@@ -248,53 +314,7 @@ itself trying to time it client-side. Should restore the room's real
 current-period behavior when the walkthrough finishes or is cancelled
 early.
 
-## Finish moving the card's UI to native HA components
-
-v0.0.7 switched form fields to native `<ha-textfield>`/`<ha-switch>` (see
-the `textField`/`switchEl` helpers and the `.rf-root ha-textfield`/
-`ha-switch` CSS rules in `roomflow-card.js`), but that only covered
-text/number inputs and toggles. Buttons (`class="rf-btn"`), dropdowns
-(plain `<select>`), and the period tabs (`rf-tab`) are still hand-rolled
-HTML elements styled with the card's own CSS instead of Home Assistant's
-native components (`ha-button`/`mwc-button`, `ha-icon-button`, `ha-select`,
-`ha-tab`/`mwc-tab-bar` or similar) - meaning the card mostly matches HA's
-look today, but drifts from it whenever HA's own theme/design system
-changes (spacing, ripple effects, color tokens), and won't automatically
-pick up an HA visual refresh the way a card built entirely on native
-components would.
-
-Possible approach: continue the v0.0.7 work by replacing the remaining
-`rf-btn`/`<select>`/`rf-tab` elements with their `ha-*` equivalents one
-category at a time (buttons first, then selects, then tabs), the same way
-switches/textfields were done - checking `customElements.get(...)` with a
-plain-HTML fallback where a given HA frontend version might not have the
-element registered, and trimming the corresponding hand-written CSS rules
-once each category is fully native.
-
-## Standalone schedules for individual devices (e.g. outdoor lighting)
-
-Periods are configured once, globally (`CONF_PERIODS` in `const.py`, read
-via `infer_periods` and shared by every room through `_apply_to_rooms` in
-`__init__.py`) - every room picks behavior against the *same*
-morning/day/afternoon/evening/night list. That fits indoor rooms that
-broadly follow the same day well, but not something like outdoor lighting,
-which usually just needs its own simple on/off window (e.g. "on from
-sunset to 23:00", or "on from dusk to dawn") unrelated to the indoor
-period breakdown. Today the only way to express that is either reusing
-existing periods loosely, or adding a new global period just for one
-device - which then also shows up as an option for every other room,
-cluttering everyone else's period list for something only relevant to one
-device.
-
-Possible approach: let a device (or a whole room) opt out of the shared
-period list and instead define its own simple standalone on/off
-schedule - one or more sun/clock/sensor-driven windows, similar in shape
-to a period's existing sources, but scoped to that single device/room
-rather than added to the global list. Could double as a plain exposed
-binary_sensor (like today's per-period ones) so it's also directly usable
-in other automations, not just within RoomFlow.
-
-## Entity health as a real notification, not just a log warning
+### Entity health as a real notification, not just a log warning
 
 When a bound entity's service call fails (`_apply_single_device` in
 `__init__.py`, `except Exception as err: _LOGGER.warning("RoomFlow: could
@@ -303,7 +323,9 @@ toggle/motion-warning call sites that follow the same pattern, the only
 trace is a warning line in Home Assistant's log - nothing surfaces in the
 UI. A device that's been unavailable or misconfigured for weeks (e.g. an
 entity_id that no longer exists after a Zigbee re-pair) can go unnoticed
-indefinitely unless someone happens to be reading the log.
+indefinitely unless someone happens to be reading the log - and the
+legacy YAML audit earlier already turned up several silently-broken
+bindings that this would have caught immediately.
 
 Possible approach: register these as Home Assistant "repair" issues
 (`homeassistant.helpers.issue_registry.async_create_issue`) keyed by
@@ -312,104 +334,7 @@ call for that device succeeds again - so a broken binding shows up in HA's
 own Settings > System > Repairs list instead of only the log, without
 RoomFlow needing its own notification/alerting system.
 
-## Linked/synced rooms (shared open-plan spaces)
-
-Every room in the config store (`cfg.get("rooms", [])`, each with its own
-`devices`/period behavior) is independent - there's no way to say two
-rooms are really one physical space, e.g. an open-plan kitchen + living
-room where you want both to always be in the same period, rather than
-configuring the same schedule twice and hoping they stay in sync.
-
-Note: the motion-sensor half of this problem (reacting to the same
-sensors together) is already solved now that motion sensors are a
-shared, named library (`cfg.motion_sensors`, see `_control_mode`/
-`_handle_motion_change` in `__init__.py`) rather than a per-room list -
-devices in both rooms can already subscribe to the same definition. What
-remains here is purely the *period/schedule* half: keeping two rooms'
-resolved current period in sync.
-
-Possible approach: an optional "linked room" reference so one room's
-resolved period follows another's instead of computing its own from its
-own schedule/custom conditions (while still keeping its own device
-list, since the two spaces likely have different lights) - checked in
-`_apply_to_rooms` by resolving the period from the room it's linked to
-before applying behavior to its own devices.
-
-## Continuous adaptive curve (sun-elevation-based), not just discrete periods
-
-Periods are always a fixed list of named blocks (`CONF_PERIODS`, resolved
-by `infer_periods`) - a device's target brightness/color_temp jumps (or,
-per the scheduled-ramping idea above, ramps over a fixed window) between
-whatever two adjacent periods define, not a smooth curve driven directly
-by where the sun actually is. That's a different, more continuous
-alternative to periods entirely, closer to how the popular Adaptive
-Lighting integration works: brightness/color temperature computed straight
-from sun elevation at every moment, with no period boundaries at all -
-useful for a room where someone doesn't want to think in named periods,
-just "warmer and dimmer as the sun goes down, brighter and cooler at
-midday."
-
-Possible approach: an opt-in per-room (or per-device) mode that replaces
-period-based resolution with a formula driven by `sun.sun`'s elevation
-attribute, interpolating between configured min/max brightness and
-color_temp - likely sharing the same recompute/timer-tick machinery the
-scheduled-ramping idea would need, but replacing "which period" with "what
-elevation" as the input.
-
-## Per-user permissions on the card
-
-Every websocket command RoomFlow registers (`ws_get_config`,
-`ws_save_config`, `ws_apply_now`, `ws_apply_room`, in websocket_api.py)
-is reachable by any authenticated Home Assistant user - there's no
-distinction today between someone allowed to reconfigure rooms/periods/
-devices and someone who should only get the quick actions (the card's
-"Test now" button, or a dashboard tile). In a multi-person household,
-anyone with card access can currently rewrite anyone else's room
-config.
-
-Possible approach: gate `ws_save_config` (and the config-editing parts of
-the card UI) behind `connection.user.is_admin` or a configurable allowlist,
-while leaving `ws_apply_now`/`ws_apply_room` open to any user - mirroring
-how Home Assistant itself treats admin-only settings vs. general
-dashboard interaction.
-
-## Undo last automatic change
-
-There's no quick way to revert just the *last* thing RoomFlow did to a
-room - e.g. a period boundary was crossed at an awkward moment, or a
-custom condition briefly flickered and changed behavior, and the fix
-today is only to wait for the next recompute or manually readjust the
-device by hand. This is a lighter-weight ask than the manual override/
-pause idea above (which is about taking a room out of RoomFlow's control
-for a while) - just a single-step "put it back to what it was a moment
-ago" action.
-
-Possible approach: keep a small per-room record of the device states
-immediately before the last `_apply_to_rooms` call actually changed
-anything, and add an "Undo" button (card action + maybe a bound-button
-action) that replays those prior states via the same `light`/`switch`
-services, clearing the record once used so it can't be replayed twice.
-
-## Native midnight-spanning time condition
-
-A period's `time` condition (`CONDITION_TYPE_TIME` in `const.py`, evaluated
-by `_condition_ok` in `__init__.py`) only supports a single `after`/`before`
-boundary compared against the current time-of-day - there's no condition
-that natively expresses a range like "22:00 to 06:00". Today the only way
-to cover a window that crosses midnight is two separate OR'd condition
-groups (one `after 22:00`, one `before 06:00`), which is exactly the
-pattern `_default_condition_groups` already generates for the last default
-period, and works correctly, but has to be built by hand for any
-custom period a user adds (e.g. a "Night" period covering 22:00-06:00).
-
-Possible approach: add a `between` operator (or a dedicated condition type)
-that takes two clock values and, when the "start" is later than the "end",
-treats the range as wrapping past midnight (`now >= start or now < end`)
-instead of requiring the user to construct two OR'd groups manually. Purely
-a UX simplification over what two condition groups already accomplish -
-not a new capability.
-
-## Time-window restriction on a motion/threshold trigger
+### Time-window restriction on a motion/threshold trigger
 
 A trigger in `room.motion.triggers` (`_is_trigger_active` in `__init__.py`)
 only ever checks the sensor's own state - a `motion` trigger fires
@@ -436,7 +361,7 @@ inactive regardless of the sensor's actual state. The card's trigger row
 would need two optional time inputs next to the existing sensor/threshold
 fields.
 
-## Restore-on-motion-return for motion_off-only devices
+### Restore-on-motion-return for motion_off-only devices
 
 `_handle_motion_change` in `__init__.py` only cancels a device's pending
 motion-off timer and re-applies its "on" behavior
@@ -461,7 +386,7 @@ itself is off - the restore is a reaction to an in-progress countdown
 being interrupted, not a fresh "motion turned this on" event, so it
 should be gated on "has a pending timer" rather than on `motion_on`.
 
-## Room test mode (override every resolution input, applied live)
+### Room test mode (override every resolution input, applied live)
 
 There's no way to put a single room into a "test mode" where you can
 manually override every input that feeds into its resolved behavior -
@@ -489,3 +414,160 @@ room id, similar to the existing `forced_period` override map) so a
 browser refresh doesn't silently drop back to real conditions while
 still "in test mode", and a clear always-visible indicator + one-click
 exit that restores the room to its real current-period behavior.
+
+## Low priority
+
+### Floors
+
+Rooms aren't grouped under anything larger today - there's no notion of a
+floor. Adding floors would let the card organize/filter rooms by floor, and
+would be a prerequisite for floor-level scenes (see above) and any future
+floor-level settings.
+
+### Presence simulation while away
+
+Today's away override (see weekend/away overrides above) sets one fixed
+behavior for the whole "away" duration. A common complementary use case:
+while home/away reports "away", randomize on/off timing for selected lights
+(varying by a few minutes each day) to make the house look occupied for
+security, instead of a static on/off state or none at all.
+
+Possible approach: an optional per-device "presence simulation" flag,
+usable only when an away override is defined, that replaces the fixed
+away behavior with a randomized on/off schedule generated within a
+configurable window (e.g. "on sometime between 19:00-19:30, off sometime
+between 22:30-23:15"), re-rolled once a day.
+
+### Scheduled ramping between periods
+
+Transition times today are just the `transition` parameter passed straight
+through to `light.turn_on` (`_apply_behavior` in `__init__.py`) - a smooth
+fade at the moment a period boundary is crossed, not a ramp that happens
+*before* the boundary. There's no way to, say, have brightness/color
+temperature gradually drift from the morning target to the day target over
+the 30 minutes leading up to the switch, the way a sunrise/sunset alarm
+clock does.
+
+Possible approach: an optional per-period "ramp duration" that, instead of
+snapping to the next period's behavior at its boundary, interpolates
+brightness/color_temp between the current and next period's target values
+over that window, recomputing on a timer tick rather than only on the
+period-change event.
+
+### Expose actions as Home Assistant services
+
+`apply_now` and `force_period` (the same two actions a physical button can
+be bound to, handled in `_handle_button_press` in `__init__.py`) are only
+reachable via a bound button entity or the card's own websocket commands
+(`ws_apply_now`/`ws_apply_room` in `websocket_api.py`) - there's no
+`roomflow.*` service registered, so scripts, automations, and Home
+Assistant's Assist voice pipeline can't trigger "run room X's scheduled
+behavior now" or "force room X into period Y" directly.
+
+Possible approach: register these as real services (`roomflow.apply_now`,
+`roomflow.force_period`, and similarly a `roomflow.pause`/`roomflow.resume`
+pair once the manual-override idea above exists) via
+`hass.services.async_register`, targeting a room by area or entity, so
+they compose with the rest of Home Assistant instead of being locked
+inside button bindings and the card.
+
+### Finish moving the card's UI to native HA components
+
+v0.0.7 switched form fields to native `<ha-textfield>`/`<ha-switch>` (see
+the `textField`/`switchEl` helpers and the `.rf-root ha-textfield`/
+`ha-switch` CSS rules in `roomflow-card.js`), but that only covered
+text/number inputs and toggles. Buttons (`class="rf-btn"`), dropdowns
+(plain `<select>`), and the period tabs (`rf-tab`) are still hand-rolled
+HTML elements styled with the card's own CSS instead of Home Assistant's
+native components (`ha-button`/`mwc-button`, `ha-icon-button`, `ha-select`,
+`ha-tab`/`mwc-tab-bar` or similar) - meaning the card mostly matches HA's
+look today, but drifts from it whenever HA's own theme/design system
+changes (spacing, ripple effects, color tokens), and won't automatically
+pick up an HA visual refresh the way a card built entirely on native
+components would.
+
+Possible approach: continue the v0.0.7 work by replacing the remaining
+`rf-btn`/`<select>`/`rf-tab` elements with their `ha-*` equivalents one
+category at a time (buttons first, then selects, then tabs), the same way
+switches/textfields were done - checking `customElements.get(...)` with a
+plain-HTML fallback where a given HA frontend version might not have the
+element registered, and trimming the corresponding hand-written CSS rules
+once each category is fully native.
+
+### Linked/synced rooms (shared open-plan spaces)
+
+Every room in the config store (`cfg.get("rooms", [])`, each with its own
+`devices`/period behavior) is independent - there's no way to say two
+rooms are really one physical space, e.g. an open-plan kitchen + living
+room where you want both to always be in the same period, rather than
+configuring the same schedule twice and hoping they stay in sync.
+
+Note: the motion-sensor half of this problem (reacting to the same
+sensors together) is already solved now that motion sensors are a
+shared, named library (`cfg.motion_sensors`, see `_control_mode`/
+`_handle_motion_change` in `__init__.py`) rather than a per-room list -
+devices in both rooms can already subscribe to the same definition. What
+remains here is purely the *period/schedule* half: keeping two rooms'
+resolved current period in sync.
+
+Possible approach: an optional "linked room" reference so one room's
+resolved period follows another's instead of computing its own from its
+own schedule/custom conditions (while still keeping its own device
+list, since the two spaces likely have different lights) - checked in
+`_apply_to_rooms` by resolving the period from the room it's linked to
+before applying behavior to its own devices.
+
+### Continuous adaptive curve (sun-elevation-based), not just discrete periods
+
+Periods are always a fixed list of named blocks (`CONF_PERIODS`, resolved
+by `infer_periods`) - a device's target brightness/color_temp jumps (or,
+per the scheduled-ramping idea above, ramps over a fixed window) between
+whatever two adjacent periods define, not a smooth curve driven directly
+by where the sun actually is. That's a different, more continuous
+alternative to periods entirely, closer to how the popular Adaptive
+Lighting integration works: brightness/color temperature computed straight
+from sun elevation at every moment, with no period boundaries at all -
+useful for a room where someone doesn't want to think in named periods,
+just "warmer and dimmer as the sun goes down, brighter and cooler at
+midday."
+
+Possible approach: an opt-in per-room (or per-device) mode that replaces
+period-based resolution with a formula driven by `sun.sun`'s elevation
+attribute, interpolating between configured min/max brightness and
+color_temp - likely sharing the same recompute/timer-tick machinery the
+scheduled-ramping idea would need, but replacing "which period" with "what
+elevation" as the input.
+
+### Per-user permissions on the card
+
+Every websocket command RoomFlow registers (`ws_get_config`,
+`ws_save_config`, `ws_apply_now`, `ws_apply_room`, in websocket_api.py)
+is reachable by any authenticated Home Assistant user - there's no
+distinction today between someone allowed to reconfigure rooms/periods/
+devices and someone who should only get the quick actions (the card's
+"Test now" button, or a dashboard tile). In a multi-person household,
+anyone with card access can currently rewrite anyone else's room
+config.
+
+Possible approach: gate `ws_save_config` (and the config-editing parts of
+the card UI) behind `connection.user.is_admin` or a configurable allowlist,
+while leaving `ws_apply_now`/`ws_apply_room` open to any user - mirroring
+how Home Assistant itself treats admin-only settings vs. general
+dashboard interaction.
+
+### Undo last automatic change
+
+There's no quick way to revert just the *last* thing RoomFlow did to a
+room - e.g. a period boundary was crossed at an awkward moment, or a
+custom condition briefly flickered and changed behavior, and the fix
+today is only to wait for the next recompute or manually readjust the
+device by hand. This is a lighter-weight ask than the manual override/
+pause idea above (which is about taking a room out of RoomFlow's control
+for a while) - just a single-step "put it back to what it was a moment
+ago" action.
+
+Possible approach: keep a small per-room record of the device states
+immediately before the last `_apply_to_rooms` call actually changed
+anything, and add an "Undo" button (card action + maybe a bound-button
+action) that replays those prior states via the same `light`/`switch`
+services, clearing the record once used so it can't be replayed twice.

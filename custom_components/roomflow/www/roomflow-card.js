@@ -356,6 +356,13 @@ const DEFAULT_SUN_EVENTS = {
 };
 const DEFAULT_ILLUMINANCE_THRESHOLDS = { night: 0, morning: 10, evening: 50, afternoon: 300, day: 1000 };
 
+// Mirrors custom_components/roomflow/const.py's EVENT_DEVICE_PROFILES - only
+// the fields the card needs to render an input per match field; the actual
+// event_type/click_type_field and matching happen backend-side.
+const EVENT_DEVICE_PROFILES = {
+  shelly_gen1_click: { event_type: "shelly.click", match_fields: ["device_id", "channel"] },
+};
+
 function buildPeriodsFromLegacy(cd) {
   const legacyKeys = [
     "time_mode", "time_sources", "time_sensor", "schedule", "sun_events",
@@ -442,6 +449,12 @@ const STRINGS = {
     log_source_motion_warn_expired: "motion warning (timed out)",
     log_source_button_off: "off button",
     log_source_button_toggle: "toggle button",
+    log_source_button_dim: "dim button",
+    button_log_header: "Button activity",
+    button_log_help: "Every recognized press of a bound button entity, whether or not it was attached to anything - press your physical button and check here to confirm Home Assistant is actually seeing it.",
+    log_outcome_ran: "ran",
+    log_outcome_no_attachments: "not attached to anything",
+    log_outcome_click_type_mismatch: "ignored (click type didn't match)",
 
     add_room_header: "Add room",
     custom_name_option: "— Custom name —",
@@ -540,6 +553,15 @@ const STRINGS = {
     click_type_single: "Single press",
     click_type_double: "Double press",
     click_type_long: "Long press",
+    trigger_source_entity: "Entity",
+    trigger_source_event: "Device event",
+    event_profile_shelly_gen1_click: "Shelly (gen1) button",
+    event_match_device_id_label: "Device ID",
+    event_match_channel_label: "Channel",
+    event_match_help:
+      "Don't know these? Go to Developer Tools → Events, listen for `{event_type}`, press the button once, and copy the values shown.",
+    copy_trigger_button: "Copy",
+    import_trigger_button: "Paste trigger",
     room_buttons_header: "Room buttons",
     device_buttons_header: "Buttons",
     no_button_triggers_hint: "No button triggers yet - add one in the Buttons tab first.",
@@ -547,6 +569,8 @@ const STRINGS = {
     button_trigger_missing: "(trigger missing)",
     device_action_toggle: "Toggle",
     device_action_off: "Turn off",
+    device_action_dim_up: "Dim up",
+    device_action_dim_down: "Dim down",
     action_toggle: "Toggle on/off",
     action_off: "Turn off room",
     action_apply_now: "Run scheduled behavior now",
@@ -641,6 +665,12 @@ const STRINGS = {
     log_source_motion_warn_expired: "rörelsevarning (av)",
     log_source_button_off: "av-knapp",
     log_source_button_toggle: "toggle-knapp",
+    log_source_button_dim: "dimmerknapp",
+    button_log_header: "Knappaktivitet",
+    button_log_help: "Varje registrerat tryck på en bunden knappentitet, oavsett om det var kopplat till något eller inte - tryck på din fysiska knapp och kolla här för att bekräfta att Home Assistant faktiskt ser den.",
+    log_outcome_ran: "kördes",
+    log_outcome_no_attachments: "inte kopplad till något",
+    log_outcome_click_type_mismatch: "ignorerad (klicktyp matchade inte)",
 
     add_room_header: "Lägg till rum",
     custom_name_option: "— Eget namn —",
@@ -739,6 +769,15 @@ const STRINGS = {
     click_type_single: "Enkeltryck",
     click_type_double: "Dubbeltryck",
     click_type_long: "Långtryck",
+    trigger_source_entity: "Entitet",
+    trigger_source_event: "Enhetsevent",
+    event_profile_shelly_gen1_click: "Shelly (gen1) knapp",
+    event_match_device_id_label: "Enhets-ID",
+    event_match_channel_label: "Kanal",
+    event_match_help:
+      "Vet du inte dessa? Gå till Utvecklarverktyg → Events, lyssna på `{event_type}`, tryck på knappen en gång och kopiera värdena som visas.",
+    copy_trigger_button: "Kopiera",
+    import_trigger_button: "Klistra in trigger",
     room_buttons_header: "Rumsknappar",
     device_buttons_header: "Knappar",
     no_button_triggers_hint: "Inga knapptriggers än - lägg till en i fliken Knappar först.",
@@ -746,6 +785,8 @@ const STRINGS = {
     button_trigger_missing: "(trigger saknas)",
     device_action_toggle: "Växla",
     device_action_off: "Stäng av",
+    device_action_dim_up: "Dimma upp",
+    device_action_dim_down: "Dimma ner",
     action_toggle: "Växla på/av",
     action_off: "Stäng av rum",
     action_apply_now: "Kör schemalagt beteende nu",
@@ -913,6 +954,15 @@ const STRINGS = {
     click_type_single: "Enkelttrykk",
     click_type_double: "Dobbelttrykk",
     click_type_long: "Langt trykk",
+    trigger_source_entity: "Entitet",
+    trigger_source_event: "Enhetshendelse",
+    event_profile_shelly_gen1_click: "Shelly (gen1) knapp",
+    event_match_device_id_label: "Enhets-ID",
+    event_match_channel_label: "Kanal",
+    event_match_help:
+      "Vet du ikke disse? Gå til Utviklerverktøy → Events, lytt etter `{event_type}`, trykk på knappen én gang, og kopier verdiene som vises.",
+    copy_trigger_button: "Kopier",
+    import_trigger_button: "Lim inn trigger",
     room_buttons_header: "Romknapper",
     device_buttons_header: "Knapper",
     no_button_triggers_hint: "Ingen knappetriggere ennå - legg til én i fanen Knapper først.",
@@ -1087,6 +1137,15 @@ const STRINGS = {
     click_type_single: "Enkelt tryk",
     click_type_double: "Dobbelt tryk",
     click_type_long: "Langt tryk",
+    trigger_source_entity: "Entitet",
+    trigger_source_event: "Enhedshændelse",
+    event_profile_shelly_gen1_click: "Shelly (gen1) knap",
+    event_match_device_id_label: "Enheds-ID",
+    event_match_channel_label: "Kanal",
+    event_match_help:
+      "Kender du ikke disse? Gå til Udviklerværktøjer → Events, lyt efter `{event_type}`, tryk på knappen én gang, og kopiér de viste værdier.",
+    copy_trigger_button: "Kopiér",
+    import_trigger_button: "Indsæt trigger",
     room_buttons_header: "Rumknapper",
     device_buttons_header: "Knapper",
     no_button_triggers_hint: "Ingen knaptriggere endnu - tilføj én under fanen Knapper først.",
@@ -1261,6 +1320,15 @@ const STRINGS = {
     click_type_single: "Yksi painallus",
     click_type_double: "Kaksoispainallus",
     click_type_long: "Pitkä painallus",
+    trigger_source_entity: "Entiteetti",
+    trigger_source_event: "Laitetapahtuma",
+    event_profile_shelly_gen1_click: "Shelly (gen1) -painike",
+    event_match_device_id_label: "Laitetunnus",
+    event_match_channel_label: "Kanava",
+    event_match_help:
+      "Etkö tiedä näitä? Mene Kehittäjätyökalut → Events, kuuntele tapahtumaa `{event_type}`, paina painiketta kerran ja kopioi näytetyt arvot.",
+    copy_trigger_button: "Kopioi",
+    import_trigger_button: "Liitä triggeri",
     room_buttons_header: "Huoneen painikkeet",
     device_buttons_header: "Painikkeet",
     no_button_triggers_hint: "Ei vielä painiketriggereitä - lisää yksi Painikkeet-välilehdellä ensin.",
@@ -1435,6 +1503,15 @@ const STRINGS = {
     click_type_single: "Einfacher Druck",
     click_type_double: "Doppelter Druck",
     click_type_long: "Langer Druck",
+    trigger_source_entity: "Entität",
+    trigger_source_event: "Geräteereignis",
+    event_profile_shelly_gen1_click: "Shelly (Gen1)-Taste",
+    event_match_device_id_label: "Geräte-ID",
+    event_match_channel_label: "Kanal",
+    event_match_help:
+      "Kennst du diese nicht? Gehe zu Entwicklertools → Events, lausche auf `{event_type}`, drücke die Taste einmal und kopiere die angezeigten Werte.",
+    copy_trigger_button: "Kopieren",
+    import_trigger_button: "Trigger einfügen",
     room_buttons_header: "Raumtasten",
     device_buttons_header: "Tasten",
     no_button_triggers_hint: "Noch keine Tasten-Trigger - füge zuerst einen im Tab Tasten hinzu.",
@@ -1609,6 +1686,15 @@ const STRINGS = {
     click_type_single: "Appui simple",
     click_type_double: "Double appui",
     click_type_long: "Appui long",
+    trigger_source_entity: "Entité",
+    trigger_source_event: "Événement d'appareil",
+    event_profile_shelly_gen1_click: "Bouton Shelly (gen1)",
+    event_match_device_id_label: "ID de l'appareil",
+    event_match_channel_label: "Canal",
+    event_match_help:
+      "Vous ne les connaissez pas ? Allez dans Outils de développement → Events, écoutez `{event_type}`, appuyez une fois sur le bouton et copiez les valeurs affichées.",
+    copy_trigger_button: "Copier",
+    import_trigger_button: "Coller un déclencheur",
     room_buttons_header: "Boutons de la pièce",
     device_buttons_header: "Boutons",
     no_button_triggers_hint: "Aucun déclencheur de bouton pour l'instant - ajoutez-en un dans l'onglet Boutons d'abord.",
@@ -1783,6 +1869,15 @@ const STRINGS = {
     click_type_single: "Enkele druk",
     click_type_double: "Dubbele druk",
     click_type_long: "Lange druk",
+    trigger_source_entity: "Entiteit",
+    trigger_source_event: "Apparaatgebeurtenis",
+    event_profile_shelly_gen1_click: "Shelly (gen1) knop",
+    event_match_device_id_label: "Apparaat-ID",
+    event_match_channel_label: "Kanaal",
+    event_match_help:
+      "Weet je deze niet? Ga naar Ontwikkelaarstools → Events, luister naar `{event_type}`, druk één keer op de knop en kopieer de getoonde waarden.",
+    copy_trigger_button: "Kopiëren",
+    import_trigger_button: "Trigger plakken",
     room_buttons_header: "Kamerknoppen",
     device_buttons_header: "Knoppen",
     no_button_triggers_hint: "Nog geen knoptriggers - voeg er eerst een toe op het tabblad Knoppen.",
@@ -2114,6 +2209,9 @@ class RoomFlowCard extends HTMLElement {
     this._activeRoomPeriod = {}; // room.id -> period, drives every device's tab in that room at once
     this._openDevices = {}; // deviceKey -> bool, undefined defaults to open (matches pre-collapse behavior)
     this._activeRoomId = null; // room.id | "__add__" | "__buttons__" | "__motion__" | "__settings__"
+    this._newTriggerSource = "entity"; // "entity" | "event", drives the Add-button-trigger form only, not persisted
+    this._newTriggerProfile = Object.keys(EVENT_DEVICE_PROFILES)[0];
+    this._importTriggerOpen = false; // toggles the "paste trigger" textarea in the Buttons tab
     this._saveTimeout = null;
     this._lang = "en";
 
@@ -2391,10 +2489,18 @@ class RoomFlowCard extends HTMLElement {
   _scheduleSave() {
     if (this._saveTimeout) clearTimeout(this._saveTimeout);
     this._saveTimeout = setTimeout(() => {
-      this._hass.callWS({
-        type: "roomflow/save_config",
-        config: this._config_data,
-      });
+      this._hass
+        .callWS({
+          type: "roomflow/save_config",
+          config: this._config_data,
+        })
+        .catch((err) => {
+          // Was previously a silent failure - a rejected save (backend
+          // exception, connection drop mid-request) left the change only
+          // in memory, with zero indication anything went wrong until the
+          // next reload quietly dropped it. Now at least visible.
+          console.error("RoomFlow: failed to save config", err);
+        });
     }, 400);
   }
 
@@ -2493,6 +2599,73 @@ class RoomFlowCard extends HTMLElement {
     this._config_data.button_triggers = this._config_data.button_triggers.filter((t) => t.id !== triggerId);
     this._scheduleSave();
     this._render();
+  }
+
+  _addEventButtonTrigger(name, profileId, eventMatch, clickType) {
+    this._config_data.button_triggers.push({
+      id: uid(),
+      name: name || this._t(`event_profile_${profileId}`),
+      source: "event",
+      profile: profileId,
+      event_match: eventMatch,
+      click_type: clickType || "any",
+    });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _copyButtonTrigger(triggerId) {
+    const t = (this._config_data.button_triggers || []).find((x) => x.id === triggerId);
+    if (!t) return;
+    const shared = { name: t.name, click_type: t.click_type };
+    if (t.source === "event") {
+      Object.assign(shared, { source: "event", profile: t.profile, event_match: t.event_match });
+    } else {
+      shared.entity_id = t.entity_id;
+    }
+    navigator.clipboard?.writeText(JSON.stringify(shared, null, 2)).then(
+      () => this._flashCopyFeedback(triggerId, true),
+      () => this._flashCopyFeedback(triggerId, false)
+    );
+  }
+
+  _flashCopyFeedback(triggerId, ok) {
+    const btn = this.querySelector(`[data-copy-button-trigger="${triggerId}"]`);
+    if (!btn) return;
+    const original = btn.innerHTML;
+    btn.innerHTML = icon(ok ? "mdi:check" : "mdi:alert-circle-outline");
+    setTimeout(() => {
+      btn.innerHTML = original;
+    }, 1500);
+  }
+
+  _importButtonTrigger(rawText) {
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return false;
+    }
+    if (!parsed || typeof parsed.name !== "string") return false;
+    const isEntityTrigger = typeof parsed.entity_id === "string" && parsed.entity_id;
+    const isEventTrigger =
+      parsed.source === "event" &&
+      EVENT_DEVICE_PROFILES[parsed.profile] &&
+      parsed.event_match &&
+      typeof parsed.event_match === "object";
+    if (!isEntityTrigger && !isEventTrigger) return false;
+
+    const trigger = { id: uid(), name: parsed.name, click_type: parsed.click_type || "any" };
+    if (isEventTrigger) {
+      Object.assign(trigger, { source: "event", profile: parsed.profile, event_match: parsed.event_match });
+    } else {
+      trigger.entity_id = parsed.entity_id;
+    }
+    this._config_data.button_triggers.push(trigger);
+    this._scheduleSave();
+    this._importTriggerOpen = false;
+    this._render();
+    return true;
   }
 
   _addRoomButton(roomId, triggerId, action, forcePeriod) {
@@ -2837,6 +3010,10 @@ class RoomFlowCard extends HTMLElement {
     return this._t(`log_source_${source}`);
   }
 
+  _logOutcomeLabel(outcome) {
+    return this._t(`log_outcome_${outcome}`);
+  }
+
   _formatLogTime(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
@@ -2960,7 +3137,7 @@ class RoomFlowCard extends HTMLElement {
     if (roomTab) {
       this._activeRoomId = roomTab.getAttribute("data-room-tab");
       this._render();
-      if (this._activeRoomId === "__overview__") this._loadDashboard();
+      if (this._activeRoomId === "__overview__" || this._activeRoomId === "__buttons__") this._loadDashboard();
       return;
     }
 
@@ -3137,16 +3314,69 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const copyButtonTriggerBtn = e.target.closest("[data-copy-button-trigger]");
+    if (copyButtonTriggerBtn) {
+      this._copyButtonTrigger(copyButtonTriggerBtn.getAttribute("data-copy-button-trigger"));
+      return;
+    }
+
+    const setTriggerSourceBtn = e.target.closest("[data-set-trigger-source]");
+    if (setTriggerSourceBtn) {
+      this._newTriggerSource = setTriggerSourceBtn.getAttribute("data-set-trigger-source");
+      this._render();
+      return;
+    }
+
+    if (e.target.closest("#toggle-import-trigger-btn")) {
+      this._importTriggerOpen = !this._importTriggerOpen;
+      this._render();
+      return;
+    }
+
+    if (e.target.closest("#confirm-import-trigger-btn")) {
+      const textarea = this.querySelector("#import-trigger-text");
+      if (!this._importButtonTrigger(textarea.value.trim())) {
+        this._flashFieldError(textarea);
+      }
+      return;
+    }
+
     if (e.target.closest("#add-button-trigger-btn")) {
       const nameInput = this.querySelector("#new-trigger-name");
-      const entityInput = this.querySelector("#new-trigger-entity");
       const clickTypeSelect = this.querySelector("#new-trigger-click-type");
+      const name = nameInput.value.trim();
+
+      if (this._newTriggerSource === "event") {
+        const profileSelect = this.querySelector("#new-trigger-profile");
+        const profileId = profileSelect.value;
+        const profile = EVENT_DEVICE_PROFILES[profileId];
+        const eventMatch = {};
+        let missingInput = null;
+        profile.match_fields.forEach((field) => {
+          const input = this.querySelector(`[data-new-trigger-match="${field}"]`);
+          const value = input.value.trim();
+          if (!value) missingInput = input;
+          eventMatch[field] = field === "channel" ? parseInt(value, 10) : value;
+        });
+        if (missingInput) {
+          this._flashFieldError(missingInput);
+          return;
+        }
+        this._addEventButtonTrigger(name, profileId, eventMatch, clickTypeSelect.value);
+        nameInput.value = "";
+        profile.match_fields.forEach((field) => {
+          this.querySelector(`[data-new-trigger-match="${field}"]`).value = "";
+        });
+        return;
+      }
+
+      const entityInput = this.querySelector("#new-trigger-entity");
       const entityId = entityInput.value.trim();
       if (!entityId) {
         this._flashFieldError(entityInput);
         return;
       }
-      this._addButtonTrigger(nameInput.value.trim(), entityId, clickTypeSelect.value);
+      this._addButtonTrigger(name, entityId, clickTypeSelect.value);
       nameInput.value = "";
       entityInput.value = "";
       return;
@@ -4106,14 +4336,48 @@ class RoomFlowCard extends HTMLElement {
     };
 
     const triggersHtml = triggers
-      .map(
-        (t) => `
+      .map((t) => {
+        const summary =
+          t.source === "event"
+            ? `<small>(${this._t(`event_profile_${t.profile}`)} · ${Object.entries(t.event_match || {})
+                .map(([k, v]) => `${k}=${v}`)
+                .join(", ")})</small>`
+            : `<small>(${t.entity_id})</small>`;
+        return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px;margin-bottom:8px">
-          <span style="display:flex;align-items:center;gap:8px">${icon("mdi:gesture-tap-button")}<b>${t.name}</b> <small>(${t.entity_id})</small> · ${clickTypeLabels[t.click_type] || clickTypeLabels.any}</span>
-          <button class="rf-icon-btn rf-danger" data-remove-button-trigger="${t.id}">${icon("mdi:close")}</button>
-        </div>`
+          <span style="display:flex;align-items:center;gap:8px">${icon("mdi:gesture-tap-button")}<b>${t.name}</b> ${summary} · ${clickTypeLabels[t.click_type] || clickTypeLabels.any}</span>
+          <span style="display:flex;gap:4px">
+            <button class="rf-icon-btn" data-copy-button-trigger="${t.id}" title="${this._t("copy_trigger_button")}">${icon("mdi:content-copy")}</button>
+            <button class="rf-icon-btn rf-danger" data-remove-button-trigger="${t.id}">${icon("mdi:close")}</button>
+          </span>
+        </div>`;
+      })
+      .join("");
+
+    const source = this._newTriggerSource === "event" ? "event" : "entity";
+    const profileId = EVENT_DEVICE_PROFILES[this._newTriggerProfile] ? this._newTriggerProfile : Object.keys(EVENT_DEVICE_PROFILES)[0];
+    const profile = EVENT_DEVICE_PROFILES[profileId];
+    const profileOptions = Object.keys(EVENT_DEVICE_PROFILES)
+      .map((id) => `<option value="${id}" ${id === profileId ? "selected" : ""}>${this._t(`event_profile_${id}`)}</option>`)
+      .join("");
+    const matchFieldsHtml = profile.match_fields
+      .map(
+        (field) => `
+          ${textField(`data-new-trigger-match="${field}" placeholder="${this._t(`event_match_${field}_label`)}" ${field === "channel" ? 'type="number" step="1"' : ""} style="width:140px"`)}
+        `
       )
       .join("");
+
+    const sourceFieldsHtml =
+      source === "event"
+        ? `
+          <select id="new-trigger-profile">${profileOptions}</select>
+          ${matchFieldsHtml}
+        `
+        : `
+          <input id="new-trigger-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
+            style="width:220px" />
+        `;
 
     return `
       <div>
@@ -4124,10 +4388,13 @@ class RoomFlowCard extends HTMLElement {
         <div style="margin-top:12px">${triggersHtml}</div>
         <div class="rf-card" style="margin-top:16px">
           <div class="rf-card-title">${icon("mdi:plus-circle-outline")}${this._t("add_button_trigger_header")}</div>
+          <div class="rf-chip-row">
+            <button class="rf-chip${source === "entity" ? " active" : ""}" data-set-trigger-source="entity">${this._t("trigger_source_entity")}</button>
+            <button class="rf-chip${source === "event" ? " active" : ""}" data-set-trigger-source="event">${this._t("trigger_source_event")}</button>
+          </div>
           <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <input id="new-trigger-name" placeholder="${this._t("button_trigger_name_placeholder")}" style="width:180px" />
-            <input id="new-trigger-entity" list="all-entities-list" placeholder="${this._t("new_button_entity_placeholder")}"
-              style="width:220px" />
+            ${sourceFieldsHtml}
             <select id="new-trigger-click-type">
               <option value="any">${clickTypeLabels.any}</option>
               <option value="single">${clickTypeLabels.single}</option>
@@ -4136,6 +4403,33 @@ class RoomFlowCard extends HTMLElement {
             </select>
             <button id="add-button-trigger-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
           </div>
+          ${source === "event" ? `<div class="rf-help" style="margin-top:8px">${this._t("event_match_help", { event_type: profile.event_type })}</div>` : ""}
+          <div style="margin-top:12px">
+            <button class="rf-btn rf-btn-flat" id="toggle-import-trigger-btn">${icon("mdi:content-paste")}${this._t("import_trigger_button")}</button>
+            ${
+              this._importTriggerOpen
+                ? `
+              <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+                <textarea id="import-trigger-text" rows="6" style="width:100%;font-family:monospace;font-size:0.85em"></textarea>
+                <button class="rf-btn" id="confirm-import-trigger-btn" style="align-self:flex-start">${icon("mdi:check")}${this._t("add")}</button>
+              </div>`
+                : ""
+            }
+          </div>
+        </div>
+        <div class="rf-card" style="margin-top:16px">
+          <div class="rf-card-title">
+            ${icon("mdi:history")}${this._t("button_log_header")}
+            <button class="rf-icon-btn" style="margin-left:auto" data-refresh-dashboard title="${this._t("overview_refresh")}">${icon("mdi:refresh")}</button>
+          </div>
+          <div class="rf-help" style="margin-top:0">${this._t("button_log_help")}</div>
+          ${this._renderLogList(
+            (this._dashboard || {}).button_log,
+            (e) => `
+              <b>${e.trigger_name}</b> <small>(${e.entity_id || "?"})</small> → ${e.state_label}
+              <span class="rf-badge">${this._logOutcomeLabel(e.outcome)}${e.detail ? `: ${e.detail}` : ""}</span>
+            `
+          )}
         </div>
       </div>
     `;
@@ -4496,7 +4790,13 @@ class RoomFlowCard extends HTMLElement {
 
   _renderDeviceButtons(deviceKey, device) {
     const triggers = this._config_data.button_triggers || [];
-    const actionLabels = { toggle: this._t("device_action_toggle"), off: this._t("device_action_off") };
+    const actionLabels = {
+      toggle: this._t("device_action_toggle"),
+      off: this._t("device_action_off"),
+      dim_up: this._t("device_action_dim_up"),
+      dim_down: this._t("device_action_dim_down"),
+    };
+    const isLight = device.type === "light";
 
     const rows = (device.buttons || [])
       .map((b) => {
@@ -4510,6 +4810,13 @@ class RoomFlowCard extends HTMLElement {
       .join("");
 
     const triggerOptions = triggers.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+    // Dimming only makes sense for lights - an outlet/switch has no
+    // brightness to step.
+    const dimOptionsHtml = isLight
+      ? `
+          <option value="dim_up">${actionLabels.dim_up}</option>
+          <option value="dim_down">${actionLabels.dim_down}</option>`
+      : "";
 
     return `
       <div class="rf-card" style="margin-top:8px">
@@ -4524,6 +4831,7 @@ class RoomFlowCard extends HTMLElement {
           <select data-field="action">
             <option value="toggle">${actionLabels.toggle}</option>
             <option value="off">${actionLabels.off}</option>
+            ${dimOptionsHtml}
           </select>
           <button data-add-device-button="${deviceKey}" class="rf-btn rf-btn-flat">${icon("mdi:plus")}${this._t("add")}</button>
         </div>

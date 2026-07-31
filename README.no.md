@@ -10,6 +10,9 @@
 
 # RoomFlow
 
+> ⚠️ **Tidlig fase:** denne integrasjonen er under aktiv utvikling — forvent
+> noen ru kanter og enkelte brytende endringer mellom versjoner.
+
 Styr lys og stikkontakter per rom basert på tid på døgnet — med valgfrie
 helg-/borte-unntak, overgangstider, fysiske knappbindinger og
 bevegelses-/terskelbasert automasjon. Bygget for Home Assistant som en egen

@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.18"
+VERSION = "0.0.19"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -489,6 +489,20 @@ def _legacy_sources_from_single(old_source: str, old_config: dict) -> dict:
 
 DEVICE_TYPE_LIGHT = "light"
 DEVICE_TYPE_OUTLET = "outlet"
+
+# Built-in device profiles for a button_trigger with source="event": maps a
+# vendor's raw HA bus event (no backing entity) to the fields RoomFlow needs
+# to filter it (match_fields, checked against event.data) and to read its
+# click type from (click_type_field, compared via the same substring
+# matching as an entity-based trigger's state/event_type). Add more vendors
+# here later - no other code needs to change per new profile.
+EVENT_DEVICE_PROFILES: dict[str, dict] = {
+    "shelly_gen1_click": {
+        "event_type": "shelly.click",
+        "match_fields": ["device_id", "channel"],
+        "click_type_field": "click_type",
+    },
+}
 
 DEFAULT_BEHAVIOR_LIGHT = {
     "state": "off",

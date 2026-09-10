@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.19"
+VERSION = "0.0.20"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -503,6 +503,17 @@ EVENT_DEVICE_PROFILES: dict[str, dict] = {
         "click_type_field": "click_type",
     },
 }
+
+# Two special click_type values for an entity-based button trigger whose
+# hardware only ever reports a plain press/release pair with no click
+# classification of its own (e.g. Plejd's event.* button entities) - short
+# vs. long is derived by timing the gap between the two, rather than
+# matched directly against a single state-change event like every other
+# click_type value.
+CLICK_TYPE_SHORT_TIMED = "short_press_timed"
+CLICK_TYPE_LONG_TIMED = "long_press_timed"
+TIMED_CLICK_TYPES = (CLICK_TYPE_SHORT_TIMED, CLICK_TYPE_LONG_TIMED)
+DEFAULT_LONG_PRESS_MS = 500
 
 DEFAULT_BEHAVIOR_LIGHT = {
     "state": "off",

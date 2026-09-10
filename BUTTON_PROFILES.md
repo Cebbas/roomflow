@@ -13,6 +13,43 @@ This file documents the built-in profiles and is where reports of tested
 hardware live, so other users can trust a profile works with their exact
 device before trying it themselves.
 
+## Entity-based buttons (no device profile needed)
+
+Most button hardware doesn't need a device profile at all - only hardware
+that fires a **raw event with no backing entity** (like Shelly gen1
+below) does. If your button already shows up as an `event.*` entity in
+Home Assistant, use the existing **"Entity"** option in the Buttons tab
+(not "Device event") and point it at that entity directly.
+
+### Plejd buttons ([hass-plejd](https://github.com/thomasloven/hass-plejd))
+
+Plejd buttons (via `thomasloven/hass-plejd`) already register as a native
+`event.*` entity per button (`custom_components/plejd/event.py`,
+`PlejdButtonEvent`) with exactly two possible `event_type` values:
+`press` and `release` - there's no single/double/long distinction at the
+protocol level (a "long press" is only detectable by measuring the time
+between a `press` and its matching `release`, which RoomFlow doesn't do
+today - see "Not yet supported" below).
+
+For a single action regardless of how long the button was held, use the
+**Entity** option, entity = your button's `event.*` entity, click type =
+**Press** (not "Any" - "Any" also matches the `release` event, which
+would immediately undo a toggle action right after it fires, since Plejd
+sends a `release` shortly after most presses too). "Press" and "Release"
+are two extra click-type choices added specifically for this kind of
+native press/release-only event entity - any other integration that
+reports the same plain `event_type` vocabulary (not just Plejd) can use
+them the same way.
+
+To distinguish a genuine long-press from a normal press, use **Short
+press (timed)** / **Long press (timed)** instead - RoomFlow times the gap
+between the entity's `press` and its matching `release` and classifies
+the release as one or the other (500ms threshold by default, or a custom
+threshold in milliseconds via the "custom long-press threshold" option
+next to the click-type picker when adding the trigger). Bind two separate
+triggers on the same entity, one with each click type, to get distinct
+short-press and long-press actions from a single physical button.
+
 ## Built-in profiles
 
 ### Shelly (gen1) button — `shelly_gen1_click`

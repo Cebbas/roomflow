@@ -63,6 +63,10 @@ from .const import (
     DEVICE_TYPE_LIGHT,
     DEVICE_TYPE_OUTLET,
     EVENT_DEVICE_PROFILES,
+    TIMED_CLICK_TYPES,
+    CLICK_TYPE_SHORT_TIMED,
+    CLICK_TYPE_LONG_TIMED,
+    DEFAULT_LONG_PRESS_MS,
     WEEKEND_STATES,
     HOME_STATES,
     DEFAULT_TRANSITIONS,
@@ -470,6 +474,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN]["config"] = config
     hass.data[DOMAIN]["entry"] = entry
     hass.data[DOMAIN].setdefault("button_unsubs", [])
+    hass.data[DOMAIN].setdefault("button_press_started", {})
     hass.data[DOMAIN].setdefault("motion_unsubs", [])
     hass.data[DOMAIN].setdefault("motion_off_timers", {})
     hass.data[DOMAIN].setdefault("motion_active_state", {})
@@ -910,6 +915,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Avoid triggering on HA restart / entity just appearing
             return
         new_state = event.data.get("new_state")
+        click_type = trigger.get("click_type") or "any"
+
+        if click_type in TIMED_CLICK_TYPES:
+            await _handle_timed_button_press(trigger, event, new_state, click_type)
+            return
+
         state_label = new_state.state if new_state else "?"
         trigger_name = trigger.get("name") or trigger.get("entity_id") or "?"
 
@@ -937,6 +948,71 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass,
             trigger_name=trigger_name,
             entity_id=trigger.get("entity_id"),
+            state_label=state_label,
+            outcome="ran" if attachments else "no_attachments",
+            detail=str(len(attachments)) if attachments else None,
+        )
+
+    async def _handle_timed_button_press(
+        trigger: dict, event: Event, new_state, click_type: str
+    ) -> None:
+        """Derive short_press_timed/long_press_timed from a plain
+        press/release pair (hardware with no click-duration classification
+        of its own, e.g. Plejd's event.* button entities, which only ever
+        report "press"/"release") by timing the gap between the two -
+        unlike every other click_type, this can't be matched against a
+        single state-change event in isolation."""
+        if new_state is None:
+            # Entity went unavailable/was removed - no press/release value
+            # to classify.
+            return
+        entity_id = trigger.get("entity_id")
+        trigger_name = trigger.get("name") or entity_id or "?"
+        candidates = [new_state.state or "", (new_state.attributes or {}).get("event_type") or ""]
+        is_release = any("release" in c.lower() for c in candidates)
+        is_press = not is_release and any("press" in c.lower() for c in candidates)
+
+        if is_press:
+            hass.data[DOMAIN]["button_press_started"][entity_id] = event.time_fired
+            return
+        if not is_release:
+            return
+
+        # Read, don't pop: a second trigger bound to the same entity (e.g.
+        # the paired short/long trigger on the same physical button) needs
+        # to independently read this same start time when its own listener
+        # processes this same release event.
+        started = hass.data[DOMAIN]["button_press_started"].get(entity_id)
+        if started is None:
+            # No matching press seen (e.g. right after a restart) - can't
+            # classify this release.
+            return
+
+        threshold_ms = trigger.get("long_press_ms") or DEFAULT_LONG_PRESS_MS
+        elapsed_ms = (event.time_fired - started).total_seconds() * 1000
+        resolved = CLICK_TYPE_LONG_TIMED if elapsed_ms >= threshold_ms else CLICK_TYPE_SHORT_TIMED
+        state_label = f"{resolved} ({elapsed_ms:.0f}ms)"
+
+        if resolved != click_type:
+            log_button_press(
+                hass,
+                trigger_name=trigger_name,
+                entity_id=entity_id,
+                state_label=state_label,
+                outcome="click_type_mismatch",
+                detail=click_type,
+            )
+            return
+
+        cfg = hass.data[DOMAIN]["config"]
+        attachments = _button_attachments_for_trigger(cfg, trigger.get("id"))
+        for room, device, attachment in attachments:
+            await _run_button_attachment(room, device, attachment, trigger)
+
+        log_button_press(
+            hass,
+            trigger_name=trigger_name,
+            entity_id=entity_id,
             state_label=state_label,
             outcome="ran" if attachments else "no_attachments",
             detail=str(len(attachments)) if attachments else None,

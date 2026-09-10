@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Genuine short vs. long press for press/release-only button entities
+  (e.g. Plejd).** Hardware whose `event.*` entity only ever reports a
+  plain `press`/`release` pair, with no click-duration classification of
+  its own (confirmed with Plejd buttons via `thomasloven/hass-plejd` -
+  see `BUTTON_PROFILES.md`), can now use two new click types, "Short
+  press (timed)" / "Long press (timed)", which RoomFlow resolves itself
+  by timing the gap between the entity's `press` and its matching
+  `release` (500ms threshold by default, or a custom threshold in
+  milliseconds set per trigger). Bind two triggers to the same entity,
+  one of each type, to get distinct short-press and long-press actions
+  from a single physical button.
 - **Physical buttons can now bind directly to a raw device event, not
   just an entity - Shelly (gen1) built in.** Some button hardware (e.g.
   Shelly gen1 relays/inputs) fires a raw Home Assistant event

@@ -553,6 +553,11 @@ const STRINGS = {
     click_type_single: "Single press",
     click_type_double: "Double press",
     click_type_long: "Long press",
+    click_type_press: "Press (raw event.* entities, e.g. Plejd)",
+    click_type_release: "Release (raw event.* entities, e.g. Plejd)",
+    click_type_short_press_timed: "Short press (timed)",
+    click_type_long_press_timed: "Long press (timed)",
+    custom_long_press_threshold_label: "Custom long-press threshold",
     trigger_source_entity: "Entity",
     trigger_source_event: "Device event",
     event_profile_shelly_gen1_click: "Shelly (gen1) button",
@@ -769,6 +774,11 @@ const STRINGS = {
     click_type_single: "Enkeltryck",
     click_type_double: "Dubbeltryck",
     click_type_long: "Långtryck",
+    click_type_press: "Nedtryck (rå event.*-entitet, t.ex. Plejd)",
+    click_type_release: "Släpp (rå event.*-entitet, t.ex. Plejd)",
+    click_type_short_press_timed: "Kort tryck (tidsbaserat)",
+    click_type_long_press_timed: "Långt tryck (tidsbaserat)",
+    custom_long_press_threshold_label: "Egen tröskel för långtryck",
     trigger_source_entity: "Entitet",
     trigger_source_event: "Enhetsevent",
     event_profile_shelly_gen1_click: "Shelly (gen1) knapp",
@@ -954,6 +964,11 @@ const STRINGS = {
     click_type_single: "Enkelttrykk",
     click_type_double: "Dobbelttrykk",
     click_type_long: "Langt trykk",
+    click_type_press: "Nedtrykk (rå event.*-entitet, f.eks. Plejd)",
+    click_type_release: "Slipp (rå event.*-entitet, f.eks. Plejd)",
+    click_type_short_press_timed: "Kort trykk (tidsbasert)",
+    click_type_long_press_timed: "Langt trykk (tidsbasert)",
+    custom_long_press_threshold_label: "Egen terskel for langt trykk",
     trigger_source_entity: "Entitet",
     trigger_source_event: "Enhetshendelse",
     event_profile_shelly_gen1_click: "Shelly (gen1) knapp",
@@ -1137,6 +1152,11 @@ const STRINGS = {
     click_type_single: "Enkelt tryk",
     click_type_double: "Dobbelt tryk",
     click_type_long: "Langt tryk",
+    click_type_press: "Nedtryk (rå event.*-enhed, f.eks. Plejd)",
+    click_type_release: "Slip (rå event.*-enhed, f.eks. Plejd)",
+    click_type_short_press_timed: "Kort tryk (tidsbaseret)",
+    click_type_long_press_timed: "Langt tryk (tidsbaseret)",
+    custom_long_press_threshold_label: "Egen tærskel for langt tryk",
     trigger_source_entity: "Entitet",
     trigger_source_event: "Enhedshændelse",
     event_profile_shelly_gen1_click: "Shelly (gen1) knap",
@@ -1320,6 +1340,11 @@ const STRINGS = {
     click_type_single: "Yksi painallus",
     click_type_double: "Kaksoispainallus",
     click_type_long: "Pitkä painallus",
+    click_type_press: "Painallus (raaka event.*-entiteetti, esim. Plejd)",
+    click_type_release: "Vapautus (raaka event.*-entiteetti, esim. Plejd)",
+    click_type_short_press_timed: "Lyhyt painallus (ajastettu)",
+    click_type_long_press_timed: "Pitkä painallus (ajastettu)",
+    custom_long_press_threshold_label: "Oma kynnysarvo pitkälle painallukselle",
     trigger_source_entity: "Entiteetti",
     trigger_source_event: "Laitetapahtuma",
     event_profile_shelly_gen1_click: "Shelly (gen1) -painike",
@@ -1503,6 +1528,11 @@ const STRINGS = {
     click_type_single: "Einfacher Druck",
     click_type_double: "Doppelter Druck",
     click_type_long: "Langer Druck",
+    click_type_press: "Drücken (rohe event.*-Entität, z. B. Plejd)",
+    click_type_release: "Loslassen (rohe event.*-Entität, z. B. Plejd)",
+    click_type_short_press_timed: "Kurzer Druck (zeitbasiert)",
+    click_type_long_press_timed: "Langer Druck (zeitbasiert)",
+    custom_long_press_threshold_label: "Eigener Schwellenwert für langen Druck",
     trigger_source_entity: "Entität",
     trigger_source_event: "Geräteereignis",
     event_profile_shelly_gen1_click: "Shelly (Gen1)-Taste",
@@ -1686,6 +1716,11 @@ const STRINGS = {
     click_type_single: "Appui simple",
     click_type_double: "Double appui",
     click_type_long: "Appui long",
+    click_type_press: "Appui (entité event.* brute, ex. Plejd)",
+    click_type_release: "Relâchement (entité event.* brute, ex. Plejd)",
+    click_type_short_press_timed: "Appui court (chronométré)",
+    click_type_long_press_timed: "Appui long (chronométré)",
+    custom_long_press_threshold_label: "Seuil personnalisé pour appui long",
     trigger_source_entity: "Entité",
     trigger_source_event: "Événement d'appareil",
     event_profile_shelly_gen1_click: "Bouton Shelly (gen1)",
@@ -1869,6 +1904,11 @@ const STRINGS = {
     click_type_single: "Enkele druk",
     click_type_double: "Dubbele druk",
     click_type_long: "Lange druk",
+    click_type_press: "Indrukken (ruwe event.*-entiteit, bijv. Plejd)",
+    click_type_release: "Loslaten (ruwe event.*-entiteit, bijv. Plejd)",
+    click_type_short_press_timed: "Korte druk (getimed)",
+    click_type_long_press_timed: "Lange druk (getimed)",
+    custom_long_press_threshold_label: "Aangepaste drempel voor lange druk",
     trigger_source_entity: "Entiteit",
     trigger_source_event: "Apparaatgebeurtenis",
     event_profile_shelly_gen1_click: "Shelly (gen1) knop",
@@ -2584,13 +2624,17 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
-  _addButtonTrigger(name, entityId, clickType) {
-    this._config_data.button_triggers.push({
+  _addButtonTrigger(name, entityId, clickType, longPressMs) {
+    const trigger = {
       id: uid(),
       name: name || entityId,
       entity_id: entityId,
       click_type: clickType || "any",
-    });
+    };
+    if (longPressMs) {
+      trigger.long_press_ms = longPressMs;
+    }
+    this._config_data.button_triggers.push(trigger);
     this._scheduleSave();
     this._render();
   }
@@ -3376,7 +3420,13 @@ class RoomFlowCard extends HTMLElement {
         this._flashFieldError(entityInput);
         return;
       }
-      this._addButtonTrigger(name, entityId, clickTypeSelect.value);
+      const thresholdCheckbox = this.querySelector("#new-trigger-custom-threshold");
+      const thresholdInput = this.querySelector("#new-trigger-threshold-ms");
+      const longPressMs =
+        thresholdCheckbox && thresholdCheckbox.checked && thresholdInput
+          ? parseInt(thresholdInput.value, 10) || null
+          : null;
+      this._addButtonTrigger(name, entityId, clickTypeSelect.value, longPressMs);
       nameInput.value = "";
       entityInput.value = "";
       return;
@@ -3521,6 +3571,28 @@ class RoomFlowCard extends HTMLElement {
       const periodWrap = wrap.querySelector('[data-field="period-wrap"]');
       if (periodWrap) {
         periodWrap.style.display = roomButtonAction.value === "force_period" ? "inline-block" : "none";
+      }
+      return;
+    }
+
+    if (e.target.closest("#new-trigger-click-type")) {
+      // Show/hide the long-press-threshold row depending on the chosen
+      // click type; nothing is saved here, this only affects the add-form
+      // UI (a full _render() would wipe whatever else is typed in the
+      // form, same reasoning as the roomButtonAction case above).
+      const select = this.querySelector("#new-trigger-click-type");
+      const row = this.querySelector("#new-trigger-threshold-row");
+      if (row) {
+        row.style.display = select.value === "short_press_timed" || select.value === "long_press_timed" ? "flex" : "none";
+      }
+      return;
+    }
+
+    if (e.target.closest("#new-trigger-custom-threshold")) {
+      const checkbox = this.querySelector("#new-trigger-custom-threshold");
+      const msInput = this.querySelector("#new-trigger-threshold-ms");
+      if (msInput) {
+        msInput.style.display = checkbox.checked ? "" : "none";
       }
       return;
     }
@@ -4333,6 +4405,10 @@ class RoomFlowCard extends HTMLElement {
       single: this._t("click_type_single"),
       double: this._t("click_type_double"),
       long: this._t("click_type_long"),
+      press: this._t("click_type_press"),
+      release: this._t("click_type_release"),
+      short_press_timed: this._t("click_type_short_press_timed"),
+      long_press_timed: this._t("click_type_long_press_timed"),
     };
 
     const triggersHtml = triggers
@@ -4343,9 +4419,10 @@ class RoomFlowCard extends HTMLElement {
                 .map(([k, v]) => `${k}=${v}`)
                 .join(", ")})</small>`
             : `<small>(${t.entity_id})</small>`;
+        const thresholdSuffix = t.long_press_ms ? ` · ${t.long_press_ms}ms` : "";
         return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px;margin-bottom:8px">
-          <span style="display:flex;align-items:center;gap:8px">${icon("mdi:gesture-tap-button")}<b>${t.name}</b> ${summary} · ${clickTypeLabels[t.click_type] || clickTypeLabels.any}</span>
+          <span style="display:flex;align-items:center;gap:8px">${icon("mdi:gesture-tap-button")}<b>${t.name}</b> ${summary} · ${clickTypeLabels[t.click_type] || clickTypeLabels.any}${thresholdSuffix}</span>
           <span style="display:flex;gap:4px">
             <button class="rf-icon-btn" data-copy-button-trigger="${t.id}" title="${this._t("copy_trigger_button")}">${icon("mdi:content-copy")}</button>
             <button class="rf-icon-btn rf-danger" data-remove-button-trigger="${t.id}">${icon("mdi:close")}</button>
@@ -4400,9 +4477,30 @@ class RoomFlowCard extends HTMLElement {
               <option value="single">${clickTypeLabels.single}</option>
               <option value="double">${clickTypeLabels.double}</option>
               <option value="long">${clickTypeLabels.long}</option>
+              <option value="press">${clickTypeLabels.press}</option>
+              <option value="release">${clickTypeLabels.release}</option>
+              ${
+                source === "entity"
+                  ? `
+              <option value="short_press_timed">${clickTypeLabels.short_press_timed}</option>
+              <option value="long_press_timed">${clickTypeLabels.long_press_timed}</option>`
+                  : ""
+              }
             </select>
             <button id="add-button-trigger-btn" class="rf-btn">${icon("mdi:plus")}${this._t("add")}</button>
           </div>
+          ${
+            source === "entity"
+              ? `
+          <div id="new-trigger-threshold-row" style="margin-top:8px;display:none;align-items:center;gap:8px;flex-wrap:wrap">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+              ${switchEl(`id="new-trigger-custom-threshold"`)}
+              ${this._t("custom_long_press_threshold_label")}
+            </label>
+            ${textField(`id="new-trigger-threshold-ms" type="number" min="1" value="500" style="width:70px;display:none"`)}
+          </div>`
+              : ""
+          }
           ${source === "event" ? `<div class="rf-help" style="margin-top:8px">${this._t("event_match_help", { event_type: profile.event_type })}</div>` : ""}
           <div style="margin-top:12px">
             <button class="rf-btn rf-btn-flat" id="toggle-import-trigger-btn">${icon("mdi:content-paste")}${this._t("import_trigger_button")}</button>

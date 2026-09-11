@@ -155,38 +155,6 @@ group, rather than requiring the user to build both halves by hand -
 purely a UX simplification over what's already buildable today, in the
 same spirit as the midnight-wrap idea above.
 
-### Continuous hold-to-dim button action
-
-Button triggers (`cd.button_triggers`, matched in `_handle_button_press`/
-`_click_type_matches` in `__init__.py`) can already be scoped to a
-`click_type` (single/double/long), but every attachment (`room.buttons`/
-`device.buttons`) only supports discrete, one-shot actions (`toggle`,
-`off`, `apply_now`, `force_period`) triggered by a single state-change
-event. There's no way to bind a press-and-hold gesture to continuous
-brightness ramping (repeatedly stepping `brightness_step` up/down at a
-fixed interval for as long as the button is held, reversing direction
-near the brightness extremes) - a common wall-switch pattern for
-dimmable lights that today has to be built as a bespoke automation
-outside RoomFlow entirely. Confirmed with a real device in the vardagsrum
-migration: the Plejd ceiling-light button (`event.vardagsrum_taklampa`)
-drives exactly this pattern today via a hand-written automation
-(`vardagsrum_knapp_1_dimmer`, 10/255 brightness steps every 50ms,
-direction reversing past 20%/80%) that has to stay outside RoomFlow for
-exactly this reason - only its plain toggle-on-press half could move over.
-
-Possible approach: a new attachment action type (e.g. `hold_dim`) on a
-`device.buttons` entry, active only for a trigger definition whose
-`click_type` implies hold semantics, starting a repeating timer (e.g.
-`async_track_time_interval` at ~50ms) that calls `light.turn_on` with a
-small `brightness_step_pct` on the attached device until a corresponding
-release event fires, alternating direction each time the hold starts
-based on the device's current brightness - device-level attachments
-already scope to one device (unlike `room.buttons`, where dimming a
-whole room in lockstep is rarely what's wanted), so this fits the
-existing per-device attachment shape rather than needing a new one, but
-is still a meaningfully different trigger model than every other button
-action today.
-
 ### Live-listen auto-detect for raw-event button triggers
 
 Raw-event button triggers (`source: "event"`, `EVENT_DEVICE_PROFILES` in
@@ -378,6 +346,26 @@ already need elsewhere) - so a trigger outside its window is treated as
 inactive regardless of the sensor's actual state. The card's trigger row
 would need two optional time inputs next to the existing sensor/threshold
 fields.
+
+### Visible countdown until a motion-controlled device turns off
+
+`_schedule_motion_off` in `__init__.py` tracks a device's pending
+off-timer purely as a cancel callback (`hass.data[DOMAIN]["motion_off_timers"][key]`,
+from `async_call_later`) - there's no stored deadline/finish time, so
+nothing can currently answer "how long until this turns off" once motion
+has stopped. A legacy hand-built equivalent (the toilet's old
+`timer.toa_belysning_timer` + a status template sensor reading its
+`remaining`/`finishes_at` attributes) showed this exact countdown in the
+UI; RoomFlow's own motion system has no equivalent today, for either the
+off-delay or the dim-warning stage.
+
+Possible approach: replace (or supplement) the bare cancel-callback stored
+per timer with the resolved finish `datetime` too, and expose it - either
+as an attribute on an existing per-device/per-room entity, or a small
+dedicated sensor per motion-controlled device (state: the finish time, or
+a template-friendly "remaining" duration) - updated when
+`_schedule_motion_off` starts a new countdown and cleared when it's
+cancelled (motion returns) or fires (device turns off/dims).
 
 ### Room test mode (override every resolution input, applied live)
 

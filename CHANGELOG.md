@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Continuous hold-to-dim button action.** A device's Buttons section can
+  now attach a trigger to "Hold to dim" - the light ramps brightness
+  smoothly for as long as the button is held, alternating direction each
+  time (down from above ~80%, up from below ~20%, otherwise the opposite
+  of last time), the same wall-switch pattern several rooms previously
+  needed a hand-written automation outside RoomFlow for. Works off any
+  entity that reports a live press/release-style signal - an `event.*`
+  entity (Plejd, Zigbee2MQTT/ZHA) via its state/`event_type`, or a plain
+  `binary_sensor.*` (e.g. a Shelly channel's own `*_input` sensor, "on"
+  for exactly as long as the button is physically held) via its on/off
+  state. A raw device-event trigger (the Shelly gen1 "Device event"
+  option) can't drive this - a completed `shelly.click` event carries no
+  "still holding" signal, only a classification after release - point a
+  hold trigger at the channel's own input `binary_sensor` instead.
+
 - **A motion-controlled device left to dim-and-turn-off after motion
   stops now correctly restores to full brightness if motion comes back
   mid-countdown.** Previously this only worked for devices motion itself

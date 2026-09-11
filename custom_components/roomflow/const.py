@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.21"
+VERSION = "0.0.22"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -514,6 +514,27 @@ CLICK_TYPE_SHORT_TIMED = "short_press_timed"
 CLICK_TYPE_LONG_TIMED = "long_press_timed"
 TIMED_CLICK_TYPES = (CLICK_TYPE_SHORT_TIMED, CLICK_TYPE_LONG_TIMED)
 DEFAULT_LONG_PRESS_MS = 500
+
+# click_type for a button trigger meant to drive a hold_dim attachment
+# (continuous brightness ramp for as long as the button is held) - unlike
+# every other click_type, this doesn't classify a single completed
+# gesture, it marks the trigger's entity as a live hold/release signal:
+# for an `event.*` entity, its state/event_type is read for "press"/
+# "release" substrings (same convention as the timed click types above);
+# for a `binary_sensor.*` entity (e.g. a Shelly channel's own *_input
+# sensor, which is "on" for exactly as long as the physical button is
+# held), "on" means held and "off" means released. A raw device-event
+# trigger (EVENT_DEVICE_PROFILES) can't drive this - a completed
+# shelly.click event carries no "still holding" information, only a
+# classification after the fact - so hold_dim only works on an
+# entity-based trigger pointed at a live-updating input entity.
+CLICK_TYPE_HOLD = "hold"
+
+# Small brightness step (0-255 scale) per hold_dim tick and the interval
+# between ticks - the same cadence the hand-written vardagsrum/nadines_rum
+# hold-to-dim automations this replaces used (10/255 every 50ms).
+HOLD_DIM_STEP = 10
+HOLD_DIM_INTERVAL_SECONDS = 0.05
 
 DEFAULT_BEHAVIOR_LIGHT = {
     "state": "off",

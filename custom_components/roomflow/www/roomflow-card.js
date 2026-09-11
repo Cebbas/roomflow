@@ -557,6 +557,7 @@ const STRINGS = {
     click_type_release: "Release (raw event.* entities, e.g. Plejd)",
     click_type_short_press_timed: "Short press (timed)",
     click_type_long_press_timed: "Long press (timed)",
+    click_type_hold: "Hold",
     custom_long_press_threshold_label: "Custom long-press threshold",
     trigger_source_entity: "Entity",
     trigger_source_event: "Device event",
@@ -576,6 +577,7 @@ const STRINGS = {
     device_action_off: "Turn off",
     device_action_dim_up: "Dim up",
     device_action_dim_down: "Dim down",
+    device_action_hold_dim: "Hold to dim",
     action_toggle: "Toggle on/off",
     action_off: "Turn off room",
     action_apply_now: "Run scheduled behavior now",
@@ -778,6 +780,7 @@ const STRINGS = {
     click_type_release: "Släpp (rå event.*-entitet, t.ex. Plejd)",
     click_type_short_press_timed: "Kort tryck (tidsbaserat)",
     click_type_long_press_timed: "Långt tryck (tidsbaserat)",
+    click_type_hold: "Håll in",
     custom_long_press_threshold_label: "Egen tröskel för långtryck",
     trigger_source_entity: "Entitet",
     trigger_source_event: "Enhetsevent",
@@ -797,6 +800,7 @@ const STRINGS = {
     device_action_off: "Stäng av",
     device_action_dim_up: "Dimma upp",
     device_action_dim_down: "Dimma ner",
+    device_action_hold_dim: "Håll in för att dimma",
     action_toggle: "Växla på/av",
     action_off: "Stäng av rum",
     action_apply_now: "Kör schemalagt beteende nu",
@@ -968,6 +972,7 @@ const STRINGS = {
     click_type_release: "Slipp (rå event.*-entitet, f.eks. Plejd)",
     click_type_short_press_timed: "Kort trykk (tidsbasert)",
     click_type_long_press_timed: "Langt trykk (tidsbasert)",
+    click_type_hold: "Hold inne",
     custom_long_press_threshold_label: "Egen terskel for langt trykk",
     trigger_source_entity: "Entitet",
     trigger_source_event: "Enhetshendelse",
@@ -1156,6 +1161,7 @@ const STRINGS = {
     click_type_release: "Slip (rå event.*-enhed, f.eks. Plejd)",
     click_type_short_press_timed: "Kort tryk (tidsbaseret)",
     click_type_long_press_timed: "Langt tryk (tidsbaseret)",
+    click_type_hold: "Hold nede",
     custom_long_press_threshold_label: "Egen tærskel for langt tryk",
     trigger_source_entity: "Entitet",
     trigger_source_event: "Enhedshændelse",
@@ -1344,6 +1350,7 @@ const STRINGS = {
     click_type_release: "Vapautus (raaka event.*-entiteetti, esim. Plejd)",
     click_type_short_press_timed: "Lyhyt painallus (ajastettu)",
     click_type_long_press_timed: "Pitkä painallus (ajastettu)",
+    click_type_hold: "Pidä painettuna",
     custom_long_press_threshold_label: "Oma kynnysarvo pitkälle painallukselle",
     trigger_source_entity: "Entiteetti",
     trigger_source_event: "Laitetapahtuma",
@@ -1532,6 +1539,7 @@ const STRINGS = {
     click_type_release: "Loslassen (rohe event.*-Entität, z. B. Plejd)",
     click_type_short_press_timed: "Kurzer Druck (zeitbasiert)",
     click_type_long_press_timed: "Langer Druck (zeitbasiert)",
+    click_type_hold: "Halten",
     custom_long_press_threshold_label: "Eigener Schwellenwert für langen Druck",
     trigger_source_entity: "Entität",
     trigger_source_event: "Geräteereignis",
@@ -1720,6 +1728,7 @@ const STRINGS = {
     click_type_release: "Relâchement (entité event.* brute, ex. Plejd)",
     click_type_short_press_timed: "Appui court (chronométré)",
     click_type_long_press_timed: "Appui long (chronométré)",
+    click_type_hold: "Maintenir",
     custom_long_press_threshold_label: "Seuil personnalisé pour appui long",
     trigger_source_entity: "Entité",
     trigger_source_event: "Événement d'appareil",
@@ -1908,6 +1917,7 @@ const STRINGS = {
     click_type_release: "Loslaten (ruwe event.*-entiteit, bijv. Plejd)",
     click_type_short_press_timed: "Korte druk (getimed)",
     click_type_long_press_timed: "Lange druk (getimed)",
+    click_type_hold: "Ingedrukt houden",
     custom_long_press_threshold_label: "Aangepaste drempel voor lange druk",
     trigger_source_entity: "Entiteit",
     trigger_source_event: "Apparaatgebeurtenis",
@@ -4409,6 +4419,7 @@ class RoomFlowCard extends HTMLElement {
       release: this._t("click_type_release"),
       short_press_timed: this._t("click_type_short_press_timed"),
       long_press_timed: this._t("click_type_long_press_timed"),
+      hold: this._t("click_type_hold"),
     };
 
     const triggersHtml = triggers
@@ -4483,7 +4494,8 @@ class RoomFlowCard extends HTMLElement {
                 source === "entity"
                   ? `
               <option value="short_press_timed">${clickTypeLabels.short_press_timed}</option>
-              <option value="long_press_timed">${clickTypeLabels.long_press_timed}</option>`
+              <option value="long_press_timed">${clickTypeLabels.long_press_timed}</option>
+              <option value="hold">${clickTypeLabels.hold}</option>`
                   : ""
               }
             </select>
@@ -4893,6 +4905,7 @@ class RoomFlowCard extends HTMLElement {
       off: this._t("device_action_off"),
       dim_up: this._t("device_action_dim_up"),
       dim_down: this._t("device_action_dim_down"),
+      hold_dim: this._t("device_action_hold_dim"),
     };
     const isLight = device.type === "light";
 
@@ -4913,7 +4926,8 @@ class RoomFlowCard extends HTMLElement {
     const dimOptionsHtml = isLight
       ? `
           <option value="dim_up">${actionLabels.dim_up}</option>
-          <option value="dim_down">${actionLabels.dim_down}</option>`
+          <option value="dim_down">${actionLabels.dim_down}</option>
+          <option value="hold_dim">${actionLabels.hold_dim}</option>`
       : "";
 
     return `

@@ -67,6 +67,9 @@ from .const import (
     CLICK_TYPE_SHORT_TIMED,
     CLICK_TYPE_LONG_TIMED,
     DEFAULT_LONG_PRESS_MS,
+    CLICK_TYPE_HOLD,
+    HOLD_DIM_STEP,
+    HOLD_DIM_INTERVAL_SECONDS,
     WEEKEND_STATES,
     HOME_STATES,
     DEFAULT_TRANSITIONS,
@@ -475,6 +478,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN]["entry"] = entry
     hass.data[DOMAIN].setdefault("button_unsubs", [])
     hass.data[DOMAIN].setdefault("button_press_started", {})
+    hass.data[DOMAIN].setdefault("hold_dim_timers", {})
+    hass.data[DOMAIN].setdefault("hold_dim_direction", {})
     hass.data[DOMAIN].setdefault("motion_unsubs", [])
     hass.data[DOMAIN].setdefault("motion_off_timers", {})
     hass.data[DOMAIN].setdefault("motion_active_state", {})
@@ -921,6 +926,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await _handle_timed_button_press(trigger, event, new_state, click_type)
             return
 
+        if click_type == CLICK_TYPE_HOLD:
+            await _handle_hold_button_press(trigger, new_state)
+            return
+
         state_label = new_state.state if new_state else "?"
         trigger_name = trigger.get("name") or trigger.get("entity_id") or "?"
 
@@ -1014,6 +1023,97 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             trigger_name=trigger_name,
             entity_id=entity_id,
             state_label=state_label,
+            outcome="ran" if attachments else "no_attachments",
+            detail=str(len(attachments)) if attachments else None,
+        )
+
+    def _start_hold_dim(room: dict, device: dict) -> None:
+        if _device_domain(device) != "light":
+            return
+        key = _motion_key(room["id"], device["entity_id"])
+        if key in hass.data[DOMAIN]["hold_dim_timers"]:
+            return  # already ramping - a duplicate press event, don't stack timers
+        hass.data[DOMAIN]["motion_manual_override"][key] = True
+        _cancel_motion_timer(key)
+
+        state = hass.states.get(device["entity_id"])
+        current = (state.attributes.get("brightness") if state and state.state == "on" else 0) or 0
+        pct = current / 255 * 100
+        if pct > 80:
+            direction = "down"
+        elif pct < 20:
+            direction = "up"
+        else:
+            # Alternate from whichever direction the last hold used, so
+            # repeated holds in the comfortable middle range ping-pong
+            # instead of always ramping the same way.
+            direction = hass.data[DOMAIN]["hold_dim_direction"].get(key, "up")
+        hass.data[DOMAIN]["hold_dim_direction"][key] = "down" if direction == "up" else "up"
+
+        async def _tick(_now) -> None:
+            tick_state = hass.states.get(device["entity_id"])
+            tick_current = (
+                tick_state.attributes.get("brightness") if tick_state and tick_state.state == "on" else 0
+            ) or 0
+            delta = HOLD_DIM_STEP if direction == "up" else -HOLD_DIM_STEP
+            new_brightness = max(1, min(255, tick_current + delta))
+            try:
+                await hass.services.async_call(
+                    "light", "turn_on", {"entity_id": device["entity_id"], "brightness": new_brightness}
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("RoomFlow: could not hold-dim %s: %s", device.get("entity_id"), err)
+
+        hass.data[DOMAIN]["hold_dim_timers"][key] = async_track_time_interval(
+            hass, _tick, timedelta(seconds=HOLD_DIM_INTERVAL_SECONDS)
+        )
+
+    async def _handle_hold_button_press(trigger: dict, new_state) -> None:
+        """Start/stop a continuous brightness ramp on every hold_dim
+        attachment for this trigger, for as long as the button is held.
+        Domain-aware press/release detection so the same mechanism covers
+        both an `event.*` entity (Plejd/Zigbee-style press/release) and a
+        `binary_sensor.*` entity (a Shelly channel's own *_input sensor,
+        "on" for exactly as long as the physical button is held) - see
+        CLICK_TYPE_HOLD's docstring in const.py for why a raw device-event
+        trigger can't drive this at all."""
+        entity_id = trigger.get("entity_id")
+        trigger_name = trigger.get("name") or entity_id or "?"
+        if not entity_id or new_state is None:
+            return
+        domain = entity_id.split(".")[0]
+        if domain == "binary_sensor":
+            is_press = new_state.state == "on"
+            is_release = new_state.state == "off"
+        else:
+            candidates = [new_state.state or "", (new_state.attributes or {}).get("event_type") or ""]
+            is_release = any("release" in c.lower() for c in candidates)
+            is_press = not is_release and any("press" in c.lower() for c in candidates)
+        if not is_press and not is_release:
+            return
+
+        cfg = hass.data[DOMAIN]["config"]
+        attachments = [
+            (room, device)
+            for room, device, attachment in _button_attachments_for_trigger(cfg, trigger.get("id"))
+            if attachment.get("action") == "hold_dim" and device is not None
+        ]
+
+        if is_press:
+            for room, device in attachments:
+                _start_hold_dim(room, device)
+        else:
+            for room, device in attachments:
+                key = _motion_key(room["id"], device["entity_id"])
+                cancel = hass.data[DOMAIN]["hold_dim_timers"].pop(key, None)
+                if cancel:
+                    cancel()
+
+        log_button_press(
+            hass,
+            trigger_name=trigger_name,
+            entity_id=entity_id,
+            state_label="held" if is_press else "released",
             outcome="ran" if attachments else "no_attachments",
             detail=str(len(attachments)) if attachments else None,
         )
@@ -1558,6 +1658,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     for motion_unsub in hass.data[DOMAIN].get("motion_unsubs", []):
         motion_unsub()
     for cancel in hass.data[DOMAIN].get("motion_off_timers", {}).values():
+        cancel()
+    for cancel in hass.data[DOMAIN].get("hold_dim_timers", {}).values():
         cancel()
     try:
         async_remove_panel(hass, "roomflow")

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **A motion-controlled device left to dim-and-turn-off after motion
+  stops now correctly restores to full brightness if motion comes back
+  mid-countdown.** Previously this only worked for devices motion itself
+  also turns *on* (`motion_on` enabled) - a device meant to be turned on
+  some other way (typically a bound button) and left purely to motion for
+  the dim-warning/off/restore sequence (`motion_on` off, `motion_off` on)
+  had no way to interrupt its own countdown: if someone was still there
+  when it dimmed as a warning, it kept counting down to off regardless.
+  Fixes the classic bathroom/toilet pattern of "button turns the light
+  on, motion governs when it dims and turns back off."
+
 - **Genuine short vs. long press for press/release-only button entities
   (e.g. Plejd).** Hardware whose `event.*` entity only ever reports a
   plain `press`/`release` pair, with no click-duration classification of

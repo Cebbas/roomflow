@@ -37,7 +37,10 @@ Midsummer, etc.), a custom date range (holiday/vacation weeks), or a
 recurring season of the year (summer vs. winter lighting). Concretely
 blocks a full migration of at least one real device (a seasonal advent/
 Christmas light left out of the kitchen migration for exactly this
-reason).
+reason) - confirmed a second time in the vardagsrum migration
+(`light.vardagsrum_stjarnor`, a Christmas star group baked directly into
+the regular Morgon/Dag/Eftermiddag scenes with no date gating of its own
+in the source YAML), also left out for the same reason.
 
 Possible approach: a new override tier (checked in precedence alongside/
 above weekend, similar to how away/weekend/default already stack) driven
@@ -164,7 +167,12 @@ brightness ramping (repeatedly stepping `brightness_step` up/down at a
 fixed interval for as long as the button is held, reversing direction
 near the brightness extremes) - a common wall-switch pattern for
 dimmable lights that today has to be built as a bespoke automation
-outside RoomFlow entirely.
+outside RoomFlow entirely. Confirmed with a real device in the vardagsrum
+migration: the Plejd ceiling-light button (`event.vardagsrum_taklampa`)
+drives exactly this pattern today via a hand-written automation
+(`vardagsrum_knapp_1_dimmer`, 10/255 brightness steps every 50ms,
+direction reversing past 20%/80%) that has to stay outside RoomFlow for
+exactly this reason - only its plain toggle-on-press half could move over.
 
 Possible approach: a new attachment action type (e.g. `hold_dim`) on a
 `device.buttons` entry, active only for a trigger definition whose
@@ -273,6 +281,16 @@ device unconditionally until explicitly resumed or a fixed expiry (end of
 day, next period change, or a chosen duration) - a deliberate override on
 top of the automatic one, not a replacement for it.
 
+Confirmed as a real (not hypothetical) need in the vardagsrum migration:
+the legacy "Bortrest" state (`input_boolean.hus_scener_bortrest`, away
+with a return date, distinct from a normal empty-house away) leaves the
+room's lights completely untouched in the source automation - it matches
+none of `vardagsrum_scener_automations.yaml`'s `choose` branches, so
+nothing is asserted at all while it's active. RoomFlow's away override is
+binary (on = apply this behavior) and has no equivalent "leave entirely
+alone" state, so this specific vacation-mode behavior can't be replicated
+without this feature - see `MIGRATION_NOTES.md`.
+
 ### Preview / simulate resolved behavior
 
 There's no way to see what RoomFlow *would* do without actually waiting
@@ -360,31 +378,6 @@ already need elsewhere) - so a trigger outside its window is treated as
 inactive regardless of the sensor's actual state. The card's trigger row
 would need two optional time inputs next to the existing sensor/threshold
 fields.
-
-### Restore-on-motion-return for motion_off-only devices
-
-`_handle_motion_change` in `__init__.py` only cancels a device's pending
-motion-off timer and re-applies its "on" behavior
-(`_cancel_motion_timer`/`_apply_motion_device_on`) for devices in
-`_motion_on_devices` (control mode "motion" with `motion_on` enabled) -
-when motion becomes active again mid-countdown. A device configured with
-`motion_on` off but `motion_off` on (e.g. turned on by a bound button,
-then left to the room's motion trigger purely to dim-and-turn-off after
-inactivity - the intended replacement for the legacy bathroom/toilet
-ceiling-light pattern of "button turns it on, motion governs the
-dim/off/restore sequence") never gets that cancel-and-restore: if motion
-returns while its off-timer/dim-warning is counting down, the device
-still turns off on schedule instead of snapping back to full brightness
-like the old hand-built automation did.
-
-Possible approach: in `_handle_motion_change`'s "motion became active"
-branch, also check `_motion_off_devices` (not just `_motion_on_devices`)
-for any device with a live pending timer (`hass.data[DOMAIN]
-["motion_off_timers"]`) and cancel + restore it to the current period's
-resolved behavior via `_apply_motion_device_on`, even though `motion_on`
-itself is off - the restore is a reaction to an in-progress countdown
-being interrupted, not a fresh "motion turned this on" event, so it
-should be gated on "has a pending timer" rather than on `motion_on`.
 
 ### Room test mode (override every resolution input, applied live)
 

@@ -1303,11 +1303,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 continue
 
             if new_active:
+                restored = set()
                 for device in _motion_on_devices(room, period, definition_id):
                     key = _motion_key(room["id"], device["entity_id"])
                     # A fresh motion cycle always releases any manual-mode
                     # lock from a prior button press, per RoomFlow's design.
                     hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
+                    _cancel_motion_timer(key)
+                    await _apply_motion_device_on(room, device)
+                    restored.add(device["entity_id"])
+                # A motion_off-only device (e.g. turned on by a bound button,
+                # then left to motion purely to dim-and-turn-off after
+                # inactivity) never went through _motion_on_devices above, so
+                # it needs its own restore path here: if motion returns while
+                # its off-timer/dim-warning is still counting down, that's an
+                # in-progress countdown being interrupted, not a fresh
+                # "motion turned this on" event - gated on an actual pending
+                # timer existing, not on motion_on (which is off for these).
+                for device in _motion_off_devices(room, period, definition_id):
+                    if device["entity_id"] in restored:
+                        continue
+                    key = _motion_key(room["id"], device["entity_id"])
+                    if key not in hass.data[DOMAIN]["motion_off_timers"]:
+                        continue
                     _cancel_motion_timer(key)
                     await _apply_motion_device_on(room, device)
             else:

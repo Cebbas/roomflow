@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Motion-restore events now log as their own source instead of
+  reusing `motion_on`.** A device configured with motion off but not
+  motion on (e.g. turned on by a button, then left to motion purely to
+  dim-and-turn-off after inactivity) could have its restore-on-return
+  event - motion coming back while its off-timer/dim-warning was still
+  counting down - show up in the device log as `source: motion_on`,
+  which looked like motion was turning the device on from cold despite
+  motion_on being disabled. That path now logs as `motion_restored`,
+  keeping it clearly distinct from a genuine motion_on activation. No
+  behavior change, log clarity only.
+
 - **A manual "turn on" button press is no longer blocked by an
   off-resolving condition or away override.** Previously, if a room
   condition (e.g. a "Natt" override tied to a global night switch) or the

@@ -1378,7 +1378,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             room, device, f"on {round(brightness / 255 * 100)}%", schedule_id, _get_period(schedule_id), "motion_warn"
         )
 
-    async def _apply_motion_device_on(room: dict, device: dict) -> None:
+    async def _apply_motion_device_on(room: dict, device: dict, source: str = "motion_on") -> None:
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         period = _get_period(schedule_id)
         if period is None:
@@ -1389,7 +1389,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cfg = hass.data[DOMAIN]["config"]
         default_transitions = transitions_for_schedule(cfg, schedule_id)
         await _apply_single_device(
-            room, device, period, day_type, home_state, active_condition_ids, default_transitions, schedule_id, "motion_on"
+            room, device, period, day_type, home_state, active_condition_ids, default_transitions, schedule_id, source
         )
 
     def _schedule_motion_off(room_id: str, device: dict, motion_cfg: dict) -> None:
@@ -1483,7 +1483,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     if key not in hass.data[DOMAIN]["motion_off_timers"]:
                         continue
                     _cancel_motion_timer(key)
-                    await _apply_motion_device_on(room, device)
+                    await _apply_motion_device_on(room, device, source="motion_restored")
             else:
                 for device in _motion_off_devices(room, period, definition_id):
                     key = _motion_key(room["id"], device["entity_id"])

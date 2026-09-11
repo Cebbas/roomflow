@@ -15,7 +15,12 @@
   state. A raw device-event trigger (the Shelly gen1 "Device event"
   option) can't drive this - a completed `shelly.click` event carries no
   "still holding" signal, only a classification after release - point a
-  hold trigger at the channel's own input `binary_sensor` instead.
+  hold trigger at the channel's own input `binary_sensor` instead. Doesn't
+  actually start ramping until held past the same threshold used for
+  timed short/long press detection, so a plain short click - which also
+  briefly reports the same "on"/"press" signal - never nudges the
+  brightness, even when a separate toggle trigger shares the same
+  physical button/input.
 
 - **A motion-controlled device left to dim-and-turn-off after motion
   stops now correctly restores to full brightness if motion comes back

@@ -479,6 +479,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("button_unsubs", [])
     hass.data[DOMAIN].setdefault("button_press_started", {})
     hass.data[DOMAIN].setdefault("hold_dim_timers", {})
+    hass.data[DOMAIN].setdefault("hold_dim_pending", {})
     hass.data[DOMAIN].setdefault("hold_dim_direction", {})
     hass.data[DOMAIN].setdefault("motion_unsubs", [])
     hass.data[DOMAIN].setdefault("motion_off_timers", {})
@@ -1076,7 +1077,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         `binary_sensor.*` entity (a Shelly channel's own *_input sensor,
         "on" for exactly as long as the physical button is held) - see
         CLICK_TYPE_HOLD's docstring in const.py for why a raw device-event
-        trigger can't drive this at all."""
+        trigger can't drive this at all. Ramping doesn't actually start
+        until DEFAULT_LONG_PRESS_MS after the press (see the pending-timer
+        dance below) so a plain short click - which also briefly reports
+        "on"/"press" on the same entity - never nudges the brightness,
+        even if a separate toggle trigger shares the same physical button."""
         entity_id = trigger.get("entity_id")
         trigger_name = trigger.get("name") or entity_id or "?"
         if not entity_id or new_state is None:
@@ -1101,10 +1106,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         if is_press:
             for room, device in attachments:
-                _start_hold_dim(room, device)
+                key = _motion_key(room["id"], device["entity_id"])
+                # Don't start ramping the instant the input goes "on" - a
+                # plain short click holds it "on" too, just for under
+                # DEFAULT_LONG_PRESS_MS, and would otherwise nudge the
+                # brightness by a tick or two on every ordinary click if a
+                # toggle trigger shares the same physical button. Wait to
+                # confirm this is actually a hold before touching the light.
+                async def _confirm_hold(_now, room=room, device=device, key=key) -> None:
+                    hass.data[DOMAIN]["hold_dim_pending"].pop(key, None)
+                    _start_hold_dim(room, device)
+
+                hass.data[DOMAIN]["hold_dim_pending"][key] = async_call_later(
+                    hass, DEFAULT_LONG_PRESS_MS / 1000, _confirm_hold
+                )
         else:
             for room, device in attachments:
                 key = _motion_key(room["id"], device["entity_id"])
+                pending_cancel = hass.data[DOMAIN]["hold_dim_pending"].pop(key, None)
+                if pending_cancel:
+                    pending_cancel()  # released before the hold was confirmed - never started ramping
                 cancel = hass.data[DOMAIN]["hold_dim_timers"].pop(key, None)
                 if cancel:
                     cancel()
@@ -1660,6 +1681,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     for cancel in hass.data[DOMAIN].get("motion_off_timers", {}).values():
         cancel()
     for cancel in hass.data[DOMAIN].get("hold_dim_timers", {}).values():
+        cancel()
+    for cancel in hass.data[DOMAIN].get("hold_dim_pending", {}).values():
         cancel()
     try:
         async_remove_panel(hass, "roomflow")

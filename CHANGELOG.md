@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **A manual "turn on" button press is no longer blocked by an
+  off-resolving condition or away override.** Previously, if a room
+  condition (e.g. a "Natt" override tied to a global night switch) or the
+  away override was active and configured to turn a device off, pressing
+  its button to turn it back *on* kept resolving to that same "off"
+  value for as long as the condition/away state stayed active - not just
+  at the moment it started. A manual on now only honours a condition/away
+  tier that itself wants "on"; an off-resolving one is skipped in favour
+  of the next tier, ultimately the period's own default - so a device can
+  force off automatically the moment a condition activates while still
+  staying fully button-controllable afterward, on the period's configured
+  brightness (set a period's default to a real "on" value, e.g. a dim
+  night brightness, to control exactly what a press turns it on to during
+  that period).
+
 - **Continuous hold-to-dim button action.** A device's Buttons section can
   now attach a trigger to "Hold to dim" - the light ramps brightness
   smoothly for as long as the button is held, alternating direction each

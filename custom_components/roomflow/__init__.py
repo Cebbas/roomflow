@@ -101,6 +101,40 @@ _CARD_URL_PATH = "/roomflow_static"
 _CARD_JS_URL = f"{_CARD_URL_PATH}/roomflow-card.js?v={VERSION}"
 
 
+def _pick_manual_on_behavior(
+    behaviors: dict,
+    active_condition_ids: list[str],
+    day_type: str,
+    home_state: str,
+    away_default: dict | None = None,
+) -> dict | None:
+    """Same tier order `_pick_behavior` uses (condition > away > weekend >
+    default) for a manual "turn on" button press specifically - except an
+    off-resolving tier never gets to veto it. A condition/away override
+    that's only there to force things off automatically (e.g. a "Natt"
+    condition bound to a global night switch) shouldn't also block a
+    deliberate manual on for as long as that condition happens to stay
+    active - only a tier that itself wants "on" can supply the press's
+    target; anything that resolves "off" (or isn't enabled/active for
+    this period) is skipped in favour of the next tier. Falls through to
+    the period's own default as the final answer either way, even if
+    that's "off" too - a device with no configured "on" value anywhere
+    for this period genuinely has none to give."""
+    for condition_id in active_condition_ids:
+        condition_cfg = behaviors.get(condition_id)
+        if condition_cfg and condition_cfg.get("enabled") and condition_cfg.get("state") == "on":
+            return condition_cfg
+    away_cfg = behaviors.get("away")
+    if away_cfg and away_cfg.get("enabled") and home_state == "away" and away_cfg.get("state") == "on":
+        return away_cfg
+    if away_default and away_default.get("enabled") and home_state == "away" and away_default.get("state") == "on":
+        return away_default
+    weekend_cfg = behaviors.get("weekend")
+    if weekend_cfg and weekend_cfg.get("enabled") and day_type == "weekend" and weekend_cfg.get("state") == "on":
+        return weekend_cfg
+    return behaviors.get("default")
+
+
 def _pick_behavior(
     behaviors: dict,
     active_condition_ids: list[str],
@@ -782,14 +816,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         room: dict, device: dict
     ) -> tuple[dict | None, str, str | None, float | None]:
         """What a manual "on" (button toggle) should apply to this device
-        right now - the same Default/Weekend/Away/condition precedence
-        _apply_single_device uses, except always with default_enabled=True.
-        Ambient/motion ticks deliberately skip a "button" control-mode
-        device's Default variant (see _control_mode), but a manual button
-        press is the *only* trigger such a device ever gets - if this also
-        gated on control mode, a button-controlled light's configured
-        brightness/color would never actually be reachable, only a bare
-        on/off."""
+        right now - the same Default/Weekend/Away/condition tiers
+        _apply_single_device uses, but resolved with `_pick_manual_on_behavior`
+        (see its docstring) instead of `_pick_behavior`: an off-resolving
+        condition/away override never blocks a manual on, only an
+        on-resolving one is honoured, falling through to the period's own
+        default otherwise. Ambient/motion ticks separately skip a
+        "button" control-mode device's Default variant entirely (see
+        _control_mode) - but a manual button press is the *only* trigger
+        such a device ever gets, so it always reaches the period's real
+        configured brightness/color, never gated on control mode."""
         cfg = hass.data[DOMAIN]["config"]
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         period = _get_period(schedule_id)
@@ -799,12 +835,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not raw_behaviors:
             return None, schedule_id, period, None
         behaviors = _normalize_behaviors(raw_behaviors)
-        behavior = _pick_behavior(
+        behavior = _pick_manual_on_behavior(
             behaviors,
             _active_room_conditions(hass, room),
             _get_day_type(),
             _get_home_state(),
-            default_enabled=True,
             away_default=device.get("away_default"),
         )
         if not behavior:

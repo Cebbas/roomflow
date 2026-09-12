@@ -865,7 +865,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         new_brightness = max(1, min(255, current + delta))
         try:
             await hass.services.async_call(
-                "light", "turn_on", {"entity_id": device["entity_id"], "brightness": new_brightness}
+                "light", "turn_on", {"entity_id": device["entity_id"], "brightness": new_brightness}, blocking=True
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("RoomFlow: could not dim %s: %s", device.get("entity_id"), err)
@@ -882,7 +882,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _cancel_motion_timer(key)
             try:
                 await hass.services.async_call(
-                    _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}
+                    _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}, blocking=True
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning(
@@ -914,7 +914,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 continue
             try:
                 await hass.services.async_call(
-                    _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}
+                    _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}, blocking=True
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning(
@@ -935,7 +935,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
         try:
             await hass.services.async_call(
-                _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}
+                _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}, blocking=True
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
@@ -1351,7 +1351,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _turn_off_device(room: dict, device: dict, source: str = "motion_off") -> None:
         try:
             await hass.services.async_call(
-                _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}
+                _device_domain(device), "turn_off", {"entity_id": device["entity_id"]}, blocking=True
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
@@ -1366,7 +1366,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return  # the dim-warning stage only makes sense for lights
         try:
             await hass.services.async_call(
-                "light", "turn_on", {"entity_id": device["entity_id"], "brightness": brightness}
+                "light", "turn_on", {"entity_id": device["entity_id"], "brightness": brightness}, blocking=True
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
@@ -1694,12 +1694,12 @@ async def _apply_behavior(
                 service_data["brightness"] = behavior["brightness"]
             if "color_temp_kelvin" in behavior:
                 service_data["color_temp_kelvin"] = behavior["color_temp_kelvin"]
-            await hass.services.async_call("light", "turn_on", service_data)
+            await hass.services.async_call("light", "turn_on", service_data, blocking=True)
         else:
-            await hass.services.async_call("light", "turn_off", service_data)
+            await hass.services.async_call("light", "turn_off", service_data, blocking=True)
     elif device_type == DEVICE_TYPE_OUTLET:
         service = "turn_on" if state == "on" else "turn_off"
-        await hass.services.async_call("switch", service, {"entity_id": entity_id})
+        await hass.services.async_call("switch", service, {"entity_id": entity_id}, blocking=True)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

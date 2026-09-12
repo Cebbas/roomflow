@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **Device commands are now sent blocking, so a real failure is no longer
+  logged as a success.** Every light/switch service call RoomFlow makes
+  (`_apply_behavior`, toggle/off/dim button actions, motion off, the
+  motion dim-warning) previously used Home Assistant's default
+  fire-and-forget dispatch: the call returned as soon as it was handed
+  off, before the target integration actually executed it. If the device
+  then failed (unavailable, a flaky Zigbee/mesh link, a timeout) that
+  failure surfaced only as a separate, disconnected error in Home
+  Assistant's own log - RoomFlow's own try/except never saw it, so it
+  still wrote a normal success entry to the device log. Every one of
+  those calls (except the 50ms hold-to-dim ramp tick, deliberately left
+  fire-and-forget so a laggy device can't back up the ramp, and which
+  never wrote a device-log entry anyway) now passes `blocking=True`, so a
+  genuine execution failure raises where the existing error handling
+  already expected it - correctly skipping the device-log entry and
+  logging a warning instead. No behavior change when devices are healthy;
+  the device log now only claims a light actually did something when it
+  did.
+
 - **Motion-restore events now log as their own source instead of
   reusing `motion_on`.** A device configured with motion off but not
   motion on (e.g. turned on by a button, then left to motion purely to

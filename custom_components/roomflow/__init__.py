@@ -1320,6 +1320,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         triggers = definition.get("triggers", [])
         return any(_is_trigger_active(t) for t in triggers)
 
+    def _motion_trigger_just_pulsed(definition: dict, event: Event) -> bool:
+        """True if this specific state-change event is a "motion"-type
+        trigger (not threshold_above) genuinely transitioning to "on" - a
+        real presence pulse, as opposed to the combined definition merely
+        staying active because a different trigger (e.g. humidity sitting
+        above its threshold for a long time) never dropped. Used to
+        re-light a motion_on device that's unexpectedly off even when the
+        aggregate active flag was already true and so wouldn't otherwise
+        cause anything to re-apply - a sticky secondary trigger shouldn't
+        be able to swallow every later, genuine motion pulse."""
+        changed_entity_id = event.data.get("entity_id")
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+        if new_state is None or new_state.state != "on":
+            return False
+        if old_state is not None and old_state.state == "on":
+            return False
+        return any(
+            trigger.get("entity_id") == changed_entity_id and trigger.get("type", "motion") == "motion"
+            for trigger in definition.get("triggers", [])
+        )
+
     def _motion_on_devices(room: dict, period: str, definition_id: str) -> list:
         """Devices to turn on when the given motion-sensor definition
         becomes active this period - control mode "motion", subscribed to
@@ -1445,6 +1467,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         new_active = _is_definition_active(definition)
         previous_active = hass.data[DOMAIN]["motion_active_state"].get(definition_id, False)
+
+        if new_active and previous_active and _motion_trigger_just_pulsed(definition, event):
+            for room in cfg.get("rooms", []):
+                schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+                period = _get_period(schedule_id)
+                if period is None:
+                    continue
+                for device in _motion_on_devices(room, period, definition_id):
+                    state = hass.states.get(device["entity_id"])
+                    if state and state.state == "on":
+                        continue
+                    key = _motion_key(room["id"], device["entity_id"])
+                    hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
+                    _cancel_motion_timer(key)
+                    await _apply_motion_device_on(room, device)
+
         if new_active == previous_active:
             return
         hass.data[DOMAIN]["motion_active_state"][definition_id] = new_active

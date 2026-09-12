@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **A genuine motion pulse now re-lights a motion_on device even when a
+  sticky secondary trigger already had the room "active".** A motion
+  definition can combine several triggers with OR (e.g. motion OR a
+  humidity threshold, so a bathroom light stays on through a shower even
+  once someone stops moving) - but only the definition's own
+  inactive-to-active edge used to cause anything to re-apply. If a
+  secondary trigger stayed satisfied for a long time (humidity lingering
+  above its threshold for tens of minutes after a shower), the combined
+  flag never went back to false, so a later, real motion pulse - someone
+  actually walking back in - looked like "nothing changed" and did
+  nothing, even though the light itself had gone off in the meantime for
+  an unrelated reason. RoomFlow now also recognizes an actual motion-type
+  trigger transitioning to "on" while the definition was already active,
+  and re-applies the on-behavior to any motion_on device that's currently
+  off - independent of whether the combined flag itself flipped. Threshold
+  triggers (humidity, etc.) don't gain this behavior on their own; only a
+  real motion-type trigger's own on-transition does.
+
 - **Device commands are now sent blocking, so a real failure is no longer
   logged as a success.** Every light/switch service call RoomFlow makes
   (`_apply_behavior`, toggle/off/dim button actions, motion off, the

@@ -2337,6 +2337,35 @@ const RF_STYLES = `
 </style>
 `;
 
+// RoomFlow's panel is a standalone page, not a Lovelace dashboard - so a
+// custom icon pack registered as a Lovelace resource (a room/device icon
+// like "phu:some-icon" only resolves once that resource's own JS has run
+// once in the page) never automatically loads here the way it does on a
+// real dashboard. A previous fix loaded every registered resource from
+// the backend on every single page load house-wide (add_extra_js_url),
+// which raced Home Assistant's own frontend bootstrap and could break
+// the whole UI, not just icons here (see RoomFlow's CHANGELOG). Doing it
+// from here instead - once, client-side, only when this panel/card is
+// actually used - runs well after that bootstrap has already finished,
+// so there's no race: dynamic import() of an already-loaded module URL
+// is a cache hit anyway, and importing one for the first time this late
+// is exactly what a normal dashboard page does for its own cards.
+let _lovelaceResourcesEnsured = false;
+async function _ensureLovelaceResourcesLoaded(hass) {
+  if (_lovelaceResourcesEnsured) return;
+  _lovelaceResourcesEnsured = true;
+  try {
+    const resources = await hass.callWS({ type: "lovelace/resources" });
+    await Promise.all(
+      (resources || [])
+        .filter((r) => r.type === "module" && r.url)
+        .map((r) => import(/* @vite-ignore */ r.url).catch(() => {}))
+    );
+  } catch (err) {
+    console.warn("RoomFlow: could not preload Lovelace resources for icon support", err);
+  }
+}
+
 class RoomFlowCard extends HTMLElement {
   constructor() {
     super();
@@ -2389,6 +2418,7 @@ class RoomFlowCard extends HTMLElement {
     this._hass = hass;
     this._lang = detectLang(hass);
     if (firstRun) {
+      _ensureLovelaceResourcesLoaded(hass);
       this._loadAll();
     } else if (this._activeRoomId) {
       // Only refresh live-status text, don't fully re-render on every tick

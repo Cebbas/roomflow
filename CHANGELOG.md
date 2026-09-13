@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **Restored custom icon packs (e.g. "phu:...") resolving inside RoomFlow's
+  own panel**, without reintroducing the race described below. The
+  previous mirroring fix removed *all* resource loading from RoomFlow's
+  panel, including the safe cases - some rooms/areas use a custom icon
+  pack (`custom-brand-icons`, registering via `window.customIcons`, no
+  `customElements.define()` at all) that never got a chance to load on
+  RoomFlow's own standalone panel page, so those icons went blank.
+  Reintroduced the same "load every registered Lovelace resource" idea,
+  but from the card's own frontend JS instead of the backend: once per
+  page load, when the card/panel first receives `hass`, it calls
+  `lovelace/resources` and `import()`s each registered module URL
+  client-side. This runs well after Home Assistant's own frontend
+  bootstrap has already finished (panel modules are dynamically
+  imported by the router itself, always after that point - unlike
+  `add_extra_js_url`, which injects a `<script type="module">` that runs
+  *concurrently* with bootstrap), so there's no race: a URL already
+  loaded is just a module-cache hit, and importing one for the first
+  time this late is exactly what a normal dashboard page already does
+  safely for its own cards.
+
 - **Fixed RoomFlow breaking the entire Home Assistant frontend** (sidebar,
   every dashboard - not just RoomFlow's own panel) on installs with many
   custom Lovelace card resources. Since v0.0.29, RoomFlow mirrored every

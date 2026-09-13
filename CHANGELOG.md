@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **Rooms can now be duplicated as a template.** Setting up several
+  similar rooms (e.g. multiple bedrooms with the same period/device
+  layout) previously meant rebuilding the whole structure - periods,
+  devices, transitions, buttons, motion triggers - from scratch each
+  time. A new "Duplicate" action on a room's header copies its full
+  configuration (devices, per-period behaviors, overrides, transitions,
+  motion control) into a new room under a chosen name. Everything wired
+  to a specific piece of hardware - the area, each device's entity,
+  every custom condition's helper entity, and any physical button
+  binding (room-level or per-device) - is left for the new room to
+  re-pick rather than silently sharing the source room's hardware, since
+  keeping those would mean one physical button/light/helper controlling
+  two rooms at once. A copied device shows an inline "pick which real
+  entity this controls" prompt in place of its usual entity_id until
+  assigned - assigning it keeps the cloned behaviors/schedule exactly as
+  copied, only re-deriving type/brightness/color-temp support from the
+  entity actually chosen (which may not match the source device's
+  capabilities).
+
 - **Fixed a manual button press silently doing nothing when a device's
   "Day" period default was set to off** - found live on a room's ceiling
   light after a button appeared to fire correctly (logged as "ran") but

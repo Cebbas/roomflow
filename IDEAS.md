@@ -85,20 +85,6 @@ card's Settings tab that reads/writes the same config-store shape
 diagnostics already partially exposes, but with entity_ids intact -
 essentially a raw dump/restore of the integration's config entry data.
 
-### Room templates / duplicate room
-
-Setting up several similar rooms (e.g. multiple bedrooms with the same
-period/device layout) means rebuilding the whole structure - periods,
-devices, transitions, buttons, motion triggers - from scratch each time.
-Directly slows down migrating a house room-by-room when several rooms
-share close to the same layout.
-
-Possible approach: a "duplicate room" action in the card that copies an
-existing room's full configuration (devices, per-period behavior,
-overrides, buttons, motion triggers) into a new room with a new name,
-leaving entity_ids blank/unset for the user to fill in per device rather
-than pointing at the same physical entities.
-
 ## Medium priority
 
 ### Get into the HACS default store (no more "add as custom repository")

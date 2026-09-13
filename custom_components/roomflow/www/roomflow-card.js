@@ -617,6 +617,12 @@ const STRINGS = {
 
     test_now: "Test now",
     remove_room: "Remove room",
+    duplicate_room: "Duplicate",
+    duplicate_room_prompt: "Name for the new room",
+    assign_entity_hint: "This device was copied from another room - pick which real entity it should control:",
+    assign_entity_placeholder: "Choose an entity...",
+    assign_entity_button: "Assign",
+    assign_entity_unassigned_label: "(not assigned yet)",
     add_device_option: "+ Add device…",
 
     control_mode_label: "Controlled by",
@@ -847,6 +853,12 @@ const STRINGS = {
 
     test_now: "Testa nu",
     remove_room: "Ta bort rum",
+    duplicate_room: "Duplicera",
+    duplicate_room_prompt: "Namn på det nya rummet",
+    assign_entity_hint: "Den här enheten kopierades från ett annat rum - välj vilken riktig entitet den ska styra:",
+    assign_entity_placeholder: "Välj en entitet...",
+    assign_entity_button: "Tilldela",
+    assign_entity_unassigned_label: "(inte tilldelad än)",
     add_device_option: "+ Lägg till enhet…",
 
     control_mode_label: "Styrs av",
@@ -1036,6 +1048,12 @@ const STRINGS = {
 
     test_now: "Test nå",
     remove_room: "Fjern rom",
+    duplicate_room: "Dupliser",
+    duplicate_room_prompt: "Navn på det nye rommet",
+    assign_entity_hint: "Denne enheten ble kopiert fra et annet rom - velg hvilken ekte entitet den skal styre:",
+    assign_entity_placeholder: "Velg en entitet...",
+    assign_entity_button: "Tildel",
+    assign_entity_unassigned_label: "(ikke tildelt ennå)",
     add_device_option: "+ Legg til enhet…",
 
     control_mode_label: "Styres av",
@@ -1225,6 +1243,12 @@ const STRINGS = {
 
     test_now: "Test nu",
     remove_room: "Fjern rum",
+    duplicate_room: "Dupliker",
+    duplicate_room_prompt: "Navn på det nye rum",
+    assign_entity_hint: "Denne enhed blev kopieret fra et andet rum - vælg hvilken rigtig enhed den skal styre:",
+    assign_entity_placeholder: "Vælg en enhed...",
+    assign_entity_button: "Tildel",
+    assign_entity_unassigned_label: "(ikke tildelt endnu)",
     add_device_option: "+ Tilføj enhed…",
 
     control_mode_label: "Styres af",
@@ -1414,6 +1438,12 @@ const STRINGS = {
 
     test_now: "Testaa nyt",
     remove_room: "Poista huone",
+    duplicate_room: "Monista",
+    duplicate_room_prompt: "Uuden huoneen nimi",
+    assign_entity_hint: "Tämä laite kopioitiin toisesta huoneesta - valitse mitä oikeaa entiteettiä sen tulee ohjata:",
+    assign_entity_placeholder: "Valitse entiteetti...",
+    assign_entity_button: "Määritä",
+    assign_entity_unassigned_label: "(ei vielä määritetty)",
     add_device_option: "+ Lisää laite…",
 
     control_mode_label: "Ohjaustapa",
@@ -1603,6 +1633,12 @@ const STRINGS = {
 
     test_now: "Jetzt testen",
     remove_room: "Raum entfernen",
+    duplicate_room: "Duplizieren",
+    duplicate_room_prompt: "Name für den neuen Raum",
+    assign_entity_hint: "Dieses Gerät wurde aus einem anderen Raum kopiert - wähle, welche echte Entität es steuern soll:",
+    assign_entity_placeholder: "Entität wählen...",
+    assign_entity_button: "Zuweisen",
+    assign_entity_unassigned_label: "(noch nicht zugewiesen)",
     add_device_option: "+ Gerät hinzufügen…",
 
     control_mode_label: "Gesteuert durch",
@@ -1792,6 +1828,12 @@ const STRINGS = {
 
     test_now: "Tester maintenant",
     remove_room: "Supprimer la pièce",
+    duplicate_room: "Dupliquer",
+    duplicate_room_prompt: "Nom de la nouvelle pièce",
+    assign_entity_hint: "Cet appareil a été copié depuis une autre pièce - choisissez quelle entité réelle il doit contrôler :",
+    assign_entity_placeholder: "Choisir une entité...",
+    assign_entity_button: "Assigner",
+    assign_entity_unassigned_label: "(pas encore assigné)",
     add_device_option: "+ Ajouter un appareil…",
 
     control_mode_label: "Contrôlé par",
@@ -1981,6 +2023,12 @@ const STRINGS = {
 
     test_now: "Nu testen",
     remove_room: "Kamer verwijderen",
+    duplicate_room: "Dupliceren",
+    duplicate_room_prompt: "Naam voor de nieuwe kamer",
+    assign_entity_hint: "Dit apparaat is gekopieerd uit een andere kamer - kies welke echte entiteit het moet aansturen:",
+    assign_entity_placeholder: "Kies een entiteit...",
+    assign_entity_button: "Toewijzen",
+    assign_entity_unassigned_label: "(nog niet toegewezen)",
     add_device_option: "+ Apparaat toevoegen…",
 
     control_mode_label: "Bestuurd door",
@@ -2630,6 +2678,46 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
+  _duplicateRoom(roomId) {
+    const source = this._config_data.rooms.find((r) => r.id === roomId);
+    if (!source) return;
+    const suggested = `${source.name} (${this._t("duplicate_room").toLowerCase()})`;
+    const name = window.prompt(this._t("duplicate_room_prompt"), suggested);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    const clone = JSON.parse(JSON.stringify(source));
+    clone.id = uid();
+    clone.name = trimmed;
+    // A duplicate is a template, not a second copy of the same physical
+    // room - area and every reference to a specific piece of hardware
+    // (device entity_id, custom-condition helper entity_id, and any
+    // button wired to a physical trigger) has to be re-picked for the new
+    // room rather than silently sharing the source room's hardware.
+    clone.area_id = null;
+    clone.devices.forEach((d) => {
+      // A stable-but-fake placeholder, not a blank string - devices are
+      // keyed by entity_id throughout the card (deviceKey, parseDeviceKey),
+      // so multiple blanked devices in the same room would collide onto
+      // the same key. "unassigned.<uid>" stays unique per device, looks
+      // like a normal entity_id (existing lookups/service calls fail
+      // safely against it), and is what _renderDevice's assign-entity bar
+      // checks for to prompt picking a real entity.
+      d.entity_id = `unassigned.${uid()}`;
+      d.buttons = [];
+    });
+    (clone.custom_conditions || []).forEach((c) => {
+      c.entity_id = "";
+    });
+    clone.buttons = [];
+
+    this._config_data.rooms.push(clone);
+    this._activeRoomId = clone.id;
+    this._scheduleSave();
+    this._render();
+  }
+
   _removeRoom(roomId) {
     this._config_data.rooms = this._config_data.rooms.filter((r) => r.id !== roomId);
     if (this._activeRoomId === roomId) {
@@ -2652,6 +2740,25 @@ class RoomFlowCard extends HTMLElement {
   _removeDevice(roomId, entityId) {
     const room = this._config_data.rooms.find((r) => r.id === roomId);
     room.devices = room.devices.filter((d) => d.entity_id !== entityId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  _setDeviceEntity(roomId, placeholderEntityId, newEntityId) {
+    const room = this._config_data.rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    const device = room.devices.find((d) => d.entity_id === placeholderEntityId);
+    const entity = this._entities.find((e) => e.entity_id === newEntityId);
+    if (!device || !entity) return;
+    // Point a duplicated-room placeholder device at its real physical
+    // entity - keeps the cloned behaviors/control/transitions (the whole
+    // point of duplicating a room) but re-derives type/capability flags
+    // from the entity actually chosen, since the source room's entity
+    // might not match this one's capabilities.
+    device.entity_id = entity.entity_id;
+    device.type = entity.domain === "light" ? "light" : "outlet";
+    device.supports_brightness = !!entity.supports_brightness;
+    device.supports_color_temp = !!entity.supports_color_temp;
     this._scheduleSave();
     this._render();
   }
@@ -3280,6 +3387,12 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const duplicateRoomBtn = e.target.closest("[data-duplicate-room]");
+    if (duplicateRoomBtn) {
+      this._duplicateRoom(duplicateRoomBtn.getAttribute("data-duplicate-room"));
+      return;
+    }
+
     const removeRoomBtn = e.target.closest("[data-remove-room]");
     if (removeRoomBtn) {
       this._removeRoom(removeRoomBtn.getAttribute("data-remove-room"));
@@ -3290,6 +3403,18 @@ class RoomFlowCard extends HTMLElement {
     if (removeDeviceBtn) {
       const [roomId, entityId] = removeDeviceBtn.getAttribute("data-remove-device").split("|");
       this._removeDevice(roomId, entityId);
+      return;
+    }
+
+    const setDeviceEntityBtn = e.target.closest("[data-set-device-entity]");
+    if (setDeviceEntityBtn) {
+      const [roomId, placeholderEntityId] = setDeviceEntityBtn.getAttribute("data-set-device-entity").split("|");
+      const select = setDeviceEntityBtn.closest(".rf-device-assign").querySelector("[data-assign-entity-select]");
+      if (!select.value) {
+        this._flashFieldError(select);
+        return;
+      }
+      this._setDeviceEntity(roomId, placeholderEntityId, select.value);
       return;
     }
 
@@ -4876,6 +5001,7 @@ class RoomFlowCard extends HTMLElement {
           <h2>${icon(this._roomIcon(room))}${room.name}</h2>
           <div>
             <button class="rf-btn rf-btn-flat" data-apply-room="${room.id}">${icon("mdi:play-outline")}${this._t("test_now")}</button>
+            <button class="rf-btn rf-btn-flat" data-duplicate-room="${room.id}">${icon("mdi:content-copy")}${this._t("duplicate_room")}</button>
             <button class="rf-btn rf-btn-danger" data-remove-room="${room.id}">${icon("mdi:delete-outline")}${this._t("remove_room")}</button>
           </div>
         </div>
@@ -5117,6 +5243,7 @@ class RoomFlowCard extends HTMLElement {
 
   _renderDevice(room, device) {
     const deviceKey = `${room.id}:${device.entity_id}`;
+    const isUnassigned = device.entity_id.startsWith("unassigned.");
     // Undefined (never toggled) defaults to open, matching the old
     // always-expanded behavior so nothing looks like it "disappeared" for
     // existing users after this became collapsible.
@@ -5184,13 +5311,28 @@ class RoomFlowCard extends HTMLElement {
       `;
     }
 
+    const assignBarHtml = isUnassigned
+      ? `
+        <div class="rf-device-assign" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:var(--warning-color,#f0ad4e22)">
+          ${icon("mdi:alert-circle-outline")}
+          <span>${this._t("assign_entity_hint")}</span>
+          <select data-assign-entity-select>
+            <option value="">${this._t("assign_entity_placeholder")}</option>
+            ${this._availableEntities(room)
+              .map((e) => `<option value="${e.entity_id}">${e.name} (${e.entity_id})</option>`)
+              .join("")}
+          </select>
+          <button class="rf-btn rf-btn-flat" data-set-device-entity="${room.id}|${device.entity_id}">${this._t("assign_entity_button")}</button>
+        </div>`
+      : "";
+
     return `
       <div class="rf-device${isOpen ? " rf-open" : ""}">
         <div class="rf-device-header" data-device-toggle="${deviceKey}">
           <div class="rf-device-name">
             ${icon(this._deviceHeaderIcon(device), "", "rf-device-icon")}
             <span class="rf-device-text">${device.name}</span>
-            <small>(${device.entity_id})</small>
+            <small>${isUnassigned ? this._t("assign_entity_unassigned_label") : `(${device.entity_id})`}</small>
             <span class="rf-badge ${this._liveStatusClass(device)}" data-live-status="${deviceKey}">${this._liveStatusText(device)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:2px;flex:none">
@@ -5198,6 +5340,7 @@ class RoomFlowCard extends HTMLElement {
             ${icon(isOpen ? "mdi:chevron-up" : "mdi:chevron-down", "", "rf-caret")}
           </div>
         </div>
+        ${assignBarHtml}
         ${bodyHtml}
       </div>
     `;

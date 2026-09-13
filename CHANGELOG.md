@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Added a live countdown to the Overview tab for motion-triggered
+  dim/off** ("Dims in 4:32" / "Turns off in 1:15" under a room), for any
+  device currently counting down after motion stopped - the two-step
+  dim-then-off sequence (off_delay, then optionally dim to
+  warn_brightness and wait warn_minutes before actually turning off)
+  already existed, but was invisible from the UI. `motion_off_timers`
+  now stores each timer's target fire time and what it'll do when it
+  fires (dim first, or go straight to off), exposed per room via
+  `get_dashboard`; the card ticks the displayed countdown every second
+  itself from that one absolute timestamp, no repeated fetching.
+
 - **Fixed those same custom icon-pack icons still showing blank on the
   Overview tab specifically** (a room tab opened directly showed its
   icon fine). The client-side resource load added just below isn't

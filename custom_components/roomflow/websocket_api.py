@@ -210,6 +210,8 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
             }
         )
 
+    motion_off_timers = domain_data.get("motion_off_timers", {})
+
     rooms = []
     for room in cfg.get("rooms", []):
         room_schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
@@ -223,10 +225,29 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
             else room_period_id
         )
         room_active_ids = _active_room_conditions(hass, room, cfg)
+        # Any device currently counting down to a motion-triggered dim/off
+        # (see _schedule_motion_off in __init__.py) - lets the Overview
+        # tab show a live countdown under the room instead of just the
+        # motion sensor's raw on/off state. The key format (f"{room_id}:
+        # {entity_id}") is duplicated rather than imported since it's a
+        # closure local to async_setup_entry there.
+        motion_timers = []
+        for device in room.get("devices", []):
+            entry = motion_off_timers.get(f"{room['id']}:{device['entity_id']}")
+            if entry:
+                motion_timers.append(
+                    {
+                        "entity_id": device["entity_id"],
+                        "name": device.get("name", device["entity_id"]),
+                        "next_action": entry["next_action"],
+                        "fires_at": entry["fires_at"].isoformat(),
+                    }
+                )
         rooms.append(
             {
                 "room_id": room["id"],
                 "status": _resolve_status_text(cfg, room_active_ids, room_period_name, day_type, home_state, room),
+                "motion_timers": motion_timers,
             }
         )
 

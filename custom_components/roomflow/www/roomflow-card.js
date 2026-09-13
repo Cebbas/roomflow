@@ -660,6 +660,8 @@ const STRINGS = {
     status_on: "· now: on",
     status_on_pct: "· now: on ({pct}%)",
     status_off: "· now: off",
+    motion_timer_dim: "Dims in {time}",
+    motion_timer_off: "Turns off in {time}",
 
     applying: "Applying…",
     done: "Done!",
@@ -904,6 +906,8 @@ const STRINGS = {
     status_on: "· nu: på",
     status_on_pct: "· nu: på ({pct}%)",
     status_off: "· nu: av",
+    motion_timer_dim: "Dimmas om {time}",
+    motion_timer_off: "Släcks om {time}",
 
     applying: "Tillämpar…",
     done: "Klart!",
@@ -1099,6 +1103,8 @@ const STRINGS = {
     status_on: "· nå: på",
     status_on_pct: "· nå: på ({pct}%)",
     status_off: "· nå: av",
+    motion_timer_dim: "Dimmes om {time}",
+    motion_timer_off: "Slukkes om {time}",
 
     applying: "Bruker…",
     done: "Ferdig!",
@@ -1294,6 +1300,8 @@ const STRINGS = {
     status_on: "· nu: til",
     status_on_pct: "· nu: til ({pct}%)",
     status_off: "· nu: fra",
+    motion_timer_dim: "Dæmpes om {time}",
+    motion_timer_off: "Slukkes om {time}",
 
     applying: "Anvender…",
     done: "Færdig!",
@@ -1489,6 +1497,8 @@ const STRINGS = {
     status_on: "· nyt: päällä",
     status_on_pct: "· nyt: päällä ({pct}%)",
     status_off: "· nyt: pois",
+    motion_timer_dim: "Himmenee {time} kuluttua",
+    motion_timer_off: "Sammuu {time} kuluttua",
 
     applying: "Otetaan käyttöön…",
     done: "Valmis!",
@@ -1684,6 +1694,8 @@ const STRINGS = {
     status_on: "· jetzt: an",
     status_on_pct: "· jetzt: an ({pct}%)",
     status_off: "· jetzt: aus",
+    motion_timer_dim: "Dimmt in {time}",
+    motion_timer_off: "Schaltet in {time} aus",
 
     applying: "Wird angewendet…",
     done: "Fertig!",
@@ -1879,6 +1891,8 @@ const STRINGS = {
     status_on: "· actuellement : allumé",
     status_on_pct: "· actuellement : allumé ({pct}%)",
     status_off: "· actuellement : éteint",
+    motion_timer_dim: "S'atténue dans {time}",
+    motion_timer_off: "S'éteint dans {time}",
 
     applying: "Application…",
     done: "Terminé !",
@@ -2074,6 +2088,8 @@ const STRINGS = {
     status_on: "· nu: aan",
     status_on_pct: "· nu: aan ({pct}%)",
     status_off: "· nu: uit",
+    motion_timer_dim: "Dimt over {time}",
+    motion_timer_off: "Gaat over {time} uit",
 
     applying: "Bezig met toepassen…",
     done: "Klaar!",
@@ -2405,6 +2421,18 @@ class RoomFlowCard extends HTMLElement {
     if (!this.hasChildNodes()) {
       this.innerHTML = `<ha-card><div style='padding:16px'>${this._t("loading")}</div></ha-card>`;
     }
+    // Ticks the Overview tab's motion dim/off countdowns (see
+    // _motionTimersHtml) once a second - a plain DOM text update, not a
+    // full _render(), so it's cheap enough to run regardless of which
+    // tab is actually showing.
+    if (!this._motionTimerInterval) {
+      this._motionTimerInterval = setInterval(() => this._tickMotionTimers(), 1000);
+    }
+  }
+
+  disconnectedCallback() {
+    clearInterval(this._motionTimerInterval);
+    this._motionTimerInterval = null;
   }
 
   // setConfig is only called when the card is used inside a dashboard (not
@@ -3502,10 +3530,59 @@ class RoomFlowCard extends HTMLElement {
       .join("");
   }
 
+  // Remaining time until an ISO timestamp, as "m:ss" (clamped at 0:00 -
+  // never negative, in case a tick lands just after the actual server-
+  // side fire time).
+  _formatCountdown(iso) {
+    const totalSeconds = Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 1000));
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  // A live countdown chip per device currently counting down to a
+  // motion-triggered dim or off (see motion_timers in ws_get_dashboard/
+  // _schedule_motion_off) - "Dims in 4:32" / "Turns off in 1:15". The
+  // actual ticking is DOM-only (_tickMotionTimers), driven by the
+  // interval started in connectedCallback - data-fires-at carries the
+  // absolute target time so each tick is a fresh computation, not a
+  // running subtraction that could drift.
+  _motionTimersHtml(timers) {
+    if (!timers || !timers.length) return "";
+    return timers
+      .map((timer) => {
+        const labelKey = timer.next_action === "dim" ? "motion_timer_dim" : "motion_timer_off";
+        const label = this._t(labelKey, { time: this._formatCountdown(timer.fires_at) });
+        return `<span class="rf-status-chip rf-on" data-live-motion-timer data-fires-at="${timer.fires_at}" data-next-action="${timer.next_action}" title="${timer.name}">${icon(timer.next_action === "dim" ? "mdi:brightness-4" : "mdi:power")}<span data-live-motion-timer-text>${label}</span></span>`;
+      })
+      .join("");
+  }
+
+  // Refreshes every [data-live-motion-timer] chip's remaining time in
+  // place, once a second (see connectedCallback) - cheap enough to run
+  // unconditionally rather than only while the Overview tab is active.
+  // Once one reaches 0:00, the room/device behind it is about to change
+  // server-side (dim, or off) - reload the dashboard once to pick up
+  // whatever comes next (another timer, or none) instead of guessing.
+  _tickMotionTimers() {
+    let anyExpired = false;
+    this.querySelectorAll("[data-live-motion-timer]").forEach((el) => {
+      const firesAt = el.getAttribute("data-fires-at");
+      const remaining = new Date(firesAt).getTime() - Date.now();
+      if (remaining <= 0) anyExpired = true;
+      const textEl = el.querySelector("[data-live-motion-timer-text]");
+      if (!textEl) return;
+      const nextAction = el.getAttribute("data-next-action");
+      const labelKey = nextAction === "dim" ? "motion_timer_dim" : "motion_timer_off";
+      textEl.textContent = this._t(labelKey, { time: this._formatCountdown(firesAt) });
+    });
+    if (anyExpired && this._activeRoomId === "__overview__") this._loadDashboard();
+  }
+
   // One room's status row (icon/name, resolved status text, live device/
   // motion icons) - shared by every grouping _renderOverviewTab's status
   // card uses (per floor, or the flat fallback with no floors set up).
-  _renderRoomStatusRow(room, scheduleById, roomStatusById) {
+  _renderRoomStatusRow(room, scheduleById, roomStatusById, roomMotionTimersById) {
     const schedule = scheduleById[room.schedule_id || DEFAULT_SCHEDULE_ID];
     const roomStatusText = roomStatusById[room.id] ?? (schedule ? schedule.period_name : "-");
     const iconsHtml = (room.devices || [])
@@ -3517,11 +3594,12 @@ class RoomFlowCard extends HTMLElement {
       })
       .join("");
     const motionIconsHtml = this._roomMotionIndicatorsHtml(room);
+    const motionTimersHtml = this._motionTimersHtml(roomMotionTimersById[room.id]);
     return `
       <div class="rf-status-row">
         <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(this._roomIcon(room))}${room.name}</div>
         <div style="opacity:0.8;font-size:0.9em">${roomStatusText}</div>
-        <div class="rf-status-icon-row">${iconsHtml}${motionIconsHtml}${iconsHtml || motionIconsHtml ? "" : "-"}</div>
+        <div class="rf-status-icon-row">${iconsHtml}${motionIconsHtml}${motionTimersHtml}${iconsHtml || motionIconsHtml || motionTimersHtml ? "" : "-"}</div>
       </div>
     `;
   }
@@ -3537,13 +3615,16 @@ class RoomFlowCard extends HTMLElement {
     const dash = this._dashboard || { schedules: [], floor_status: [], room_status: [] };
     const scheduleById = Object.fromEntries((dash.schedules || []).map((s) => [s.id, s]));
     const roomStatusById = Object.fromEntries((dash.room_status || []).map((r) => [r.room_id, r.status]));
+    const roomMotionTimersById = Object.fromEntries(
+      (dash.room_status || []).map((r) => [r.room_id, r.motion_timers || []])
+    );
 
     if (!rooms.length) {
       return `<div class="rf-help">${this._t("overview_no_rooms")}</div>`;
     }
 
     if (!this._floors || !this._floors.length) {
-      return rooms.map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById)).join("");
+      return rooms.map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById, roomMotionTimersById)).join("");
     }
 
     const floorStatusById = Object.fromEntries((dash.floor_status || []).map((f) => [f.floor_id, f.status]));
@@ -3577,7 +3658,7 @@ class RoomFlowCard extends HTMLElement {
       `;
       if (floorRooms) {
         html += `<div class="rf-status-room-group">${floorRooms
-          .map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById))
+          .map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById, roomMotionTimersById))
           .join("")}</div>`;
       }
     });
@@ -3585,7 +3666,7 @@ class RoomFlowCard extends HTMLElement {
     if (noFloorRooms && noFloorRooms.length) {
       html += `
         <div class="rf-log-floor-header">${icon("mdi:help-circle-outline")}${this._t("no_floor_label")}</div>
-        ${noFloorRooms.map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById)).join("")}
+        ${noFloorRooms.map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById, roomMotionTimersById)).join("")}
       `;
     }
     return html;

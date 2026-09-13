@@ -930,9 +930,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return f"{room_id}:{entity_id}"
 
     def _cancel_motion_timer(key: str) -> None:
-        cancel = hass.data[DOMAIN]["motion_off_timers"].pop(key, None)
-        if cancel:
-            cancel()
+        entry = hass.data[DOMAIN]["motion_off_timers"].pop(key, None)
+        if entry:
+            entry["cancel"]()
 
     def _resolve_manual_on_behavior(
         room: dict, device: dict
@@ -1609,13 +1609,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if warn_enabled:
                 await _dim_device_for_warning(current_room, current_device, warn_brightness)
                 cancel = async_call_later(hass, warn_minutes * 60, _after_warn)
-                hass.data[DOMAIN]["motion_off_timers"][key] = cancel
+                hass.data[DOMAIN]["motion_off_timers"][key] = {
+                    "cancel": cancel,
+                    "next_action": "off",
+                    "fires_at": dt_util.utcnow() + timedelta(minutes=warn_minutes),
+                }
             else:
                 await _turn_off_device(current_room, current_device)
 
+        # Exposed to the frontend (see ws_get_dashboard) so the Overview
+        # tab can show a live countdown under the room - "next_action" is
+        # what happens when *this* timer fires: dims first if warn_enabled,
+        # otherwise this is already the final off.
         _cancel_motion_timer(key)
         cancel = async_call_later(hass, off_delay * 60, _after_off_delay)
-        hass.data[DOMAIN]["motion_off_timers"][key] = cancel
+        hass.data[DOMAIN]["motion_off_timers"][key] = {
+            "cancel": cancel,
+            "next_action": "dim" if warn_enabled else "off",
+            "fires_at": dt_util.utcnow() + timedelta(minutes=off_delay),
+        }
 
     async def _handle_motion_change(definition_id: str, event: Event) -> None:
         cfg = hass.data[DOMAIN]["config"]
@@ -1692,8 +1704,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     def _setup_motion_listeners() -> None:
         for unsub in hass.data[DOMAIN].get("motion_unsubs", []):
             unsub()
-        for cancel in hass.data[DOMAIN].get("motion_off_timers", {}).values():
-            cancel()
+        for entry in hass.data[DOMAIN].get("motion_off_timers", {}).values():
+            entry["cancel"]()
         hass.data[DOMAIN]["motion_off_timers"] = {}
         hass.data[DOMAIN]["motion_active_state"] = {}
         hass.data[DOMAIN]["motion_manual_override"] = {}
@@ -1938,8 +1950,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         button_unsub()
     for motion_unsub in hass.data[DOMAIN].get("motion_unsubs", []):
         motion_unsub()
-    for cancel in hass.data[DOMAIN].get("motion_off_timers", {}).values():
-        cancel()
+    for entry in hass.data[DOMAIN].get("motion_off_timers", {}).values():
+        entry["cancel"]()
     for cancel in hass.data[DOMAIN].get("hold_dim_timers", {}).values():
         cancel()
     for cancel in hass.data[DOMAIN].get("hold_dim_pending", {}).values():

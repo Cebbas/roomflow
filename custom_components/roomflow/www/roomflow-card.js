@@ -437,6 +437,7 @@ const STRINGS = {
 
     overview_status_header: "Current status",
     overview_device_log_header: "Device log",
+    no_floor_label: "No floor assigned",
     overview_period_log_header: "Period log",
     overview_refresh: "Refresh",
     overview_log_empty: "No events yet",
@@ -592,6 +593,13 @@ const STRINGS = {
       "Build named, reusable motion-sensor definitions here once, then pick which one each device subscribes to (per period) from its own control-mode setting - not a room-wide switch, so two devices in the same room can react to two different sensors, and two rooms can share one.",
     add_motion_sensor_header: "Add motion sensor",
     motion_sensor_name_placeholder: "Name (e.g. Bathroom mirror)",
+
+    tab_house_conditions: "House & floors",
+    house_conditions_help:
+      "A house-wide condition (e.g. \"Cleaning\", \"Away trip\") applies to every room; a floor condition applies to every room on that floor - a room's own condition still wins over its floor's, which wins over the house's. Each device still needs its own per-period behavior set for a condition here, same as a room's own conditions, in that device's period editor.",
+    house_conditions_header: "Whole house",
+    house_conditions_box_help: "Applies to every room in the house when active.",
+    floor_conditions_box_help: "Applies to every room on this floor when active.",
     no_motion_sensors_hint: "No motion sensors yet - add one in the Motion sensors tab first.",
     motion_sensor_which_label: "Which motion sensor:",
     choose_motion_sensor_option: "Choose motion sensor…",
@@ -673,6 +681,7 @@ const STRINGS = {
 
     overview_status_header: "Aktuell status",
     overview_device_log_header: "Enhetslogg",
+    no_floor_label: "Ingen våning tilldelad",
     overview_period_log_header: "Periodlogg",
     overview_refresh: "Uppdatera",
     overview_log_empty: "Inga händelser än",
@@ -828,6 +837,13 @@ const STRINGS = {
       "Bygg namngivna, återanvändbara rörelsevakter här en gång, välj sedan vilken varje enhet prenumererar på (per period) från dess egen styrningsinställning - inte en rumsomfattande brytare, så två enheter i samma rum kan reagera på olika sensorer, och två rum kan dela en.",
     add_motion_sensor_header: "Lägg till rörelsevakt",
     motion_sensor_name_placeholder: "Namn (t.ex. Badrumsspegel)",
+
+    tab_house_conditions: "Hus & våningar",
+    house_conditions_help:
+      "Ett husomfattande villkor (t.ex. \"Städning\", \"Bortrest\") gäller alla rum; ett våningsvillkor gäller alla rum på den våningen - ett rums eget villkor vinner ändå över våningens, som vinner över husets. Varje enhet behöver fortfarande ett eget beteende per period för ett villkor här, precis som för rummets egna villkor, i den enhetens periodredigerare.",
+    house_conditions_header: "Hela huset",
+    house_conditions_box_help: "Gäller alla rum i huset när det är aktivt.",
+    floor_conditions_box_help: "Gäller alla rum på den här våningen när det är aktivt.",
     no_motion_sensors_hint: "Inga rörelsevakter än - lägg till en i fliken Rörelsevakter först.",
     motion_sensor_which_label: "Vilken rörelsevakt:",
     choose_motion_sensor_option: "Välj rörelsevakt…",
@@ -2277,6 +2293,11 @@ const RF_STYLES = `
   }
   .rf-log-row:last-child { border-bottom: none; }
   .rf-log-time { opacity: 0.6; flex: none; font-variant-numeric: tabular-nums; }
+  .rf-log-floor-header {
+    display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.9em;
+    opacity: 0.75; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.02em;
+  }
+  .rf-log-floor-header:first-child { margin-top: 0; }
 
   .rf-variant {
     border-radius: 8px; padding: 8px 10px; margin-top: 8px;
@@ -2375,16 +2396,30 @@ class RoomFlowCard extends HTMLElement {
   }
 
   async _loadAll() {
-    const [config, areas, entities] = await Promise.all([
+    const [config, areas, entities, floors] = await Promise.all([
       this._hass.callWS({ type: "roomflow/get_config" }),
       this._hass.callWS({ type: "roomflow/list_areas" }),
       this._hass.callWS({ type: "roomflow/list_entities" }),
+      this._hass.callWS({ type: "roomflow/list_floors" }),
     ]);
     this._config_data = config && config.rooms ? config : { rooms: [] };
     this._areas = areas;
     this._entities = entities;
+    this._floors = floors;
     this._migrateConfig();
     this._render();
+  }
+
+  // A room's floor follows its HA Area's floor assignment (Settings ->
+  // Areas -> floor) - RoomFlow has no floor concept of its own, it just
+  // reads the one HA's own floor registry already provides. Returns null
+  // if the room has no area, or that area isn't assigned to a floor.
+  _floorForRoom(roomId) {
+    const room = (this._config_data.rooms || []).find((r) => r.id === roomId);
+    if (!room || !room.area_id) return null;
+    const area = (this._areas || []).find((a) => a.area_id === room.area_id);
+    if (!area || !area.floor_id) return null;
+    return (this._floors || []).find((f) => f.floor_id === area.floor_id) || null;
   }
 
   _hasDayType() {
@@ -2424,6 +2459,8 @@ class RoomFlowCard extends HTMLElement {
     if (!cd.buttons) cd.buttons = [];
     if (!cd.motion_sensors) cd.motion_sensors = [];
     if (!cd.button_triggers) cd.button_triggers = [];
+    if (!cd.house_conditions) cd.house_conditions = [];
+    if (!cd.floor_conditions) cd.floor_conditions = [];
 
     // Schedules: a named, independent periods list of its own (see
     // DEFAULT_SCHEDULE_ID docs above) - a room follows one via its
@@ -2990,6 +3027,108 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
+  // House-wide and per-floor conditions: same shape/semantics as a room's
+  // own custom_conditions, just living at the top level of the config
+  // instead of on one room - cfg.house_conditions applies to every room,
+  // cfg.floor_conditions (each tagged with a floor_id) applies to every
+  // room whose HA Area is on that floor. See _active_room_conditions in
+  // the backend for the actual room > floor > house precedence.
+
+  _addHouseCondition() {
+    if (!this._config_data.house_conditions) this._config_data.house_conditions = [];
+    this._config_data.house_conditions.push({ id: uid(), name: this._t("new_condition_name"), entity_id: "", state: "on" });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removeHouseCondition(conditionId) {
+    this._config_data.house_conditions = (this._config_data.house_conditions || []).filter((c) => c.id !== conditionId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  _updateHouseCondition(conditionId, field, value) {
+    const condition = (this._config_data.house_conditions || []).find((c) => c.id === conditionId);
+    if (!condition) return;
+    condition[field] = value;
+    this._scheduleSave();
+  }
+
+  _moveHouseCondition(conditionId, direction) {
+    const conditions = this._config_data.house_conditions;
+    if (!conditions) return;
+    const index = conditions.findIndex((c) => c.id === conditionId);
+    if (index === -1) return;
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= conditions.length) return;
+    [conditions[index], conditions[swapWith]] = [conditions[swapWith], conditions[index]];
+    this._scheduleSave();
+    this._render();
+  }
+
+  _addFloorCondition(floorId) {
+    if (!this._config_data.floor_conditions) this._config_data.floor_conditions = [];
+    this._config_data.floor_conditions.push({
+      id: uid(),
+      name: this._t("new_condition_name"),
+      entity_id: "",
+      state: "on",
+      floor_id: floorId,
+    });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removeFloorCondition(conditionId) {
+    this._config_data.floor_conditions = (this._config_data.floor_conditions || []).filter((c) => c.id !== conditionId);
+    this._scheduleSave();
+    this._render();
+  }
+
+  _updateFloorCondition(conditionId, field, value) {
+    const condition = (this._config_data.floor_conditions || []).find((c) => c.id === conditionId);
+    if (!condition) return;
+    condition[field] = value;
+    this._scheduleSave();
+  }
+
+  _moveFloorCondition(conditionId, direction) {
+    const all = this._config_data.floor_conditions;
+    if (!all) return;
+    const condition = all.find((c) => c.id === conditionId);
+    if (!condition) return;
+    // Move only within this condition's own floor's subset - conditions
+    // for different floors are interleaved in one flat array, but "up/
+    // down" should only reorder relative to siblings on the same floor.
+    const siblings = all.filter((c) => c.floor_id === condition.floor_id);
+    const siblingIndex = siblings.findIndex((c) => c.id === conditionId);
+    const swapWith = direction === "up" ? siblingIndex - 1 : siblingIndex + 1;
+    if (swapWith < 0 || swapWith >= siblings.length) return;
+    const a = all.indexOf(condition);
+    const b = all.indexOf(siblings[swapWith]);
+    [all[a], all[b]] = [all[b], all[a]];
+    this._scheduleSave();
+    this._render();
+  }
+
+  // The combined, priority-ordered list of conditions that can affect one
+  // room's devices - room's own first (highest priority), then its
+  // floor's, then the house's - mirroring _active_room_conditions in the
+  // backend exactly, so the device period editor offers a variant row for
+  // every condition that could actually win for this room, in the same
+  // order they'd be checked.
+  _conditionsForRoom(room) {
+    const floor = this._floorForRoom(room.id);
+    const floorConditions = floor
+      ? (this._config_data.floor_conditions || []).filter((c) => c.floor_id === floor.floor_id)
+      : [];
+    return [
+      ...(room.custom_conditions || []),
+      ...floorConditions,
+      ...(this._config_data.house_conditions || []),
+    ];
+  }
+
   // Time-of-day periods: a top-level ORDERED list (order = priority, top =
   // highest, first period with a true condition group wins). Each period
   // holds a list of condition groups, OR'd together; each group holds a
@@ -3210,6 +3349,64 @@ class RoomFlowCard extends HTMLElement {
     });
   }
 
+  // Groups the device log by the floor its room's HA Area belongs to
+  // (see _floorForRoom) - floors ordered by their own "level" (ground
+  // floor first), rooms with no area/no floor assignment collected into
+  // one final group instead of being dropped. Falls back to a single
+  // flat, ungrouped list when no floors exist yet in this HA instance,
+  // so a house that hasn't set floors up doesn't just show empty groups.
+  _renderDeviceLogByFloor(entries) {
+    if (!entries || !entries.length) {
+      return `<div class="rf-help">${this._t("overview_log_empty")}</div>`;
+    }
+    if (!this._floors || !this._floors.length) {
+      return this._renderDeviceLogEntries(entries);
+    }
+
+    const groups = new Map(); // floor_id|"__none__" -> entries[]
+    entries.forEach((e) => {
+      const floor = this._floorForRoom(e.room_id);
+      const key = floor ? floor.floor_id : "__none__";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(e);
+    });
+
+    const orderedFloors = [...this._floors].sort((a, b) => {
+      const av = a.level ?? Number.MAX_SAFE_INTEGER;
+      const bv = b.level ?? Number.MAX_SAFE_INTEGER;
+      return av - bv;
+    });
+
+    let html = "";
+    orderedFloors.forEach((floor) => {
+      const floorEntries = groups.get(floor.floor_id);
+      if (!floorEntries || !floorEntries.length) return;
+      html += `
+        <div class="rf-log-floor-header">${icon(floor.icon || "mdi:floor-plan")}${floor.name}</div>
+        ${this._renderDeviceLogEntries(floorEntries)}
+      `;
+    });
+    const noFloorEntries = groups.get("__none__");
+    if (noFloorEntries && noFloorEntries.length) {
+      html += `
+        <div class="rf-log-floor-header">${icon("mdi:help-circle-outline")}${this._t("no_floor_label")}</div>
+        ${this._renderDeviceLogEntries(noFloorEntries)}
+      `;
+    }
+    return html;
+  }
+
+  _renderDeviceLogEntries(entries) {
+    return this._renderLogList(
+      entries,
+      (e) => `
+        <b>${e.room_name}</b> · ${e.device_name} → ${e.state_label}
+        <span class="rf-badge">${e.period_name}</span>
+        <span class="rf-badge">${this._logSourceLabel(e.source)}</span>
+      `
+    );
+  }
+
   _renderLogList(entries, describeFn) {
     if (!entries || !entries.length) {
       return `<div class="rf-help">${this._t("overview_log_empty")}</div>`;
@@ -3297,14 +3494,7 @@ class RoomFlowCard extends HTMLElement {
           .join("")
       : `<div class="rf-help">${this._t("overview_no_rooms")}</div>`;
 
-    const deviceLogHtml = this._renderLogList(
-      dash.device_log,
-      (e) => `
-        <b>${e.room_name}</b> · ${e.device_name} → ${e.state_label}
-        <span class="rf-badge">${e.period_name}</span>
-        <span class="rf-badge">${this._logSourceLabel(e.source)}</span>
-      `
-    );
+    const deviceLogHtml = this._renderDeviceLogByFloor(dash.device_log);
 
     const periodLogHtml = this._renderLogList(
       dash.period_log,
@@ -3504,6 +3694,53 @@ class RoomFlowCard extends HTMLElement {
     if (moveConditionDownBtn) {
       const [roomId, conditionId] = moveConditionDownBtn.getAttribute("data-move-custom-condition-down").split("|");
       this._moveCustomCondition(roomId, conditionId, "down");
+      return;
+    }
+
+    if (e.target.closest("[data-add-house-condition]")) {
+      this._addHouseCondition();
+      return;
+    }
+
+    const removeHouseConditionBtn = e.target.closest("[data-remove-house-condition]");
+    if (removeHouseConditionBtn) {
+      this._removeHouseCondition(removeHouseConditionBtn.getAttribute("data-remove-house-condition"));
+      return;
+    }
+
+    const moveHouseConditionUpBtn = e.target.closest("[data-move-house-condition-up]");
+    if (moveHouseConditionUpBtn) {
+      this._moveHouseCondition(moveHouseConditionUpBtn.getAttribute("data-move-house-condition-up"), "up");
+      return;
+    }
+
+    const moveHouseConditionDownBtn = e.target.closest("[data-move-house-condition-down]");
+    if (moveHouseConditionDownBtn) {
+      this._moveHouseCondition(moveHouseConditionDownBtn.getAttribute("data-move-house-condition-down"), "down");
+      return;
+    }
+
+    const addFloorConditionBtn = e.target.closest("[data-add-floor-condition]");
+    if (addFloorConditionBtn) {
+      this._addFloorCondition(addFloorConditionBtn.getAttribute("data-add-floor-condition"));
+      return;
+    }
+
+    const removeFloorConditionBtn = e.target.closest("[data-remove-floor-condition]");
+    if (removeFloorConditionBtn) {
+      this._removeFloorCondition(removeFloorConditionBtn.getAttribute("data-remove-floor-condition"));
+      return;
+    }
+
+    const moveFloorConditionUpBtn = e.target.closest("[data-move-floor-condition-up]");
+    if (moveFloorConditionUpBtn) {
+      this._moveFloorCondition(moveFloorConditionUpBtn.getAttribute("data-move-floor-condition-up"), "up");
+      return;
+    }
+
+    const moveFloorConditionDownBtn = e.target.closest("[data-move-floor-condition-down]");
+    if (moveFloorConditionDownBtn) {
+      this._moveFloorCondition(moveFloorConditionDownBtn.getAttribute("data-move-floor-condition-down"), "down");
       return;
     }
 
@@ -3880,6 +4117,66 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const houseConditionName = e.target.closest("[data-house-condition-name]");
+    if (houseConditionName) {
+      this._updateHouseCondition(
+        houseConditionName.getAttribute("data-house-condition-name"),
+        "name",
+        houseConditionName.value.trim() || this._t("condition_fallback_name")
+      );
+      return;
+    }
+
+    const houseConditionEntity = e.target.closest("[data-house-condition-entity]");
+    if (houseConditionEntity) {
+      this._updateHouseCondition(
+        houseConditionEntity.getAttribute("data-house-condition-entity"),
+        "entity_id",
+        houseConditionEntity.value.trim()
+      );
+      return;
+    }
+
+    const houseConditionState = e.target.closest("[data-house-condition-state]");
+    if (houseConditionState) {
+      this._updateHouseCondition(
+        houseConditionState.getAttribute("data-house-condition-state"),
+        "state",
+        houseConditionState.value.trim()
+      );
+      return;
+    }
+
+    const floorConditionName = e.target.closest("[data-floor-condition-name]");
+    if (floorConditionName) {
+      this._updateFloorCondition(
+        floorConditionName.getAttribute("data-floor-condition-name"),
+        "name",
+        floorConditionName.value.trim() || this._t("condition_fallback_name")
+      );
+      return;
+    }
+
+    const floorConditionEntity = e.target.closest("[data-floor-condition-entity]");
+    if (floorConditionEntity) {
+      this._updateFloorCondition(
+        floorConditionEntity.getAttribute("data-floor-condition-entity"),
+        "entity_id",
+        floorConditionEntity.value.trim()
+      );
+      return;
+    }
+
+    const floorConditionState = e.target.closest("[data-floor-condition-state]");
+    if (floorConditionState) {
+      this._updateFloorCondition(
+        floorConditionState.getAttribute("data-floor-condition-state"),
+        "state",
+        floorConditionState.value.trim()
+      );
+      return;
+    }
+
     const motionTimeout = e.target.closest("[data-motion-timeout]");
     if (motionTimeout) {
       const val = parseInt(motionTimeout.value, 10);
@@ -4230,6 +4527,7 @@ class RoomFlowCard extends HTMLElement {
       this._activeRoomId !== "__settings__" &&
       this._activeRoomId !== "__buttons__" &&
       this._activeRoomId !== "__motion__" &&
+      this._activeRoomId !== "__house__" &&
       this._activeRoomId !== "__overview__" &&
       !rooms.some((r) => r.id === this._activeRoomId)
     ) {
@@ -4255,6 +4553,8 @@ class RoomFlowCard extends HTMLElement {
       contentHtml = this._renderButtonsTab();
     } else if (this._activeRoomId === "__motion__") {
       contentHtml = this._renderMotionSensorsTab();
+    } else if (this._activeRoomId === "__house__") {
+      contentHtml = this._renderHouseConditionsTab();
     } else if (activeRoom) {
       contentHtml = this._renderRoom(activeRoom);
     } else {
@@ -4278,6 +4578,7 @@ class RoomFlowCard extends HTMLElement {
             ${tabBtn("__add__", this._t("tab_add_room").replace(/^\+\s*/, ""), "mdi:plus")}
             ${tabBtn("__buttons__", this._t("tab_buttons"), "mdi:gesture-tap-button")}
             ${tabBtn("__motion__", this._t("tab_motion_sensors"), "mdi:motion-sensor")}
+            ${tabBtn("__house__", this._t("tab_house_conditions"), "mdi:home-city-outline")}
             ${tabBtn("__settings__", this._t("tab_settings"), "mdi:cog-outline")}
           </div>
           <button id="apply-all-btn" class="rf-btn" style="margin:6px">${icon("mdi:play-outline")}${this._t("test_all")}</button>
@@ -4863,6 +5164,87 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
+  _renderHouseConditionsTab() {
+    const floors = this._floors || [];
+    const floorBoxesHtml = floors.map((floor) => this._renderFloorConditionsBox(floor)).join("");
+
+    return `
+      <div>
+        <div class="rf-section-title">${icon("mdi:home-city-outline")}${this._t("tab_house_conditions")}</div>
+        <div class="rf-help">${this._t("house_conditions_help")}</div>
+        ${this._renderHouseConditionsBox()}
+        ${floorBoxesHtml}
+      </div>
+    `;
+  }
+
+  // Shared row markup for a house/floor/room condition - only the fields
+  // that vary (data-attribute key, list, move handlers) differ between
+  // the three scopes, so this one renderer backs all of them.
+  _renderConditionRows(conditions, { nameAttr, entityAttr, stateAttr, moveUpAttr, moveDownAttr, removeAttr }) {
+    return conditions
+      .map(
+        (c, i) => `
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+        ${textField(`${nameAttr(c)} value="${c.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:120px"`)}
+        <input list="all-entities-list" ${entityAttr(c)}
+          value="${c.entity_id || ""}" placeholder="binary_sensor...." style="width:200px" />
+        <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
+        ${textField(`${stateAttr(c)} value="${c.state || ""}" placeholder="on" style="width:70px"`)}
+        <button class="rf-icon-btn" ${moveUpAttr(c)} ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
+        <button class="rf-icon-btn" ${moveDownAttr(c)} ${i === conditions.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
+        <button class="rf-icon-btn rf-danger" ${removeAttr(c)}>${icon("mdi:close")}</button>
+      </div>`
+      )
+      .join("");
+  }
+
+  _renderHouseConditionsBox() {
+    const conditions = this._config_data.house_conditions || [];
+    const rows = this._renderConditionRows(conditions, {
+      nameAttr: (c) => `data-house-condition-name="${c.id}"`,
+      entityAttr: (c) => `data-house-condition-entity="${c.id}"`,
+      stateAttr: (c) => `data-house-condition-state="${c.id}"`,
+      moveUpAttr: (c) => `data-move-house-condition-up="${c.id}"`,
+      moveDownAttr: (c) => `data-move-house-condition-down="${c.id}"`,
+      removeAttr: (c) => `data-remove-house-condition="${c.id}"`,
+    });
+
+    return `
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:home-city-outline")}${this._t("house_conditions_header")}</div>
+        <div class="rf-help" style="margin-top:0">${this._t("house_conditions_box_help")}</div>
+        ${rows}
+        <div style="margin-top:8px">
+          <button class="rf-btn rf-btn-flat" data-add-house-condition>${icon("mdi:plus")}${this._t("add_condition")}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderFloorConditionsBox(floor) {
+    const conditions = (this._config_data.floor_conditions || []).filter((c) => c.floor_id === floor.floor_id);
+    const rows = this._renderConditionRows(conditions, {
+      nameAttr: (c) => `data-floor-condition-name="${c.id}"`,
+      entityAttr: (c) => `data-floor-condition-entity="${c.id}"`,
+      stateAttr: (c) => `data-floor-condition-state="${c.id}"`,
+      moveUpAttr: (c) => `data-move-floor-condition-up="${c.id}"`,
+      moveDownAttr: (c) => `data-move-floor-condition-down="${c.id}"`,
+      removeAttr: (c) => `data-remove-floor-condition="${c.id}"`,
+    });
+
+    return `
+      <div class="rf-card">
+        <div class="rf-card-title">${icon(floor.icon || "mdi:floor-plan")}${floor.name}</div>
+        <div class="rf-help" style="margin-top:0">${this._t("floor_conditions_box_help")}</div>
+        ${rows}
+        <div style="margin-top:8px">
+          <button class="rf-btn rf-btn-flat" data-add-floor-condition="${floor.floor_id}">${icon("mdi:plus")}${this._t("add_condition")}</button>
+        </div>
+      </div>
+    `;
+  }
+
   _renderRoomButtons(room) {
     const triggers = this._config_data.button_triggers || [];
     const actionLabels = {
@@ -5273,9 +5655,12 @@ class RoomFlowCard extends HTMLElement {
       if (this._hasHome()) {
         controlsHtml += this._renderVariantControls(deviceKey, device, activePeriod, "away", this._t("variant_away"), true);
       }
-      (room.custom_conditions || []).forEach((cond) => {
+      this._conditionsForRoom(room).forEach((cond) => {
         // Lazily initialize this condition's variant so conditions added
         // mid-session don't need a reload to become editable per device.
+        // Covers the room's own conditions plus any inherited from its
+        // floor/the whole house (see _conditionsForRoom) - a device needs
+        // an editable variant for every tier that could actually win here.
         if (!device.behaviors[activePeriod][cond.id]) {
           device.behaviors[activePeriod][cond.id] = emptyVariant(device.behaviors[activePeriod].default, true);
         }

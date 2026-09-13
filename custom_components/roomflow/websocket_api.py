@@ -5,7 +5,12 @@ import voluptuous as vol
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+    floor_registry as fr,
+)
 
 from .const import DOMAIN, infer_schedules
 
@@ -39,6 +44,7 @@ async def ws_save_config(hass: HomeAssistant, connection, msg):
         "refresh_rooms_fn",
         "refresh_periods_fn",
         "refresh_schedule_sensors_fn",
+        "refresh_floor_sensors_fn",
     ):
         refresh_fn = hass.data[DOMAIN].get(refresh_key)
         if refresh_fn:
@@ -79,8 +85,22 @@ async def ws_apply_room(hass: HomeAssistant, connection, msg):
 @websocket_api.async_response
 async def ws_list_areas(hass: HomeAssistant, connection, msg):
     registry = ar.async_get(hass)
-    areas = [{"area_id": a.id, "name": a.name, "icon": a.icon} for a in registry.async_list_areas()]
+    areas = [
+        {"area_id": a.id, "name": a.name, "icon": a.icon, "floor_id": a.floor_id}
+        for a in registry.async_list_areas()
+    ]
     connection.send_result(msg["id"], areas)
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_floors"})
+@websocket_api.async_response
+async def ws_list_floors(hass: HomeAssistant, connection, msg):
+    registry = fr.async_get(hass)
+    floors = [
+        {"floor_id": f.floor_id, "name": f.name, "icon": f.icon, "level": f.level}
+        for f in registry.async_list_floors()
+    ]
+    connection.send_result(msg["id"], floors)
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_entities"})
@@ -167,5 +187,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_apply_now)
     websocket_api.async_register_command(hass, ws_apply_room)
     websocket_api.async_register_command(hass, ws_list_areas)
+    websocket_api.async_register_command(hass, ws_list_floors)
     websocket_api.async_register_command(hass, ws_list_entities)
     websocket_api.async_register_command(hass, ws_get_dashboard)

@@ -11,7 +11,7 @@ from homeassistant.components.frontend import async_remove_panel, add_extra_js_u
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, Event
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import area_registry as ar, device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -297,19 +297,85 @@ def _button_attachments_for_trigger(cfg: dict, trigger_id: str) -> list[tuple[di
     return result
 
 
-def _active_room_conditions(hass: HomeAssistant, room: dict) -> list[str]:
-    """IDs of this room's custom conditions that are currently true, in
-    priority order (list order = priority, top = highest)."""
-    active = []
-    for condition in room.get("custom_conditions", []):
-        entity_id = condition.get("entity_id")
-        expected = condition.get("state")
-        if not entity_id or not expected:
-            continue
-        state = hass.states.get(entity_id)
-        if state is not None and state.state == expected:
-            active.append(condition["id"])
+def _condition_active(hass: HomeAssistant, condition: dict) -> bool:
+    entity_id = condition.get("entity_id")
+    expected = condition.get("state")
+    if not entity_id or not expected:
+        return False
+    state = hass.states.get(entity_id)
+    return state is not None and state.state == expected
+
+
+def _room_floor_id(hass: HomeAssistant, room: dict) -> str | None:
+    """The HA floor a room's Area belongs to (Settings -> Areas -> floor) -
+    RoomFlow has no floor concept of its own, it just reads the one HA's
+    own floor registry already provides."""
+    area_id = room.get("area_id")
+    if not area_id:
+        return None
+    area = ar.async_get(hass).async_get_area(area_id)
+    return area.floor_id if area else None
+
+
+def _active_house_conditions(hass: HomeAssistant, cfg: dict) -> list[str]:
+    """IDs of the house-wide conditions (cfg.house_conditions) that are
+    currently true, in priority order - same shape/semantics as a room's
+    own custom_conditions, just scoped to the whole house instead of one
+    room (e.g. replacing the old hus_scener_bortrest/stadning cascade)."""
+    return [
+        condition["id"]
+        for condition in cfg.get("house_conditions", [])
+        if _condition_active(hass, condition)
+    ]
+
+
+def _active_floor_conditions(hass: HomeAssistant, cfg: dict, floor_id: str | None) -> list[str]:
+    """IDs of the conditions (cfg.floor_conditions) scoped to one floor
+    that are currently true, in priority order - only ever non-empty for
+    a floor_id an area is actually assigned to."""
+    if not floor_id:
+        return []
+    return [
+        condition["id"]
+        for condition in cfg.get("floor_conditions", [])
+        if condition.get("floor_id") == floor_id and _condition_active(hass, condition)
+    ]
+
+
+def _active_room_conditions(hass: HomeAssistant, room: dict, cfg: dict) -> list[str]:
+    """IDs of conditions currently true for this room, in priority order
+    (list order = priority, top = highest): the room's own custom
+    conditions first, then any active condition shared by its floor (via
+    the room's HA Area -> floor assignment), then any active house-wide
+    condition - mirroring the old per-room/per-floor/per-house scene
+    cascade this replaces (room's own scene beats the floor's, which
+    beats the house's)."""
+    active = [
+        condition["id"]
+        for condition in room.get("custom_conditions", [])
+        if _condition_active(hass, condition)
+    ]
+    active.extend(_active_floor_conditions(hass, cfg, _room_floor_id(hass, room)))
+    active.extend(_active_house_conditions(hass, cfg))
     return active
+
+
+def _condition_name(cfg: dict, condition_id: str, room: dict | None = None) -> str | None:
+    """Looks up a condition id's display name across every tier it could
+    have come from - a room's own custom_conditions (only searched when a
+    room is given), then floor_conditions, then house_conditions - so the
+    room/floor/house status sensors can show *whichever* tier's condition
+    actually won without needing to know which one it was."""
+    pools = []
+    if room is not None:
+        pools.append(room.get("custom_conditions", []))
+    pools.append(cfg.get("floor_conditions", []))
+    pools.append(cfg.get("house_conditions", []))
+    for pool in pools:
+        for condition in pool:
+            if condition.get("id") == condition_id:
+                return condition.get("name")
+    return None
 
 
 def _normalize_behaviors(raw: dict) -> dict:
@@ -785,7 +851,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _record_period_change(schedule_id, period, source)
 
             default_transitions = transitions_for_schedule(cfg, schedule_id)
-            active_condition_ids = _active_room_conditions(hass, room)
+            active_condition_ids = _active_room_conditions(hass, room, cfg)
             for device in room.get("devices", []):
                 # Devices whose control mode is "motion" for this period are
                 # exclusively controlled by the motion subsystem during
@@ -861,7 +927,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         behaviors = _normalize_behaviors(raw_behaviors)
         behavior = _pick_manual_on_behavior(
             behaviors,
-            _active_room_conditions(hass, room),
+            _active_room_conditions(hass, room, cfg),
             _get_day_type(),
             _get_home_state(),
             away_default=device.get("away_default"),
@@ -1456,8 +1522,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
         day_type = _get_day_type()
         home_state = _get_home_state()
-        active_condition_ids = _active_room_conditions(hass, room)
         cfg = hass.data[DOMAIN]["config"]
+        active_condition_ids = _active_room_conditions(hass, room, cfg)
         default_transitions = transitions_for_schedule(cfg, schedule_id)
         await _apply_single_device(
             room, device, period, day_type, home_state, active_condition_ids, default_transitions, schedule_id, source
@@ -1685,6 +1751,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 entity_id = condition.get("entity_id")
                 if entity_id:
                     tracked_entities.append(entity_id)
+        for condition in cfg.get("floor_conditions", []) + cfg.get("house_conditions", []):
+            entity_id = condition.get("entity_id")
+            if entity_id:
+                tracked_entities.append(entity_id)
 
         if tracked_entities:
             unsubs.append(

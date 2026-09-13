@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- **House-wide and per-floor conditions, plus status sensors for both.**
+  Previously only a room could define its own custom conditions (e.g.
+  "Cleaning", "Cozy") - replicating the pre-RoomFlow house's
+  room/floor/house scene cascade (a room's own scene, else its floor's,
+  else the whole house's) meant manually wiring the same condition into
+  every room on a floor or in the house. New "House & floors" tab: define
+  a condition once for the whole house (`house_conditions`) or once per
+  floor (`floor_conditions`, using HA's own floor registry - Settings ->
+  Areas -> floor), and every room on that floor/in the house
+  automatically inherits it - a room's own condition still wins over its
+  floor's, which wins over the house's (same precedence order the old
+  cascade used). Each device still gets its own per-period behavior for
+  an inherited condition, same as for a room's own conditions, right in
+  that device's period editor. Also added a "Status" sensor per floor and
+  one whole-house "House status" sensor (alongside the existing per-room
+  one) - each shows whichever condition is currently active at that
+  level, or falls back to Away/Weekend/the current period, mirroring the
+  old `hus_status`/`ov_status`/`uv_status` template sensors.
+
+- **The Overview tab's device log is now grouped by floor** (using the
+  same HA floor registry as above), instead of one flat chronological
+  list mixing every room together - makes it far easier to scan what's
+  been happening upstairs vs. downstairs. Falls back to the old flat list
+  if this HA instance has no floors configured yet.
+
 - **Rooms can now be duplicated as a template.** Setting up several
   similar rooms (e.g. multiple bedrooms with the same period/device
   layout) previously meant rebuilding the whole structure - periods,

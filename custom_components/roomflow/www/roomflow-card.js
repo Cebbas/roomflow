@@ -456,6 +456,7 @@ const STRINGS = {
     log_outcome_ran: "ran",
     log_outcome_no_attachments: "not attached to anything",
     log_outcome_click_type_mismatch: "ignored (click type didn't match)",
+    log_outcome_stale_reconnect: "ignored (stale reconnect echo, not a real press)",
 
     add_room_header: "Add room",
     custom_name_option: "— Custom name —",
@@ -680,6 +681,7 @@ const STRINGS = {
     log_outcome_ran: "kördes",
     log_outcome_no_attachments: "inte kopplad till något",
     log_outcome_click_type_mismatch: "ignorerad (klicktyp matchade inte)",
+    log_outcome_stale_reconnect: "ignorerad (gammal återanslutnings-signal, inte ett riktigt tryck)",
 
     add_room_header: "Lägg till rum",
     custom_name_option: "— Eget namn —",

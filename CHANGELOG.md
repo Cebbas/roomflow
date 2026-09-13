@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **A flaky BLE/mesh reconnect no longer fires a phantom button press.**
+  An `event.*` button trigger (e.g. a Plejd device with an unstable
+  connection) can cycle `unavailable` -> its own last cached press
+  timestamp -> `unavailable` again purely from reconnecting - not a new
+  physical press, but RoomFlow had no way to tell the difference and
+  reacted to it as a real one. Since a `event` domain entity's state is
+  always the ISO timestamp of when it last fired, a re-announced
+  timestamp that's more than 10 seconds old, arriving right after the
+  entity was `unavailable` a moment earlier, is now recognized as a stale
+  reconnect echo and ignored (logged as `stale_reconnect` in the button
+  activity log) rather than triggering the attached action. A genuine
+  press always reports a fresh timestamp, so this doesn't affect real
+  button presses at all - only ones whose own timestamp gives them away
+  as old.
+
 - **A genuine motion pulse now re-lights a motion_on device even when a
   sticky secondary trigger already had the room "active".** A motion
   definition can combine several triggers with OR (e.g. motion OR a

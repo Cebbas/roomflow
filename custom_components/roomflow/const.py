@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.27"
+VERSION = "0.0.28"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -535,6 +535,17 @@ CLICK_TYPE_HOLD = "hold"
 # hold-to-dim automations this replaces used (10/255 every 50ms).
 HOLD_DIM_STEP = 10
 HOLD_DIM_INTERVAL_SECONDS = 0.05
+
+# A flaky BLE/mesh link (observed with a Plejd device losing and regaining
+# its connection every so often) can make an `event.*` entity cycle
+# "unavailable" -> its own last cached state -> "unavailable" again,
+# purely as a side effect of reconnecting - not a new physical press. HA's
+# `event` domain always reports its state as the ISO timestamp of when the
+# event last fired, so a re-announced *old* timestamp is distinguishable
+# from a genuine new press (whose timestamp is right now). Anything older
+# than this is treated as a stale reconnect echo and ignored, rather than
+# fired as a real button press.
+STALE_EVENT_MAX_AGE_SECONDS = 10
 
 DEFAULT_BEHAVIOR_LIGHT = {
     "state": "off",

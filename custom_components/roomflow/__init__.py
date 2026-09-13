@@ -70,6 +70,7 @@ from .const import (
     CLICK_TYPE_HOLD,
     HOLD_DIM_STEP,
     HOLD_DIM_INTERVAL_SECONDS,
+    STALE_EVENT_MAX_AGE_SECONDS,
     WEEKEND_STATES,
     HOME_STATES,
     DEFAULT_TRANSITIONS,
@@ -236,6 +237,29 @@ def _click_type_matches(trigger: dict, event: Event) -> bool:
     return _click_type_value_matches(
         trigger.get("click_type"), new_state.state, (new_state.attributes or {}).get("event_type")
     )
+
+
+def _is_stale_reconnect_event(old_state, new_state) -> bool:
+    """True if this looks like a flaky BLE/mesh link re-announcing an old
+    button press after reconnecting, rather than a genuine new one. Only
+    meaningful for the `event` domain, whose state is always the ISO
+    timestamp of when it last fired: a real press always reports a
+    timestamp close to now, so a reported timestamp far in the past -
+    specifically arriving right after the entity was `unavailable` a
+    moment ago, exactly the reconnect signature observed - is almost
+    certainly the entity re-transmitting its last cached state rather
+    than a fresh physical press."""
+    if old_state is None or new_state is None:
+        return False
+    if old_state.state != "unavailable":
+        return False
+    if new_state.domain != "event":
+        return False
+    reported = dt_util.parse_datetime(new_state.state)
+    if reported is None:
+        return False
+    age = (dt_util.utcnow() - dt_util.as_utc(reported)).total_seconds()
+    return age > STALE_EVENT_MAX_AGE_SECONDS
 
 
 def _event_match_ok(trigger: dict, profile: dict, event: Event) -> bool:
@@ -957,6 +981,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
         new_state = event.data.get("new_state")
         click_type = trigger.get("click_type") or "any"
+
+        if _is_stale_reconnect_event(old_state, new_state):
+            log_button_press(
+                hass,
+                trigger_name=trigger.get("name") or trigger.get("entity_id") or "?",
+                entity_id=trigger.get("entity_id"),
+                state_label=new_state.state if new_state else "?",
+                outcome="stale_reconnect",
+                detail=click_type,
+            )
+            return
 
         if click_type in TIMED_CLICK_TYPES:
             await _handle_timed_button_press(trigger, event, new_state, click_type)

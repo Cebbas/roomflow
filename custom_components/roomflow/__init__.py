@@ -1278,6 +1278,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # action simply doesn't exist on a room-level attachment.
                 if device:
                     await _dim_device(room, device, "up" if action == "dim_up" else "down", "button_dim")
+            elif action == "toggle_condition":
+                # Room-level only, like apply_now/force_period - a custom
+                # condition (e.g. "Mys") belongs to the room, not to any one
+                # device, so this toggles the helper entity it's defined
+                # against directly (almost always an input_boolean) rather
+                # than resolving/applying a light behavior at all.
+                condition = next(
+                    (c for c in room.get("custom_conditions", []) if c.get("id") == attachment.get("condition_id")),
+                    None,
+                )
+                if condition and condition.get("entity_id"):
+                    await hass.services.async_call(
+                        "homeassistant", "toggle", {"entity_id": condition["entity_id"]}, blocking=True
+                    )
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
                 "RoomFlow: error handling button press (%s): %s",

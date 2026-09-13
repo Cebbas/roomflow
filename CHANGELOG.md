@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **A room-level button can now toggle a custom condition directly**
+  (e.g. a "Mys"/scene helper), not just a device or the whole room. A
+  house often has a physical button wired to flip a scene-style
+  `input_boolean` rather than any one light - previously the only way to
+  wire that up was a hand-written automation outside RoomFlow entirely.
+  New room button action "Toggle a condition": pick which of the room's
+  own custom conditions to flip, and RoomFlow calls
+  `homeassistant.toggle` on that condition's own entity when the button
+  fires.
+
 - **A motion sensor's own hold time can now be configured, so the
   turn-off timeout means what it says.** A real motion sensor typically
   keeps reporting "on" for a while after the room is actually empty (a

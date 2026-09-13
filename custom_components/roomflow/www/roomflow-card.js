@@ -584,6 +584,9 @@ const STRINGS = {
     action_off: "Turn off room",
     action_apply_now: "Run scheduled behavior now",
     action_force_period: "Force a specific period",
+    action_toggle_condition: "Toggle a condition (e.g. a scene helper)",
+    choose_condition_option: "Choose condition…",
+    no_conditions_for_toggle_hint: "No conditions yet - add one below first.",
 
     motion_sensors_help:
       "Build named, reusable motion-sensor definitions here once, then pick which one each device subscribes to (per period) from its own control-mode setting - not a room-wide switch, so two devices in the same room can react to two different sensors, and two rooms can share one.",
@@ -811,6 +814,9 @@ const STRINGS = {
     action_off: "Stäng av rum",
     action_apply_now: "Kör schemalagt beteende nu",
     action_force_period: "Tvinga en specifik period",
+    action_toggle_condition: "Toggla ett villkor (t.ex. en scen-hjälpare)",
+    choose_condition_option: "Välj villkor…",
+    no_conditions_for_toggle_hint: "Inga villkor än - lägg till ett nedan först.",
 
     motion_sensors_help:
       "Bygg namngivna, återanvändbara rörelsevakter här en gång, välj sedan vilken varje enhet prenumererar på (per period) från dess egen styrningsinställning - inte en rumsomfattande brytare, så två enheter i samma rum kan reagera på olika sensorer, och två rum kan dela en.",
@@ -2738,7 +2744,7 @@ class RoomFlowCard extends HTMLElement {
     return true;
   }
 
-  _addRoomButton(roomId, triggerId, action, forcePeriod) {
+  _addRoomButton(roomId, triggerId, action, forcePeriod, conditionId) {
     const room = this._config_data.rooms.find((r) => r.id === roomId);
     if (!room || !triggerId) return;
     room.buttons.push({
@@ -2746,6 +2752,7 @@ class RoomFlowCard extends HTMLElement {
       trigger_id: triggerId,
       action: action,
       force_period: action === "force_period" ? forcePeriod : null,
+      condition_id: action === "toggle_condition" ? conditionId : null,
     });
     this._scheduleSave();
     this._render();
@@ -3528,11 +3535,22 @@ class RoomFlowCard extends HTMLElement {
       const triggerSelect = wrap.querySelector('[data-field="trigger"]');
       const actionSelect = wrap.querySelector('[data-field="action"]');
       const periodSelect = wrap.querySelector('[data-field="period"]');
+      const conditionSelect = wrap.querySelector('[data-field="condition"]');
       if (!triggerSelect.value) {
         this._flashFieldError(triggerSelect);
         return;
       }
-      this._addRoomButton(roomId, triggerSelect.value, actionSelect.value, periodSelect ? periodSelect.value : null);
+      if (actionSelect.value === "toggle_condition" && conditionSelect && !conditionSelect.value) {
+        this._flashFieldError(conditionSelect);
+        return;
+      }
+      this._addRoomButton(
+        roomId,
+        triggerSelect.value,
+        actionSelect.value,
+        periodSelect ? periodSelect.value : null,
+        conditionSelect ? conditionSelect.value : null
+      );
       return;
     }
 
@@ -3653,6 +3671,10 @@ class RoomFlowCard extends HTMLElement {
       const periodWrap = wrap.querySelector('[data-field="period-wrap"]');
       if (periodWrap) {
         periodWrap.style.display = roomButtonAction.value === "force_period" ? "inline-block" : "none";
+      }
+      const conditionWrap = wrap.querySelector('[data-field="condition-wrap"]');
+      if (conditionWrap) {
+        conditionWrap.style.display = roomButtonAction.value === "toggle_condition" ? "inline-block" : "none";
       }
       return;
     }
@@ -4723,8 +4745,10 @@ class RoomFlowCard extends HTMLElement {
       off: this._t("action_off"),
       apply_now: this._t("action_apply_now"),
       force_period: this._t("action_force_period"),
+      toggle_condition: this._t("action_toggle_condition"),
     };
     const roomPeriods = this._roomPeriods(room);
+    const roomConditions = room.custom_conditions || [];
 
     const rows = (room.buttons || [])
       .map((b) => {
@@ -4733,6 +4757,9 @@ class RoomFlowCard extends HTMLElement {
           actionLabels[b.action] +
           (b.action === "force_period" && b.force_period
             ? ` (${roomPeriods.find((p) => p.id === b.force_period)?.name || b.force_period})`
+            : "") +
+          (b.action === "toggle_condition" && b.condition_id
+            ? ` (${roomConditions.find((c) => c.id === b.condition_id)?.name || b.condition_id})`
             : "");
         return `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
@@ -4744,6 +4771,7 @@ class RoomFlowCard extends HTMLElement {
 
     const triggerOptions = triggers.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
     const periodOptions = roomPeriods.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+    const conditionOptions = roomConditions.map((c) => `<option value="${c.id}">${c.name}</option>`).join("");
 
     return `
       <div class="rf-card">
@@ -4760,9 +4788,15 @@ class RoomFlowCard extends HTMLElement {
             <option value="off">${actionLabels.off}</option>
             <option value="apply_now">${actionLabels.apply_now}</option>
             <option value="force_period">${actionLabels.force_period}</option>
+            <option value="toggle_condition">${actionLabels.toggle_condition}</option>
           </select>
           <span data-field="period-wrap" style="display:none">
             <select data-field="period">${periodOptions}</select>
+          </span>
+          <span data-field="condition-wrap" style="display:none">
+            ${roomConditions.length
+              ? `<select data-field="condition"><option value="">${this._t("choose_condition_option")}</option>${conditionOptions}</select>`
+              : `<span class="rf-help" style="margin:0">${this._t("no_conditions_for_toggle_hint")}</span>`}
           </span>
           <button data-add-room-button="${room.id}" class="rf-btn rf-btn-flat">${icon("mdi:plus")}${this._t("add")}</button>
         </div>

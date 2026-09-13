@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **A motion sensor's own hold time can now be configured, so the
+  turn-off timeout means what it says.** A real motion sensor typically
+  keeps reporting "on" for a while after the room is actually empty (a
+  hardware/firmware hold time that varies per sensor model) - RoomFlow's
+  own off-timer only ever started counting from when the sensor's
+  `binary_sensor` finally went "off", so the *actual* total time since
+  someone left was always longer than the configured timeout by however
+  long that sensor holds. Added a per-motion-trigger "hold time"
+  (seconds) field in the Motion sensors tab - it's subtracted from every
+  timeout that definition drives (the off-delay and, transitively, the
+  warn-then-off sequence), so a configured "10 minutes" is 10 minutes
+  from when the person actually left, not from whenever the specific
+  sensor's own hold time happens to expire. Defaults to 0 (no change in
+  behavior) for every existing definition until set.
+
 - **A device's own icon (e.g. from a custom icon pack like Custom Brand
   Icons) now renders correctly in RoomFlow's panel.** RoomFlow is a
   standalone page, not a Lovelace dashboard - so a custom icon

@@ -594,6 +594,8 @@ const STRINGS = {
     choose_motion_sensor_option: "Choose motion sensor…",
     motion_sensor_value_above: "Sensor value above",
     motion_label: "Motion",
+    motion_sensor_hold_label: "This sensor's own hold time (stays \"on\" this long after real motion stops)",
+    motion_sensor_hold_suffix: "seconds - subtracted from every timeout below",
     motion_or_logic_help: 'This counts as "active" if ANY condition below is currently true (OR logic).',
     add_motion_sensor: "+ Motion sensor",
     add_threshold: "+ Threshold (e.g. humidity)",
@@ -819,6 +821,8 @@ const STRINGS = {
     choose_motion_sensor_option: "Välj rörelsevakt…",
     motion_sensor_value_above: "Sensorvärde över",
     motion_label: "Rörelse",
+    motion_sensor_hold_label: "Sensorns egen hålltid (visar \"på\" så här länge efter att rörelsen faktiskt upphört)",
+    motion_sensor_hold_suffix: "sekunder - dras av från alla tidsgränser nedan",
     motion_or_logic_help: 'Detta räknas som "aktivt" om NÅGOT villkor nedan just nu är sant (ELLER-logik).',
     add_motion_sensor: "+ Rörelsesensor",
     add_threshold: "+ Tröskelvärde (t.ex. luftfuktighet)",
@@ -3700,6 +3704,14 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const motionHold = e.target.closest("[data-motion-trigger-hold]");
+    if (motionHold) {
+      const [definitionId, triggerId] = motionHold.getAttribute("data-motion-trigger-hold").split("|");
+      const val = parseFloat(motionHold.value);
+      this._updateMotionTrigger(definitionId, triggerId, "hold_seconds", isNaN(val) || val < 0 ? 0 : val);
+      return;
+    }
+
     const conditionName = e.target.closest("[data-condition-name]");
     if (conditionName) {
       const [roomId, conditionId] = conditionName.getAttribute("data-condition-name").split("|");
@@ -4630,12 +4642,18 @@ class RoomFlowCard extends HTMLElement {
           </div>`;
         }
         return `
-        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
           ${icon("mdi:motion-sensor")}
           <span style="opacity:0.7;font-size:0.9em;width:120px">${this._t("motion_label")}</span>
           <input list="all-entities-list" data-motion-trigger-entity="${definition.id}|${t.id}"
             value="${t.entity_id || ""}" placeholder="binary_sensor.motion_..." style="width:220px" />
           <button class="rf-icon-btn rf-danger" data-remove-motion-trigger="${definition.id}|${t.id}">${icon("mdi:close")}</button>
+          <div style="width:100%;display:flex;align-items:center;gap:6px;font-size:0.85em;opacity:0.85;padding-left:26px">
+            ${icon("mdi:timer-sand")}
+            <span>${this._t("motion_sensor_hold_label")}</span>
+            ${textField(`type="number" min="0" step="1" data-motion-trigger-hold="${definition.id}|${t.id}" value="${t.hold_seconds ?? 0}" style="width:55px"`)}
+            <span>${this._t("motion_sensor_hold_suffix")}</span>
+          </div>
         </div>`;
       })
       .join("");

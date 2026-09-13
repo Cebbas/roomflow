@@ -1456,6 +1456,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         off_delay = device_motion_cfg.get("off_delay_minutes")
         if off_delay is None:
             off_delay = motion_cfg.get("timeout_minutes", 10)
+        # A real motion sensor typically keeps reporting "on" for a while
+        # after actual movement stops (a hardware/firmware hold time that
+        # varies per sensor model) - the binary_sensor going "off" already
+        # has that baked in, so counting the full configured timeout from
+        # there would overshoot the time the user actually intends by that
+        # same amount. Subtract the largest hold_seconds among this
+        # definition's own motion-type triggers so the total elapsed time
+        # since the person actually left matches what was configured.
+        hold_seconds = max(
+            (t.get("hold_seconds", 0) or 0 for t in motion_cfg.get("triggers", []) if t.get("type", "motion") == "motion"),
+            default=0,
+        )
+        off_delay = max(0.0, off_delay - hold_seconds / 60)
         warn_enabled = motion_cfg.get("warn_enabled", False)
         warn_minutes = motion_cfg.get("warn_minutes", 3)
         warn_brightness = motion_cfg.get("warn_brightness", 25)

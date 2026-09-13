@@ -436,7 +436,6 @@ const STRINGS = {
     test_all: "Test all",
 
     overview_status_header: "Current status",
-    overview_house_status_header: "House & floor status",
     overview_device_log_header: "Device log",
     no_floor_label: "No floor assigned",
     overview_period_log_header: "Period log",
@@ -681,7 +680,6 @@ const STRINGS = {
     test_all: "Testa alla",
 
     overview_status_header: "Aktuell status",
-    overview_house_status_header: "Hus- & våningsstatus",
     overview_device_log_header: "Enhetslogg",
     no_floor_label: "Ingen våning tilldelad",
     overview_period_log_header: "Periodlogg",
@@ -2269,6 +2267,7 @@ const RF_STYLES = `
   }
   .rf-status-row:last-child { border-bottom: none; }
   .rf-status-icon-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rf-status-room-group { padding-left: 20px; }
   .rf-status-icon {
     --mdc-icon-size: 20px;
     display: flex; align-items: center; justify-content: center;
@@ -3466,57 +3465,99 @@ class RoomFlowCard extends HTMLElement {
       .join("");
   }
 
-  _renderOverviewTab() {
+  // One room's status row (icon/name, resolved status text, live device/
+  // motion icons) - shared by every grouping _renderOverviewTab's status
+  // card uses (per floor, or the flat fallback with no floors set up).
+  _renderRoomStatusRow(room, scheduleById, roomStatusById) {
+    const schedule = scheduleById[room.schedule_id || DEFAULT_SCHEDULE_ID];
+    const roomStatusText = roomStatusById[room.id] ?? (schedule ? schedule.period_name : "-");
+    const iconsHtml = (room.devices || [])
+      .map((d) => {
+        const deviceKey = `${room.id}:${d.entity_id}`;
+        const statusClass = this._liveStatusClass(d);
+        const statusText = this._liveStatusText(d);
+        return `<span class="rf-status-icon ${statusClass}" data-live-status-icon="${deviceKey}" title="${d.name}: ${statusText}">${icon(this._deviceHeaderIcon(d))}</span>`;
+      })
+      .join("");
+    const motionIconsHtml = this._roomMotionIndicatorsHtml(room);
+    return `
+      <div class="rf-status-row">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(this._roomIcon(room))}${room.name}</div>
+        <div style="opacity:0.8;font-size:0.9em">${roomStatusText}</div>
+        <div class="rf-status-icon-row">${iconsHtml}${motionIconsHtml}${iconsHtml || motionIconsHtml ? "" : "-"}</div>
+      </div>
+    `;
+  }
+
+  // One "Current status" card, merging the house/floor status with each
+  // room's - a house row, then each floor's own status row immediately
+  // followed by that floor's rooms (so it reads as one hierarchy: house
+  // -> floor -> room), then any room with no floor assignment at the
+  // end. Falls back to a flat room list (no house/floor rows at all) if
+  // this HA instance has no floors configured yet.
+  _renderCurrentStatusCard() {
     const rooms = this._config_data.rooms || [];
-    const dash = this._dashboard || { schedules: [], device_log: [], period_log: [], floor_status: [], room_status: [] };
+    const dash = this._dashboard || { schedules: [], floor_status: [], room_status: [] };
     const scheduleById = Object.fromEntries((dash.schedules || []).map((s) => [s.id, s]));
     const roomStatusById = Object.fromEntries((dash.room_status || []).map((r) => [r.room_id, r.status]));
 
-    const houseFloorStatusHtml = `
-      <div class="rf-card">
-        <div class="rf-card-title">${icon("mdi:home-city-outline")}${this._t("overview_house_status_header")}</div>
-        <div class="rf-status-row">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon("mdi:home-city-outline")}${this._t("house_conditions_header")}</div>
-          <div style="opacity:0.8;font-size:0.9em">${dash.house_status ?? "-"}</div>
-        </div>
-        ${(dash.floor_status || [])
-          .map(
-            (f) => `
-          <div class="rf-status-row">
-            <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon("mdi:home-floor-g")}${f.name}</div>
-            <div style="opacity:0.8;font-size:0.9em">${f.status ?? "-"}</div>
-          </div>
-        `
-          )
-          .join("")}
+    if (!rooms.length) {
+      return `<div class="rf-help">${this._t("overview_no_rooms")}</div>`;
+    }
+
+    if (!this._floors || !this._floors.length) {
+      return rooms.map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById)).join("");
+    }
+
+    const floorStatusById = Object.fromEntries((dash.floor_status || []).map((f) => [f.floor_id, f.status]));
+    const roomsByFloor = new Map(); // floor_id|"__none__" -> rooms[]
+    rooms.forEach((room) => {
+      const floor = this._floorForRoom(room.id);
+      const key = floor ? floor.floor_id : "__none__";
+      if (!roomsByFloor.has(key)) roomsByFloor.set(key, []);
+      roomsByFloor.get(key).push(room);
+    });
+
+    const orderedFloors = [...this._floors].sort((a, b) => {
+      const av = a.level ?? Number.MAX_SAFE_INTEGER;
+      const bv = b.level ?? Number.MAX_SAFE_INTEGER;
+      return av - bv;
+    });
+
+    let html = `
+      <div class="rf-status-row">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon("mdi:home-city-outline")}${this._t("house_conditions_header")}</div>
+        <div style="opacity:0.8;font-size:0.9em">${dash.house_status ?? "-"}</div>
       </div>
     `;
+    orderedFloors.forEach((floor) => {
+      const floorRooms = roomsByFloor.get(floor.floor_id);
+      html += `
+        <div class="rf-status-row">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(floor.icon || "mdi:floor-plan")}${floor.name}</div>
+          <div style="opacity:0.8;font-size:0.9em">${floorStatusById[floor.floor_id] ?? "-"}</div>
+        </div>
+      `;
+      if (floorRooms) {
+        html += `<div class="rf-status-room-group">${floorRooms
+          .map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById))
+          .join("")}</div>`;
+      }
+    });
+    const noFloorRooms = roomsByFloor.get("__none__");
+    if (noFloorRooms && noFloorRooms.length) {
+      html += `
+        <div class="rf-log-floor-header">${icon("mdi:help-circle-outline")}${this._t("no_floor_label")}</div>
+        ${noFloorRooms.map((room) => this._renderRoomStatusRow(room, scheduleById, roomStatusById)).join("")}
+      `;
+    }
+    return html;
+  }
 
-    const statusRowsHtml = rooms.length
-      ? rooms
-          .map((room) => {
-            const schedule = scheduleById[room.schedule_id || DEFAULT_SCHEDULE_ID];
-            const roomStatusText = roomStatusById[room.id] ?? (schedule ? schedule.period_name : "-");
-            const iconsHtml = (room.devices || [])
-              .map((d) => {
-                const deviceKey = `${room.id}:${d.entity_id}`;
-                const statusClass = this._liveStatusClass(d);
-                const statusText = this._liveStatusText(d);
-                return `<span class="rf-status-icon ${statusClass}" data-live-status-icon="${deviceKey}" title="${d.name}: ${statusText}">${icon(this._deviceHeaderIcon(d))}</span>`;
-              })
-              .join("");
-            const motionIconsHtml = this._roomMotionIndicatorsHtml(room);
-            return `
-              <div class="rf-status-row">
-                <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(this._roomIcon(room))}${room.name}</div>
-                <div style="opacity:0.8;font-size:0.9em">${roomStatusText}</div>
-                <div class="rf-status-icon-row">${iconsHtml}${motionIconsHtml}${iconsHtml || motionIconsHtml ? "" : "-"}</div>
-              </div>
-            `;
-          })
-          .join("")
-      : `<div class="rf-help">${this._t("overview_no_rooms")}</div>`;
+  _renderOverviewTab() {
+    const dash = this._dashboard || { schedules: [], device_log: [], period_log: [] };
 
+    const currentStatusHtml = this._renderCurrentStatusCard();
     const deviceLogHtml = this._renderDeviceLogByFloor(dash.device_log);
 
     const periodLogHtml = this._renderLogList(
@@ -3533,9 +3574,8 @@ class RoomFlowCard extends HTMLElement {
           ${icon("mdi:view-dashboard-outline")}${this._t("overview_status_header")}
           <button class="rf-icon-btn" style="margin-left:auto" data-refresh-dashboard title="${this._t("overview_refresh")}">${icon("mdi:refresh")}</button>
         </div>
-        ${statusRowsHtml}
+        ${currentStatusHtml}
       </div>
-      ${houseFloorStatusHtml}
       <div class="rf-card">
         <div class="rf-card-title">${icon("mdi:swap-horizontal")}${this._t("overview_device_log_header")}</div>
         ${deviceLogHtml}

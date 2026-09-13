@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Merged the "House & floor status" card into "Current status"** -
+  house status, then each floor's status immediately followed by that
+  floor's own rooms, then any room with no floor assignment at the end -
+  one hierarchy (house -> floor -> room) instead of two separate cards
+  covering overlapping ground.
+
 - **The Overview tab now shows House/floor/room status directly**, not
   just in Developer Tools - a new "House & floor status" card (whole
   house, then each floor) plus each room's own status row now shows the

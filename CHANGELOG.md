@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **A device's own icon (e.g. from a custom icon pack like Custom Brand
+  Icons) now renders correctly in RoomFlow's panel.** RoomFlow is a
+  standalone page, not a Lovelace dashboard - so a custom icon
+  namespace an entity's `icon` attribute points at (anything other than
+  the built-in `mdi:` set) only ever resolved on the user's actual
+  dashboards, where that icon pack's own resource script had already run
+  once in the page. RoomFlow's own panel now best-effort mirrors every
+  registered Lovelace module-type resource into itself at setup, so any
+  icon pack (or other resource) that already works on a dashboard also
+  works here - read from Home Assistant's own resource storage, not
+  hardcoded to any specific pack.
+
+- **The Overview tab now shows a room's motion sensor and humidity
+  reading, not just its devices.** If any device in a room uses a
+  motion_sensors definition, its motion trigger's live on/off state and
+  its humidity threshold trigger's current reading (if either exists)
+  now appear alongside the device icons in that room's status row -
+  live-updating the same way the device icons already do, not just on a
+  full re-render.
+
 - **A flaky BLE/mesh reconnect no longer fires a phantom button press.**
   An `event.*` button trigger (e.g. a Plejd device with an unstable
   connection) can cycle `unavailable` -> its own last cached press

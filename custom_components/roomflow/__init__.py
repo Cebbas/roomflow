@@ -1724,6 +1724,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         pass
     add_extra_js_url(hass, _CARD_JS_URL)
 
+    # RoomFlow's panel is a standalone page, not a Lovelace dashboard - so
+    # any custom Lovelace resource the user has registered (a custom icon
+    # pack being the common case: an entity's own `icon` attribute can
+    # point at a namespace like "phu:some-icon" that only resolves once
+    # that resource's own JS has run once in the page) never automatically
+    # loads here the way it does on a real dashboard. Best-effort mirror
+    # every registered module-type resource into this panel too, so an
+    # icon (or anything else) that already works on the user's dashboards
+    # works here as well. Read via the storage file directly rather than
+    # lovelace's internal Python API, which isn't a stable cross-version
+    # dependency to import from another integration.
+    try:
+        lovelace_resources_store: Store = Store(hass, 1, "lovelace_resources")
+        lovelace_resources_data = await lovelace_resources_store.async_load()
+        for resource in (lovelace_resources_data or {}).get("items", []):
+            if resource.get("type") == "module" and resource.get("url"):
+                add_extra_js_url(hass, resource["url"])
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("RoomFlow: could not mirror Lovelace resources into its panel: %s", err)
+
     # Register a dedicated sidebar page (reuses the same card as a full page)
     try:
         await panel_custom.async_register_panel(

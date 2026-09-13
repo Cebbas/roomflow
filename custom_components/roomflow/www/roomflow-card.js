@@ -2201,6 +2201,14 @@ const RF_STYLES = `
   }
   .rf-status-icon.rf-on { background: #4caf5026; color: #2e7d32; }
   .rf-status-icon.rf-off { background: var(--divider-color); color: var(--secondary-text-color); }
+  .rf-status-chip {
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 10px; height: 34px; border-radius: 999px; flex: none;
+    background: var(--divider-color); color: var(--secondary-text-color);
+    font-size: 0.85em; white-space: nowrap;
+  }
+  .rf-status-chip ha-icon { --mdc-icon-size: 18px; }
+  .rf-status-chip.rf-on { background: #2196f326; color: #1565c0; }
 
   .rf-field-error { outline: 2px solid var(--error-color, #db4437); border-radius: 4px; }
 
@@ -3104,6 +3112,43 @@ class RoomFlowCard extends HTMLElement {
     `;
   }
 
+  // Motion/humidity indicators for the Overview status row - a room can
+  // reference a shared motion_sensors definition from several devices
+  // (across different periods, even), so this collects every distinct
+  // definition actually in use rather than assuming one-per-room.
+  _roomMotionIndicatorsHtml(room) {
+    const defIds = new Set();
+    (room.devices || []).forEach((d) => {
+      Object.values(d.control || {}).forEach((c) => {
+        if (c && c.mode === "motion" && c.motion_sensor_id) defIds.add(c.motion_sensor_id);
+      });
+    });
+    if (!defIds.size) return "";
+    return Array.from(defIds)
+      .map((id) => this._findMotionSensor(id))
+      .filter(Boolean)
+      .map((def) => {
+        const motionTrigger = (def.triggers || []).find((t) => (t.type || "motion") === "motion");
+        const humidityTrigger = (def.triggers || []).find((t) => t.type === "threshold_above");
+        let html = "";
+        if (motionTrigger && motionTrigger.entity_id) {
+          const st = this._hass && this._hass.states[motionTrigger.entity_id];
+          const active = !!st && st.state === "on";
+          const label = st ? st.state : this._t("status_unavailable");
+          html += `<span class="rf-status-icon ${active ? "rf-on" : "rf-off"}" data-live-motion="${motionTrigger.entity_id}" title="${def.name}: ${label}">${icon(active ? "mdi:motion-sensor" : "mdi:motion-sensor-off")}</span>`;
+        }
+        if (humidityTrigger && humidityTrigger.entity_id) {
+          const st = this._hass && this._hass.states[humidityTrigger.entity_id];
+          const raw = st ? parseFloat(st.state) : NaN;
+          const label = Number.isFinite(raw) ? `${Math.round(raw)}%` : this._t("status_unavailable");
+          const active = Number.isFinite(raw) && raw > (humidityTrigger.threshold ?? 100);
+          html += `<span class="rf-status-chip ${active ? "rf-on" : ""}" data-live-humidity="${humidityTrigger.entity_id}|${humidityTrigger.threshold ?? 100}" title="${def.name}: ${label}">${icon("mdi:water-percent")}<span data-live-humidity-text>${label}</span></span>`;
+        }
+        return html;
+      })
+      .join("");
+  }
+
   _renderOverviewTab() {
     const rooms = this._config_data.rooms || [];
     const dash = this._dashboard || { schedules: [], device_log: [], period_log: [] };
@@ -3122,11 +3167,12 @@ class RoomFlowCard extends HTMLElement {
                 return `<span class="rf-status-icon ${statusClass}" data-live-status-icon="${deviceKey}" title="${d.name}: ${statusText}">${icon(this._deviceHeaderIcon(d))}</span>`;
               })
               .join("");
+            const motionIconsHtml = this._roomMotionIndicatorsHtml(room);
             return `
               <div class="rf-status-row">
                 <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(this._roomIcon(room))}${room.name}</div>
                 <div style="opacity:0.8;font-size:0.9em">${periodName}</div>
-                <div class="rf-status-icon-row">${iconsHtml || "-"}</div>
+                <div class="rf-status-icon-row">${iconsHtml}${motionIconsHtml}${iconsHtml || motionIconsHtml ? "" : "-"}</div>
               </div>
             `;
           })
@@ -3185,6 +3231,24 @@ class RoomFlowCard extends HTMLElement {
         el.className = `rf-status-icon ${this._liveStatusClass(device)}`.trim();
         el.title = `${device.name}: ${this._liveStatusText(device)}`;
       }
+    });
+    this.querySelectorAll("[data-live-motion]").forEach((el) => {
+      const entityId = el.getAttribute("data-live-motion");
+      const st = this._hass && this._hass.states[entityId];
+      const active = !!st && st.state === "on";
+      el.className = `rf-status-icon ${active ? "rf-on" : "rf-off"}`;
+      const iconEl = el.querySelector("ha-icon");
+      if (iconEl) iconEl.setAttribute("icon", active ? "mdi:motion-sensor" : "mdi:motion-sensor-off");
+    });
+    this.querySelectorAll("[data-live-humidity]").forEach((el) => {
+      const [entityId, thresholdStr] = el.getAttribute("data-live-humidity").split("|");
+      const st = this._hass && this._hass.states[entityId];
+      const raw = st ? parseFloat(st.state) : NaN;
+      const active = Number.isFinite(raw) && raw > parseFloat(thresholdStr);
+      const label = Number.isFinite(raw) ? `${Math.round(raw)}%` : this._t("status_unavailable");
+      el.className = `rf-status-chip ${active ? "rf-on" : ""}`.trim();
+      const textEl = el.querySelector("[data-live-humidity-text]");
+      if (textEl) textEl.textContent = label;
     });
   }
 

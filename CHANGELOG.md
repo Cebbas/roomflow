@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Temporary diagnostic logging in `_handle_button_press`** - a
+  warning-level log line on every invocation, added to chase down a live
+  report of a button's own final click-type-classification state change
+  (e.g. `single_push` following its own `btn_down`/`btn_up`) never
+  reaching the handler at all, while the two earlier states in the same
+  press do. To be removed once root-caused - not a real feature, don't
+  rely on this log line.
+
 - **A room-level button can now toggle a custom condition directly**
   (e.g. a "Mys"/scene helper), not just a device or the whole room. A
   house often has a physical button wired to flip a scene-style

@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Fixed RoomFlow breaking the entire Home Assistant frontend** (sidebar,
+  every dashboard - not just RoomFlow's own panel) on installs with many
+  custom Lovelace card resources. Since v0.0.29, RoomFlow mirrored every
+  registered Lovelace resource into its own panel via
+  `frontend.add_extra_js_url` (`extra_module_url`), so a custom icon pack
+  would resolve inside RoomFlow's panel too, not just on a real
+  dashboard. That mechanism races Home Assistant's own frontend
+  bootstrap: `app.js` swaps `window.customElements` for a scoped registry
+  shim while extra modules load concurrently, and whichever side loses
+  throws `Failed to execute 'define' ... already been used with this
+  registry` - which, unhandled, broke the *whole* frontend, not just the
+  mirrored resource. Confirmed on a real install with ~35 HACS card
+  resources: every single page load crashed with this active; disabling
+  only RoomFlow (nothing else) took it from crashing 100% of the time to
+  0%. Removed the mirroring entirely - a custom icon pack may no longer
+  resolve inside RoomFlow's own panel specifically (the actual, narrower
+  regression this was originally fixing), which is a real loss but a
+  much smaller one than the whole app breaking. See
+  https://github.com/aex351/home-assistant-neerslag-card/issues/58 for
+  the same race independently reported in another integration, with the
+  same conclusion: `extra_module_url` isn't safe for anything but the
+  one script a panel actually needs.
+
 - **Merged the "House & floor status" card into "Current status"** -
   house status, then each floor's status immediately followed by that
   floor's own rooms, then any room with no floor assignment at the end -

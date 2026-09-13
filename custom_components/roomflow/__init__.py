@@ -1853,25 +1853,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         pass
     add_extra_js_url(hass, _CARD_JS_URL)
 
-    # RoomFlow's panel is a standalone page, not a Lovelace dashboard - so
-    # any custom Lovelace resource the user has registered (a custom icon
-    # pack being the common case: an entity's own `icon` attribute can
-    # point at a namespace like "phu:some-icon" that only resolves once
-    # that resource's own JS has run once in the page) never automatically
-    # loads here the way it does on a real dashboard. Best-effort mirror
-    # every registered module-type resource into this panel too, so an
-    # icon (or anything else) that already works on the user's dashboards
-    # works here as well. Read via the storage file directly rather than
-    # lovelace's internal Python API, which isn't a stable cross-version
-    # dependency to import from another integration.
-    try:
-        lovelace_resources_store: Store = Store(hass, 1, "lovelace_resources")
-        lovelace_resources_data = await lovelace_resources_store.async_load()
-        for resource in (lovelace_resources_data or {}).get("items", []):
-            if resource.get("type") == "module" and resource.get("url"):
-                add_extra_js_url(hass, resource["url"])
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("RoomFlow: could not mirror Lovelace resources into its panel: %s", err)
+    # REMOVED (v0.0.41): this used to mirror every registered Lovelace
+    # resource into RoomFlow's own panel via add_extra_js_url, so a custom
+    # icon pack (e.g. a "phu:some-icon" namespace) would resolve here too,
+    # not just on a real dashboard. That mechanism - `extra_module_url` -
+    # races Home Assistant's own frontend bootstrap: app.js swaps
+    # `window.customElements` for a scoped registry shim while these
+    # extra modules are loading concurrently, and whichever side loses the
+    # race throws "Failed to execute 'define' ... already been used with
+    # this registry" - breaking the *entire* frontend (sidebar, every
+    # dashboard), not just RoomFlow's own panel. Confirmed live: with this
+    # block active alongside ~35 HACS card resources, every single page
+    # load crashed; disabling RoomFlow's config entry alone (with
+    # everything else untouched) took it from 8/8 crashes to 0/8. See
+    # https://github.com/aex351/home-assistant-neerslag-card/issues/58 for
+    # the same race in another integration, and its own recommendation:
+    # don't use extra_module_url for anything that isn't the one panel
+    # script itself - a real Lovelace resource (loaded by the frontend
+    # itself, after bootstrap, not racing it) is the only safe way to add
+    # a script to every page. Custom icon packs not resolving inside
+    # RoomFlow's own panel is a real, known regression from removing this
+    # - accepted deliberately over the alternative (the regression this
+    # was fixing was cosmetic; this one took down the whole app).
 
     # Register a dedicated sidebar page (reuses the same card as a full page)
     try:

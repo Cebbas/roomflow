@@ -2418,7 +2418,14 @@ class RoomFlowCard extends HTMLElement {
     this._hass = hass;
     this._lang = detectLang(hass);
     if (firstRun) {
-      _ensureLovelaceResourcesLoaded(hass);
+      // Not awaited - the card renders immediately without waiting for
+      // this. Icons from a pack that wasn't ready yet at that first
+      // render (e.g. a "phu:..." room icon) come out blank the first
+      // time, so re-render once this resolves to pick them up - _render
+      // is a full, idempotent re-render safe to call again, and a no-op
+      // if _loadAll hasn't populated _config_data yet (it'll render with
+      // the icons already available once it does).
+      _ensureLovelaceResourcesLoaded(hass).then(() => this._render());
       this._loadAll();
     } else if (this._activeRoomId) {
       // Only refresh live-status text, don't fully re-render on every tick

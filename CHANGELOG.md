@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Fixed those same custom icon-pack icons still showing blank on the
+  Overview tab specifically** (a room tab opened directly showed its
+  icon fine). The client-side resource load added just below isn't
+  awaited before the card does its first render - deliberately, so the
+  card doesn't sit blank waiting on it - but that means whatever gets
+  drawn in that window (almost always the Overview tab, since it's the
+  default) can render a "phu:..." room icon before its pack has
+  finished loading, and nothing was re-rendering it afterwards. Now
+  re-renders once the resource load resolves, so any icon that came out
+  blank on that first pass gets picked up.
+
 - **Restored custom icon packs (e.g. "phu:...") resolving inside RoomFlow's
   own panel**, without reintroducing the race described below. The
   previous mirroring fix removed *all* resource loading from RoomFlow's

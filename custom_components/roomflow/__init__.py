@@ -977,14 +977,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _handle_button_press(trigger: dict, event: Event) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        _LOGGER.warning(
-            "RoomFlow TEMP-DEBUG: _handle_button_press invoked for trigger '%s' (%s) - old_state=%s, new_state.state=%s, new_state.event_type=%s",
-            trigger.get("name"),
-            trigger.get("entity_id"),
-            old_state.state if old_state else None,
-            new_state.state if new_state else None,
-            (new_state.attributes or {}).get("event_type") if new_state else None,
-        )
         if old_state is None:
             # Avoid triggering on HA restart / entity just appearing
             return

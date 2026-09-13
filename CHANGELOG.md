@@ -2,13 +2,19 @@
 
 ## Unreleased
 
-- **Temporary diagnostic logging in `_handle_button_press`** - a
-  warning-level log line on every invocation, added to chase down a live
-  report of a button's own final click-type-classification state change
-  (e.g. `single_push` following its own `btn_down`/`btn_up`) never
-  reaching the handler at all, while the two earlier states in the same
-  press do. To be removed once root-caused - not a real feature, don't
-  rely on this log line.
+- **Fixed a manual button press silently doing nothing when a device's
+  "Day" period default was set to off** - found live on a room's ceiling
+  light after a button appeared to fire correctly (logged as "ran") but
+  never actually toggled the light during the day. The manual-on
+  resolution path falls back to the period's own `default` behavior when
+  no condition/away/weekend tier applies, and several devices had that
+  `default` left at off for the Day period (inherited from a schedule
+  design that intentionally kept the light off during the day) - so a
+  button's "turn on" resolved right back to off. This is the same class
+  of bug fixed earlier for the living room and entryway lights, found
+  this time by a live debugging session on another button; fixed the
+  same way (Day default set to on) for the affected devices found via a
+  config-wide sweep, not just the one reported.
 
 - **A room-level button can now toggle a custom condition directly**
   (e.g. a "Mys"/scene helper), not just a device or the whole room. A

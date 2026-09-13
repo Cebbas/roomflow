@@ -436,6 +436,7 @@ const STRINGS = {
     test_all: "Test all",
 
     overview_status_header: "Current status",
+    overview_house_status_header: "House & floor status",
     overview_device_log_header: "Device log",
     no_floor_label: "No floor assigned",
     overview_period_log_header: "Period log",
@@ -680,6 +681,7 @@ const STRINGS = {
     test_all: "Testa alla",
 
     overview_status_header: "Aktuell status",
+    overview_house_status_header: "Hus- & våningsstatus",
     overview_device_log_header: "Enhetslogg",
     no_floor_label: "Ingen våning tilldelad",
     overview_period_log_header: "Periodlogg",
@@ -3466,14 +3468,35 @@ class RoomFlowCard extends HTMLElement {
 
   _renderOverviewTab() {
     const rooms = this._config_data.rooms || [];
-    const dash = this._dashboard || { schedules: [], device_log: [], period_log: [] };
+    const dash = this._dashboard || { schedules: [], device_log: [], period_log: [], floor_status: [], room_status: [] };
     const scheduleById = Object.fromEntries((dash.schedules || []).map((s) => [s.id, s]));
+    const roomStatusById = Object.fromEntries((dash.room_status || []).map((r) => [r.room_id, r.status]));
+
+    const houseFloorStatusHtml = `
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:home-city-outline")}${this._t("overview_house_status_header")}</div>
+        <div class="rf-status-row">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon("mdi:home-city-outline")}${this._t("house_conditions_header")}</div>
+          <div style="opacity:0.8;font-size:0.9em">${dash.house_status ?? "-"}</div>
+        </div>
+        ${(dash.floor_status || [])
+          .map(
+            (f) => `
+          <div class="rf-status-row">
+            <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon("mdi:home-floor-g")}${f.name}</div>
+            <div style="opacity:0.8;font-size:0.9em">${f.status ?? "-"}</div>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    `;
 
     const statusRowsHtml = rooms.length
       ? rooms
           .map((room) => {
             const schedule = scheduleById[room.schedule_id || DEFAULT_SCHEDULE_ID];
-            const periodName = schedule ? schedule.period_name : "-";
+            const roomStatusText = roomStatusById[room.id] ?? (schedule ? schedule.period_name : "-");
             const iconsHtml = (room.devices || [])
               .map((d) => {
                 const deviceKey = `${room.id}:${d.entity_id}`;
@@ -3486,7 +3509,7 @@ class RoomFlowCard extends HTMLElement {
             return `
               <div class="rf-status-row">
                 <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(this._roomIcon(room))}${room.name}</div>
-                <div style="opacity:0.8;font-size:0.9em">${periodName}</div>
+                <div style="opacity:0.8;font-size:0.9em">${roomStatusText}</div>
                 <div class="rf-status-icon-row">${iconsHtml}${motionIconsHtml}${iconsHtml || motionIconsHtml ? "" : "-"}</div>
               </div>
             `;
@@ -3512,6 +3535,7 @@ class RoomFlowCard extends HTMLElement {
         </div>
         ${statusRowsHtml}
       </div>
+      ${houseFloorStatusHtml}
       <div class="rf-card">
         <div class="rf-card-title">${icon("mdi:swap-horizontal")}${this._t("overview_device_log_header")}</div>
         ${deviceLogHtml}

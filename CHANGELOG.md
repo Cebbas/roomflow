@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The Overview tab now shows House/floor/room status directly**, not
+  just in Developer Tools - a new "House & floor status" card (whole
+  house, then each floor) plus each room's own status row now shows the
+  same resolved text the House/Floor/Room status sensors compute
+  (whichever condition is active, else Away/Weekend/the current period)
+  instead of just the raw period name. Backed by a shared
+  `_resolve_status_text` helper so the sensors and this summary can never
+  disagree.
+
 - **House-wide and per-floor conditions, plus status sensors for both.**
   Previously only a room could define its own custom conditions (e.g.
   "Cleaning", "Cozy") - replicating the pre-RoomFlow house's

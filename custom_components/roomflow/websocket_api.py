@@ -12,7 +12,13 @@ from homeassistant.helpers import (
     floor_registry as fr,
 )
 
-from .const import DOMAIN, infer_schedules
+from . import (
+    _active_floor_conditions,
+    _active_house_conditions,
+    _active_room_conditions,
+    _resolve_status_text,
+)
+from .const import DOMAIN, DEFAULT_SCHEDULE_ID, infer_schedules
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_config"})
@@ -170,6 +176,60 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
             }
         )
 
+    get_day_type_fn = domain_data.get("get_day_type_fn")
+    get_home_state_fn = domain_data.get("get_home_state_fn")
+    day_type = get_day_type_fn() if get_day_type_fn else "weekday"
+    home_state = get_home_state_fn() if get_home_state_fn else "home"
+    # House/floor status has no one room's schedule to follow - same as
+    # the House/Floor status sensors (sensor.py), it reads the default
+    # schedule's period as its own time-of-day fallback.
+    house_period_id = forced.get(DEFAULT_SCHEDULE_ID) or (
+        get_period_fn(DEFAULT_SCHEDULE_ID) if get_period_fn else None
+    )
+    default_schedule = next(
+        (s for s in infer_schedules(cfg) if s["id"] == DEFAULT_SCHEDULE_ID), None
+    )
+    house_period_name = None
+    if default_schedule:
+        house_period = next(
+            (p for p in default_schedule["periods"] if p["id"] == house_period_id), None
+        )
+        house_period_name = house_period.get("name", house_period_id) if house_period else house_period_id
+
+    house_active_ids = _active_house_conditions(hass, cfg)
+    house_status = _resolve_status_text(cfg, house_active_ids, house_period_name, day_type, home_state)
+
+    floors = []
+    for floor in fr.async_get(hass).async_list_floors():
+        floor_active_ids = _active_floor_conditions(hass, cfg, floor.floor_id) + house_active_ids
+        floors.append(
+            {
+                "floor_id": floor.floor_id,
+                "name": floor.name,
+                "status": _resolve_status_text(cfg, floor_active_ids, house_period_name, day_type, home_state),
+            }
+        )
+
+    rooms = []
+    for room in cfg.get("rooms", []):
+        room_schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+        room_period_id = forced.get(room_schedule_id) or (
+            get_period_fn(room_schedule_id) if get_period_fn else None
+        )
+        room_schedule = next((s for s in schedules if s["id"] == room_schedule_id), None)
+        room_period_name = (
+            room_schedule["period_name"]
+            if room_schedule and room_schedule["period_id"] == room_period_id
+            else room_period_id
+        )
+        room_active_ids = _active_room_conditions(hass, room, cfg)
+        rooms.append(
+            {
+                "room_id": room["id"],
+                "status": _resolve_status_text(cfg, room_active_ids, room_period_name, day_type, home_state, room),
+            }
+        )
+
     connection.send_result(
         msg["id"],
         {
@@ -177,6 +237,9 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
             "device_log": list(reversed(domain_data.get("device_log", []))),
             "period_log": list(reversed(domain_data.get("period_log", []))),
             "button_log": list(reversed(domain_data.get("button_log", []))),
+            "house_status": house_status,
+            "floor_status": floors,
+            "room_status": rooms,
         },
     )
 

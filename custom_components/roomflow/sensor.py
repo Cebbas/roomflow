@@ -22,7 +22,7 @@ from . import (
     _active_floor_conditions,
     _active_house_conditions,
     _active_room_conditions,
-    _condition_name,
+    _resolve_status_text,
 )
 from .const import (
     DOMAIN,
@@ -361,21 +361,7 @@ class RoomFlowRoomStatusSensor(SensorEntity):
 
         conditions = room.get("custom_conditions", [])
         active_ids = _active_room_conditions(self.hass, room, cfg)
-
-        if active_ids:
-            # The winning condition can be the room's own, or (since
-            # _active_room_conditions falls through room -> floor -> house)
-            # one inherited from its floor/the whole house - _condition_name
-            # searches all three so the status text is right either way.
-            status = _condition_name(cfg, active_ids[0], room) or "Active"
-        elif home_state == "away":
-            status = "Away"
-        elif day_type == "weekend":
-            status = "Weekend"
-        elif period:
-            status = period.capitalize()
-        else:
-            status = None
+        status = _resolve_status_text(cfg, active_ids, period, day_type, home_state, room)
 
         active_id_set = set(active_ids)
         attributes: dict[str, bool] = {}
@@ -450,17 +436,7 @@ class RoomFlowFloorStatusSensor(SensorEntity):
         floor_conditions = [c for c in cfg.get("floor_conditions", []) if c.get("floor_id") == self._floor_id]
         active_ids = _active_floor_conditions(self.hass, cfg, self._floor_id)
         active_ids = active_ids + _active_house_conditions(self.hass, cfg)
-
-        if active_ids:
-            status = _condition_name(cfg, active_ids[0]) or "Active"
-        elif home_state == "away":
-            status = "Away"
-        elif day_type == "weekend":
-            status = "Weekend"
-        elif period:
-            status = period.capitalize()
-        else:
-            status = None
+        status = _resolve_status_text(cfg, active_ids, period, day_type, home_state)
 
         active_id_set = set(active_ids)
         attributes: dict[str, bool] = {}
@@ -501,17 +477,7 @@ class RoomFlowHouseStatusSensor(_RoomFlowBaseSensor):
 
         conditions = cfg.get("house_conditions", [])
         active_ids = _active_house_conditions(self.hass, cfg)
-
-        if active_ids:
-            status = _condition_name(cfg, active_ids[0]) or "Active"
-        elif home_state == "away":
-            status = "Away"
-        elif day_type == "weekend":
-            status = "Weekend"
-        elif period:
-            status = period.capitalize()
-        else:
-            status = None
+        status = _resolve_status_text(cfg, active_ids, period, day_type, home_state)
 
         active_id_set = set(active_ids)
         attributes: dict[str, bool] = {}

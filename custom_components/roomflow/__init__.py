@@ -83,7 +83,11 @@ from .const import (
     infer_home_mode,
 )
 from .logs import async_load_logs, log_button_press, log_device_change, log_period_change
-from .websocket_api import async_register_commands
+# websocket_api is imported lazily inside async_setup_entry (below), not
+# here at module level - it now imports condition-cascade helpers back
+# from this module (_active_room_conditions and friends), which aren't
+# defined yet this early in the file; importing it only once this module
+# has finished executing avoids a circular-import error at startup.
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -378,6 +382,32 @@ def _condition_name(cfg: dict, condition_id: str, room: dict | None = None) -> s
     return None
 
 
+def _resolve_status_text(
+    cfg: dict,
+    active_ids: list[str],
+    period: str | None,
+    day_type: str,
+    home_state: str,
+    room: dict | None = None,
+) -> str | None:
+    """The display text for a room/floor/house status: whichever
+    condition is active wins (highest priority first - see
+    _active_room_conditions/_active_floor_conditions/
+    _active_house_conditions), else "Away"/"Weekend" if those apply, else
+    the current period name. Shared by the Room/Floor/House status
+    sensors (sensor.py) and the Overview tab's status summary
+    (ws_get_dashboard in websocket_api.py) so the two can never disagree."""
+    if active_ids:
+        return _condition_name(cfg, active_ids[0], room) or "Active"
+    if home_state == "away":
+        return "Away"
+    if day_type == "weekend":
+        return "Weekend"
+    if period:
+        return period.capitalize()
+    return None
+
+
 def _normalize_behaviors(raw: dict) -> dict:
     """Backward compatibility: older formats stored the behavior directly
     without a 'default' wrapper."""
@@ -616,6 +646,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register websocket commands only once
     if not hass.data[DOMAIN].get("ws_registered"):
+        from .websocket_api import async_register_commands
+
         async_register_commands(hass)
         hass.data[DOMAIN]["ws_registered"] = True
 

@@ -91,6 +91,27 @@ from .logs import async_load_logs, log_button_press, log_device_change, log_peri
 
 _LOGGER = logging.getLogger(__name__)
 
+# _resolve_status_text's three fixed (non-user-named) outcomes, as
+# sentinels rather than literal English words - it has no access to the
+# viewer's language, unlike the frontend (see detectLang/STRINGS in
+# roomflow-card.js). Two different audiences read its return value:
+# sensor.py resolves these back to the stable English words below for the
+# actual House/Floor/Room status sensors' native_value (state text should
+# stay a stable, machine-parseable value - not vary with a browser's
+# language, and not something an automation matching on it would need to
+# track); the Overview tab (ws_get_dashboard) instead sends the sentinel
+# straight through, and the card translates it itself (see
+# _displayStatusText) the same way it already does for period/condition
+# names.
+STATUS_SENTINEL_ACTIVE = "__status_active__"
+STATUS_SENTINEL_AWAY = "__status_away__"
+STATUS_SENTINEL_WEEKEND = "__status_weekend__"
+STATUS_SENTINEL_TEXT = {
+    STATUS_SENTINEL_ACTIVE: "Active",
+    STATUS_SENTINEL_AWAY: "Away",
+    STATUS_SENTINEL_WEEKEND: "Weekend",
+}
+
 PLATFORMS: list[str] = ["sensor", "binary_sensor"]
 
 # The card lives inside this component (custom_components/roomflow/www/) so
@@ -393,16 +414,19 @@ def _resolve_status_text(
     """The display text for a room/floor/house status: whichever
     condition is active wins (highest priority first - see
     _active_room_conditions/_active_floor_conditions/
-    _active_house_conditions), else "Away"/"Weekend" if those apply, else
-    the current period name. Shared by the Room/Floor/House status
-    sensors (sensor.py) and the Overview tab's status summary
-    (ws_get_dashboard in websocket_api.py) so the two can never disagree."""
+    _active_house_conditions), else away/weekend if those apply, else the
+    current period name. Shared by the Room/Floor/House status sensors
+    (sensor.py) and the Overview tab's status summary (ws_get_dashboard
+    in websocket_api.py) so the two can never disagree. The away/weekend/
+    no-name-active outcomes come back as sentinels (see
+    STATUS_SENTINEL_TEXT above), not literal English words - this
+    function has no notion of the viewer's language."""
     if active_ids:
-        return _condition_name(cfg, active_ids[0], room) or "Active"
+        return _condition_name(cfg, active_ids[0], room) or STATUS_SENTINEL_ACTIVE
     if home_state == "away":
-        return "Away"
+        return STATUS_SENTINEL_AWAY
     if day_type == "weekend":
-        return "Weekend"
+        return STATUS_SENTINEL_WEEKEND
     if period:
         return period.capitalize()
     return None

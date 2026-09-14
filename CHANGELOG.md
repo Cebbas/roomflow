@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **Localized the Overview tab's "Away"/"Weekend"/"Active" status
+  words**, which had been hardcoded English regardless of the rest of
+  the UI's language ever since the merged status card was added -
+  period and condition names were already properly localized (or
+  user-named), but these three fixed outcomes weren't. `_resolve_status_text`
+  now returns a sentinel for each instead of the literal English word,
+  since it has no notion of the viewer's language; sensor.py resolves
+  the sentinel back to the original English text for the actual House/
+  Floor/Room status sensors (their state should stay stable and
+  language-independent), while the card translates it itself for the
+  Overview tab, the same way it already does for period/condition names.
+
+- **Fixed a real "helg" (weekend) misdetection that also broke
+  buttons for part of the morning**: with `day_type_mode: sensor`
+  pointed at a `binary_sensor.workday_sensor`-style entity (HA's own
+  Workday integration convention: "on" = *is* a workday), the day-type
+  resolver's default assumed polarity is the opposite - "on" = weekend
+  - unless `day_type_sensor_inverted` is set. Every weekday read as
+  "weekend", including in the main schedule's own "morning" period
+  condition (which only matches weekday-time-after-06:00 OR weekend-
+  time-after-07:00) - so for that first hour each weekday, *no* period
+  matched at all, and a button press on a device with no matching
+  period falls back to a bare on/off with no configured brightness -
+  exactly what looked like "the buttons don't work" this morning. Fixed
+  by setting `day_type_sensor_inverted: true` for this household's
+  config (not a code change - the polarity option already existed for
+  exactly this).
+
 - **Added a live countdown to the Overview tab for motion-triggered
   dim/off** ("Dims in 4:32" / "Turns off in 1:15" under a room), for any
   device currently counting down after motion stopped - the two-step

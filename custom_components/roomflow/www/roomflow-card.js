@@ -662,6 +662,9 @@ const STRINGS = {
     status_off: "· now: off",
     motion_timer_dim: "Dims in {time}",
     motion_timer_off: "Turns off in {time}",
+    status_active: "Active",
+    status_away: "Away",
+    status_weekend: "Weekend",
 
     applying: "Applying…",
     done: "Done!",
@@ -908,6 +911,9 @@ const STRINGS = {
     status_off: "· nu: av",
     motion_timer_dim: "Dimmas om {time}",
     motion_timer_off: "Släcks om {time}",
+    status_active: "Aktiv",
+    status_away: "Borta",
+    status_weekend: "Helg",
 
     applying: "Tillämpar…",
     done: "Klart!",
@@ -1105,6 +1111,9 @@ const STRINGS = {
     status_off: "· nå: av",
     motion_timer_dim: "Dimmes om {time}",
     motion_timer_off: "Slukkes om {time}",
+    status_active: "Aktiv",
+    status_away: "Borte",
+    status_weekend: "Helg",
 
     applying: "Bruker…",
     done: "Ferdig!",
@@ -1302,6 +1311,9 @@ const STRINGS = {
     status_off: "· nu: fra",
     motion_timer_dim: "Dæmpes om {time}",
     motion_timer_off: "Slukkes om {time}",
+    status_active: "Aktiv",
+    status_away: "Ikke hjemme",
+    status_weekend: "Weekend",
 
     applying: "Anvender…",
     done: "Færdig!",
@@ -1499,6 +1511,9 @@ const STRINGS = {
     status_off: "· nyt: pois",
     motion_timer_dim: "Himmenee {time} kuluttua",
     motion_timer_off: "Sammuu {time} kuluttua",
+    status_active: "Aktiivinen",
+    status_away: "Poissa",
+    status_weekend: "Viikonloppu",
 
     applying: "Otetaan käyttöön…",
     done: "Valmis!",
@@ -1696,6 +1711,9 @@ const STRINGS = {
     status_off: "· jetzt: aus",
     motion_timer_dim: "Dimmt in {time}",
     motion_timer_off: "Schaltet in {time} aus",
+    status_active: "Aktiv",
+    status_away: "Abwesend",
+    status_weekend: "Wochenende",
 
     applying: "Wird angewendet…",
     done: "Fertig!",
@@ -1893,6 +1911,9 @@ const STRINGS = {
     status_off: "· actuellement : éteint",
     motion_timer_dim: "S'atténue dans {time}",
     motion_timer_off: "S'éteint dans {time}",
+    status_active: "Actif",
+    status_away: "Absent",
+    status_weekend: "Week-end",
 
     applying: "Application…",
     done: "Terminé !",
@@ -2090,6 +2111,9 @@ const STRINGS = {
     status_off: "· nu: uit",
     motion_timer_dim: "Dimt over {time}",
     motion_timer_off: "Gaat over {time} uit",
+    status_active: "Actief",
+    status_away: "Afwezig",
+    status_weekend: "Weekend",
 
     applying: "Bezig met toepassen…",
     done: "Klaar!",
@@ -3540,6 +3564,20 @@ class RoomFlowCard extends HTMLElement {
     return `${m}:${String(s).padStart(2, "0")}`;
   }
 
+  // House/floor/room status text as sent by ws_get_dashboard: a real
+  // condition or period name comes through as-is (already the text the
+  // user configured/RoomFlow resolved), but away/weekend/no-name-active
+  // comes through as one of __init__.py's STATUS_SENTINEL_* markers,
+  // since the backend has no notion of the viewer's language - translate
+  // those here the same way period/condition names are already
+  // language-specific by the time they arrive.
+  _displayStatusText(raw) {
+    if (raw === "__status_active__") return this._t("status_active");
+    if (raw === "__status_away__") return this._t("status_away");
+    if (raw === "__status_weekend__") return this._t("status_weekend");
+    return raw;
+  }
+
   // A live countdown chip per device currently counting down to a
   // motion-triggered dim or off (see motion_timers in ws_get_dashboard/
   // _schedule_motion_off) - "Dims in 4:32" / "Turns off in 1:15". The
@@ -3584,7 +3622,7 @@ class RoomFlowCard extends HTMLElement {
   // card uses (per floor, or the flat fallback with no floors set up).
   _renderRoomStatusRow(room, scheduleById, roomStatusById, roomMotionTimersById) {
     const schedule = scheduleById[room.schedule_id || DEFAULT_SCHEDULE_ID];
-    const roomStatusText = roomStatusById[room.id] ?? (schedule ? schedule.period_name : "-");
+    const roomStatusText = this._displayStatusText(roomStatusById[room.id] ?? (schedule ? schedule.period_name : "-"));
     const iconsHtml = (room.devices || [])
       .map((d) => {
         const deviceKey = `${room.id}:${d.entity_id}`;
@@ -3645,7 +3683,7 @@ class RoomFlowCard extends HTMLElement {
     let html = `
       <div class="rf-status-row">
         <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon("mdi:home-city-outline")}${this._t("house_conditions_header")}</div>
-        <div style="opacity:0.8;font-size:0.9em">${dash.house_status ?? "-"}</div>
+        <div style="opacity:0.8;font-size:0.9em">${this._displayStatusText(dash.house_status ?? "-")}</div>
       </div>
     `;
     orderedFloors.forEach((floor) => {
@@ -3653,7 +3691,7 @@ class RoomFlowCard extends HTMLElement {
       html += `
         <div class="rf-status-row">
           <div style="display:flex;align-items:center;gap:8px;font-weight:600">${icon(floor.icon || "mdi:floor-plan")}${floor.name}</div>
-          <div style="opacity:0.8;font-size:0.9em">${floorStatusById[floor.floor_id] ?? "-"}</div>
+          <div style="opacity:0.8;font-size:0.9em">${this._displayStatusText(floorStatusById[floor.floor_id] ?? "-")}</div>
         </div>
       `;
       if (floorRooms) {

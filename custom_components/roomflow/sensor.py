@@ -19,6 +19,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import (
+    STATUS_SENTINEL_TEXT,
     _active_floor_conditions,
     _active_house_conditions,
     _active_room_conditions,
@@ -362,6 +363,7 @@ class RoomFlowRoomStatusSensor(SensorEntity):
         conditions = room.get("custom_conditions", [])
         active_ids = _active_room_conditions(self.hass, room, cfg)
         status = _resolve_status_text(cfg, active_ids, period, day_type, home_state, room)
+        status = STATUS_SENTINEL_TEXT.get(status, status)
 
         active_id_set = set(active_ids)
         attributes: dict[str, bool] = {}
@@ -437,6 +439,7 @@ class RoomFlowFloorStatusSensor(SensorEntity):
         active_ids = _active_floor_conditions(self.hass, cfg, self._floor_id)
         active_ids = active_ids + _active_house_conditions(self.hass, cfg)
         status = _resolve_status_text(cfg, active_ids, period, day_type, home_state)
+        status = STATUS_SENTINEL_TEXT.get(status, status)
 
         active_id_set = set(active_ids)
         attributes: dict[str, bool] = {}
@@ -478,6 +481,7 @@ class RoomFlowHouseStatusSensor(_RoomFlowBaseSensor):
         conditions = cfg.get("house_conditions", [])
         active_ids = _active_house_conditions(self.hass, cfg)
         status = _resolve_status_text(cfg, active_ids, period, day_type, home_state)
+        status = STATUS_SENTINEL_TEXT.get(status, status)
 
         active_id_set = set(active_ids)
         attributes: dict[str, bool] = {}

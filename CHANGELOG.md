@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Fixed multi-word period names getting mangled in the status text**
+  ("Helg Dag" showing as "Helg dag") - `_resolve_status_text` ran the
+  resolved period name through `.capitalize()`, which lowercases
+  everything after the first letter. Harmless for a single-word name,
+  wrong for the new two-word weekend period names. Removed - the name
+  reaching this point is already properly cased.
+
 - **Removed the blanket "it's the weekend" status override**, now that a
   schedule can distinguish weekday/weekend with its own periods (see
   below) - it used to take priority over the period name, so even once

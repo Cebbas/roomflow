@@ -437,7 +437,13 @@ def _resolve_status_text(
     if home_state == "away":
         return STATUS_SENTINEL_AWAY
     if period:
-        return period.capitalize()
+        # Not .capitalize() - that lowercases everything after the first
+        # letter, which is harmless for a single-word name ("dag" ->
+        # "Dag") but mangles a multi-word one ("Helg Dag" -> "Helg dag").
+        # By the time a name reaches here it's already properly cased
+        # (or the caller's own raw period id as a last-resort fallback,
+        # already lowercase either way) - nothing left to fix up.
+        return period
     return None
 
 

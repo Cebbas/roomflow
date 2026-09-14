@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The Overview tab now polls for new motion dim/off countdowns**
+  every ~20s while it's the visible tab, not just when one already
+  showing runs out. `get_dashboard` was otherwise only ever fetched on
+  tab-click or the manual refresh button - a motion event that started
+  a brand new timer while the tab just sat open had no way to appear
+  until the viewer manually refreshed.
+
 - **Fixed multi-word period names getting mangled in the status text**
   ("Helg Dag" showing as "Helg dag") - `_resolve_status_text` ran the
   resolved period name through `.capitalize()`, which lowercases

@@ -3602,6 +3602,14 @@ class RoomFlowCard extends HTMLElement {
   // Once one reaches 0:00, the room/device behind it is about to change
   // server-side (dim, or off) - reload the dashboard once to pick up
   // whatever comes next (another timer, or none) instead of guessing.
+  //
+  // That reload-on-expiry only ever catches a timer *this page already
+  // knows about* running out - it does nothing for a motion event that
+  // starts a brand new timer while the Overview tab just sits there
+  // (get_dashboard is otherwise only fetched on tab-click or the manual
+  // refresh button), so a countdown that starts after the tab was
+  // already open would silently never appear. Poll every ~20s as well,
+  // while Overview is actually the visible tab, to catch that case too.
   _tickMotionTimers() {
     let anyExpired = false;
     this.querySelectorAll("[data-live-motion-timer]").forEach((el) => {
@@ -3614,7 +3622,9 @@ class RoomFlowCard extends HTMLElement {
       const labelKey = nextAction === "dim" ? "motion_timer_dim" : "motion_timer_off";
       textEl.textContent = this._t(labelKey, { time: this._formatCountdown(firesAt) });
     });
-    if (anyExpired && this._activeRoomId === "__overview__") this._loadDashboard();
+    this._motionTimerTicks = (this._motionTimerTicks || 0) + 1;
+    const isOverview = this._activeRoomId === "__overview__";
+    if (isOverview && (anyExpired || this._motionTimerTicks % 20 === 0)) this._loadDashboard();
   }
 
   // One room's status row (icon/name, resolved status text, live device/

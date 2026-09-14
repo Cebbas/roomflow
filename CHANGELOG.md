@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Added a "create a helper" button next to every condition's entity
+  field** (room, house, and floor conditions alike) - previously the
+  entity had to already exist (an input_boolean created ahead of time
+  in Settings -> Helpers) before it could be typed in here. The new
+  button calls the same public `input_boolean/create` websocket
+  command Home Assistant's own "Add helper" UI uses, named "<room/
+  house/floor> <condition name>", and fills the field with the result.
+
 - **Fixed lights getting permanently stuck on after motion stopped**
   (found live: a bathroom light stayed on for nearly 3 hours after the
   room emptied). Any config save re-subscribes the motion listeners

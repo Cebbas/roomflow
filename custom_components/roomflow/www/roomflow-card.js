@@ -665,6 +665,7 @@ const STRINGS = {
     status_active: "Active",
     status_away: "Away",
     status_weekend: "Weekend",
+    create_helper_title: "Create a new helper for this",
 
     applying: "Applying…",
     done: "Done!",
@@ -914,6 +915,7 @@ const STRINGS = {
     status_active: "Aktiv",
     status_away: "Borta",
     status_weekend: "Helg",
+    create_helper_title: "Skapa en ny hjälpare för det här",
 
     applying: "Tillämpar…",
     done: "Klart!",
@@ -1114,6 +1116,7 @@ const STRINGS = {
     status_active: "Aktiv",
     status_away: "Borte",
     status_weekend: "Helg",
+    create_helper_title: "Opprett en ny hjelper for dette",
 
     applying: "Bruker…",
     done: "Ferdig!",
@@ -1314,6 +1317,7 @@ const STRINGS = {
     status_active: "Aktiv",
     status_away: "Ikke hjemme",
     status_weekend: "Weekend",
+    create_helper_title: "Opret en ny hjælper til dette",
 
     applying: "Anvender…",
     done: "Færdig!",
@@ -1514,6 +1518,7 @@ const STRINGS = {
     status_active: "Aktiivinen",
     status_away: "Poissa",
     status_weekend: "Viikonloppu",
+    create_helper_title: "Luo uusi apuväline tätä varten",
 
     applying: "Otetaan käyttöön…",
     done: "Valmis!",
@@ -1714,6 +1719,7 @@ const STRINGS = {
     status_active: "Aktiv",
     status_away: "Abwesend",
     status_weekend: "Wochenende",
+    create_helper_title: "Einen neuen Helfer dafür erstellen",
 
     applying: "Wird angewendet…",
     done: "Fertig!",
@@ -1914,6 +1920,7 @@ const STRINGS = {
     status_active: "Actif",
     status_away: "Absent",
     status_weekend: "Week-end",
+    create_helper_title: "Créer un nouvel assistant pour ça",
 
     applying: "Application…",
     done: "Terminé !",
@@ -2114,6 +2121,7 @@ const STRINGS = {
     status_active: "Actief",
     status_away: "Afwezig",
     status_weekend: "Weekend",
+    create_helper_title: "Nieuwe helper hiervoor maken",
 
     applying: "Bezig met toepassen…",
     done: "Klaar!",
@@ -3074,6 +3082,44 @@ class RoomFlowCard extends HTMLElement {
     this._scheduleSave();
   }
 
+  // A condition's entity_id normally has to already exist (an
+  // input_boolean created ahead of time in Settings -> Helpers) before it
+  // can be typed into the field below - this creates one on the spot
+  // instead, the same way Home Assistant's own "Add helper" UI does
+  // (input_boolean/create is that same public, stable websocket command),
+  // and fills the field with the result. Named "<scope> <condition name>"
+  // so it's identifiable back in Settings -> Helpers; HA slugifies that
+  // into the actual entity_id itself.
+  async _createConditionInputBoolean(scope, roomId, conditionId) {
+    let condition;
+    let scopeLabel;
+    if (scope === "room") {
+      const room = this._config_data.rooms.find((r) => r.id === roomId);
+      if (!room) return;
+      condition = (room.custom_conditions || []).find((c) => c.id === conditionId);
+      scopeLabel = room.name;
+    } else if (scope === "house") {
+      condition = (this._config_data.house_conditions || []).find((c) => c.id === conditionId);
+      scopeLabel = this._t("house_conditions_header");
+    } else {
+      condition = (this._config_data.floor_conditions || []).find((c) => c.id === conditionId);
+      const floor = (this._floors || []).find((f) => f.floor_id === condition?.floor_id);
+      scopeLabel = floor ? floor.name : "";
+    }
+    if (!condition) return;
+
+    const conditionName = condition.name || this._t("new_condition_name");
+    const helperName = `${scopeLabel} ${conditionName}`.trim();
+    try {
+      const result = await this._hass.callWS({ type: "input_boolean/create", name: helperName });
+      condition.entity_id = `input_boolean.${result.id}`;
+      this._scheduleSave();
+      this._render();
+    } catch (err) {
+      console.warn("RoomFlow: could not create a helper for this condition", err);
+    }
+  }
+
   // Room-level custom conditions: an ORDERED list (order = priority, top =
   // highest), unlike motion triggers which are unordered/OR-combined. Each
   // one gets its own per-period behavior variant on every device in the
@@ -3913,6 +3959,13 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const createConditionInputBtn = e.target.closest("[data-create-condition-input]");
+    if (createConditionInputBtn) {
+      const [roomId, conditionId] = createConditionInputBtn.getAttribute("data-create-condition-input").split("|");
+      this._createConditionInputBoolean("room", roomId, conditionId);
+      return;
+    }
+
     const moveConditionUpBtn = e.target.closest("[data-move-custom-condition-up]");
     if (moveConditionUpBtn) {
       const [roomId, conditionId] = moveConditionUpBtn.getAttribute("data-move-custom-condition-up").split("|");
@@ -3938,6 +3991,16 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const createHouseConditionInputBtn = e.target.closest("[data-create-house-condition-input]");
+    if (createHouseConditionInputBtn) {
+      this._createConditionInputBoolean(
+        "house",
+        null,
+        createHouseConditionInputBtn.getAttribute("data-create-house-condition-input")
+      );
+      return;
+    }
+
     const moveHouseConditionUpBtn = e.target.closest("[data-move-house-condition-up]");
     if (moveHouseConditionUpBtn) {
       this._moveHouseCondition(moveHouseConditionUpBtn.getAttribute("data-move-house-condition-up"), "up");
@@ -3959,6 +4022,16 @@ class RoomFlowCard extends HTMLElement {
     const removeFloorConditionBtn = e.target.closest("[data-remove-floor-condition]");
     if (removeFloorConditionBtn) {
       this._removeFloorCondition(removeFloorConditionBtn.getAttribute("data-remove-floor-condition"));
+      return;
+    }
+
+    const createFloorConditionInputBtn = e.target.closest("[data-create-floor-condition-input]");
+    if (createFloorConditionInputBtn) {
+      this._createConditionInputBoolean(
+        "floor",
+        null,
+        createFloorConditionInputBtn.getAttribute("data-create-floor-condition-input")
+      );
       return;
     }
 
@@ -5411,7 +5484,7 @@ class RoomFlowCard extends HTMLElement {
   // Shared row markup for a house/floor/room condition - only the fields
   // that vary (data-attribute key, list, move handlers) differ between
   // the three scopes, so this one renderer backs all of them.
-  _renderConditionRows(conditions, { nameAttr, entityAttr, stateAttr, moveUpAttr, moveDownAttr, removeAttr }) {
+  _renderConditionRows(conditions, { nameAttr, entityAttr, createAttr, stateAttr, moveUpAttr, moveDownAttr, removeAttr }) {
     return conditions
       .map(
         (c, i) => `
@@ -5419,6 +5492,7 @@ class RoomFlowCard extends HTMLElement {
         ${textField(`${nameAttr(c)} value="${c.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:120px"`)}
         <input list="all-entities-list" ${entityAttr(c)}
           value="${c.entity_id || ""}" placeholder="binary_sensor...." style="width:200px" />
+        <button class="rf-icon-btn" ${createAttr(c)} title="${this._t("create_helper_title")}">${icon("mdi:plus-circle-outline")}</button>
         <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
         ${textField(`${stateAttr(c)} value="${c.state || ""}" placeholder="on" style="width:70px"`)}
         <button class="rf-icon-btn" ${moveUpAttr(c)} ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
@@ -5434,6 +5508,7 @@ class RoomFlowCard extends HTMLElement {
     const rows = this._renderConditionRows(conditions, {
       nameAttr: (c) => `data-house-condition-name="${c.id}"`,
       entityAttr: (c) => `data-house-condition-entity="${c.id}"`,
+      createAttr: (c) => `data-create-house-condition-input="${c.id}"`,
       stateAttr: (c) => `data-house-condition-state="${c.id}"`,
       moveUpAttr: (c) => `data-move-house-condition-up="${c.id}"`,
       moveDownAttr: (c) => `data-move-house-condition-down="${c.id}"`,
@@ -5457,6 +5532,7 @@ class RoomFlowCard extends HTMLElement {
     const rows = this._renderConditionRows(conditions, {
       nameAttr: (c) => `data-floor-condition-name="${c.id}"`,
       entityAttr: (c) => `data-floor-condition-entity="${c.id}"`,
+      createAttr: (c) => `data-create-floor-condition-input="${c.id}"`,
       stateAttr: (c) => `data-floor-condition-state="${c.id}"`,
       moveUpAttr: (c) => `data-move-floor-condition-up="${c.id}"`,
       moveDownAttr: (c) => `data-move-floor-condition-down="${c.id}"`,
@@ -5551,6 +5627,7 @@ class RoomFlowCard extends HTMLElement {
         ${textField(`data-condition-name="${room.id}|${c.id}" value="${c.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:120px"`)}
         <input list="all-entities-list" data-condition-entity="${room.id}|${c.id}"
           value="${c.entity_id || ""}" placeholder="binary_sensor...." style="width:200px" />
+        <button class="rf-icon-btn" data-create-condition-input="${room.id}|${c.id}" title="${this._t("create_helper_title")}">${icon("mdi:plus-circle-outline")}</button>
         <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
         ${textField(`data-condition-state="${room.id}|${c.id}" value="${c.state || ""}" placeholder="on" style="width:70px"`)}
         <button class="rf-icon-btn" data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>

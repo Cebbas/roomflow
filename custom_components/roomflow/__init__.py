@@ -2021,6 +2021,23 @@ async def _apply_behavior(
         await hass.services.async_call("switch", service, {"entity_id": entity_id}, blocking=True)
 
 
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Lets a device with no entities left be deleted from Settings ->
+    Devices (or via the equivalent websocket call) - without this hook
+    Home Assistant refuses with "Config entry does not support device
+    removal" for every integration that doesn't explicitly opt in, no
+    matter how empty the device already is. Every device this
+    integration creates is virtual (a room/floor/schedule grouping, not
+    real hardware) and HA only invokes this in the first place once a
+    device's last entity is already gone (see
+    _async_remove_entity_and_its_device in sensor.py, which removes both
+    together going forward) - so unconditionally allowing it here is
+    safe."""
+    return True
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if not unload_ok:

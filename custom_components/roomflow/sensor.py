@@ -35,6 +35,21 @@ from .const import (
 )
 
 
+async def _async_remove_entity_and_its_device(hass: HomeAssistant, entity, identifier: str) -> None:
+    """Removes a room/floor/schedule sensor entity *and* the device it was
+    the last (only) entity on - entity.async_remove(force_remove=True)
+    alone only unregisters the entity; Home Assistant never deletes a
+    device just because its last entity is gone, so without this every
+    deleted room/floor/schedule left an empty, permanently-orphaned
+    device behind (found live: 8 of them, from long-past room-duplication
+    testing, cluttering Settings -> Devices). Awaits the entity's removal
+    first so the device lookup below doesn't race it."""
+    await entity.async_remove(force_remove=True)
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, identifier)})
+    if device:
+        dr.async_get(hass).async_remove_device(device.id)
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -57,7 +72,9 @@ async def async_setup_entry(
         for schedule_id in list(existing):
             if schedule_id not in current_schedule_ids:
                 entity = existing.pop(schedule_id)
-                hass.async_create_task(entity.async_remove(force_remove=True))
+                hass.async_create_task(
+                    _async_remove_entity_and_its_device(hass, entity, f"schedule_{schedule_id}")
+                )
 
         new_entities = []
         for schedule in schedules:
@@ -82,7 +99,9 @@ async def async_setup_entry(
         for room_id in list(existing):
             if room_id not in current_room_ids:
                 entity = existing.pop(room_id)
-                hass.async_create_task(entity.async_remove(force_remove=True))
+                hass.async_create_task(
+                    _async_remove_entity_and_its_device(hass, entity, f"room_{room_id}")
+                )
 
         new_entities = []
         for room in rooms:
@@ -128,7 +147,9 @@ async def async_setup_entry(
         for floor_id in list(existing):
             if floor_id not in current_floor_ids:
                 entity = existing.pop(floor_id)
-                hass.async_create_task(entity.async_remove(force_remove=True))
+                hass.async_create_task(
+                    _async_remove_entity_and_its_device(hass, entity, f"floor_{floor_id}")
+                )
 
         new_entities = []
         for floor in floors:

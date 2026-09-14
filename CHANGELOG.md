@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Fixed deleting a room/floor/schedule leaving a permanently orphaned
+  device behind** in Settings -> Devices (found live: 8 of them, from
+  long-past room-duplication testing). `entity.async_remove()` alone
+  only unregisters the entity - Home Assistant never deletes a device
+  just because its last entity is gone - so every deletion left an
+  empty device with no way to clean it up: this integration didn't
+  implement the hook Home Assistant requires before it'll even let a
+  user delete such a device by hand ("Config entry does not support
+  device removal"). Added that hook, and the room/floor/schedule
+  refresh functions now remove the device alongside its entity going
+  forward, so this can't recur.
+
 - **Condition helpers are now created automatically, not just on
   request** - adding a new room/house/floor condition creates its
   input_boolean right away (the v0.0.50 button is still there, now

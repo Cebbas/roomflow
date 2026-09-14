@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Fixed lights getting permanently stuck on after motion stopped**
+  (found live: a bathroom light stayed on for nearly 3 hours after the
+  room emptied). Any config save re-subscribes the motion listeners
+  (`refresh_motion_fn`), which cancels every pending motion dim/off
+  timer with no memory of how far it had got - not just a full
+  restart, but any edit made anywhere in the card while a room's
+  countdown happens to be running. Nothing ever rescheduled it
+  afterwards, so the light was stuck on until a fresh motion cycle -
+  and even that didn't help a "motion_off-only" device (control mode
+  motion, `motion_on` off - e.g. turned on by a bound button, left to
+  motion purely to time the off), because clearing its manual-override
+  lock was itself gated on a pending timer already existing, the very
+  thing that had just been cancelled. Two fixes: motion listener setup
+  now re-arms a full-length timer for anything found on with its
+  motion already reading inactive; and a fresh motion pulse now always
+  clears a motion_off-only device's override lock, not only when a
+  timer happens to still be running.
+
 - **The Overview tab now polls for new motion dim/off countdowns**
   every ~20s while it's the visible tab, not just when one already
   showing runs out. `get_dashboard` was otherwise only ever fetched on

@@ -1723,12 +1723,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # it needs its own restore path here: if motion returns while
                 # its off-timer/dim-warning is still counting down, that's an
                 # in-progress countdown being interrupted, not a fresh
-                # "motion turned this on" event - gated on an actual pending
-                # timer existing, not on motion_on (which is off for these).
+                # "motion turned this on" event - resuming to full
+                # brightness only makes sense with an actual pending timer
+                # to interrupt.
+                #
+                # The manual-override lock always gets released here
+                # regardless, though (unlike the resume action above it) -
+                # a motion_off-only device never passes through
+                # _motion_on_devices, which is the only other place that
+                # ever clears it (see the loop above). Gating the release
+                # itself on a pending timer, the way this used to work,
+                # meant that once the override was ever set without a
+                # timer somehow also running (e.g. a timer lost to a
+                # restart - motion_off_timers doesn't survive one, while
+                # motion_manual_override, being restored from
+                # last_applied_signature's persisted state, effectively
+                # does) no future motion could ever clear it again: the
+                # very next "motion stopped" tick would see the still-set
+                # override and skip scheduling a new timer (see the
+                # `else` branch below) - silently stuck on forever, not
+                # just until the next restart.
                 for device in _motion_off_devices(room, period, definition_id):
                     if device["entity_id"] in restored:
                         continue
                     key = _motion_key(room["id"], device["entity_id"])
+                    hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
                     if key not in hass.data[DOMAIN]["motion_off_timers"]:
                         continue
                     _cancel_motion_timer(key)
@@ -1750,14 +1769,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["motion_manual_override"] = {}
 
         unsubs = []
-        definitions = hass.data[DOMAIN]["config"].get("motion_sensors", [])
+        cfg = hass.data[DOMAIN]["config"]
+        definitions = cfg.get("motion_sensors", [])
         for definition in definitions:
             triggers = definition.get("triggers", [])
             entity_ids = [t.get("entity_id") for t in triggers if t.get("entity_id")]
             if not entity_ids:
                 continue
 
-            hass.data[DOMAIN]["motion_active_state"][definition["id"]] = _is_definition_active(definition)
+            active = _is_definition_active(definition)
+            hass.data[DOMAIN]["motion_active_state"][definition["id"]] = active
+            if not active:
+                # Every pending off-timer was just cancelled above with no
+                # memory of how far it had got - this runs on every config
+                # save (see refresh_motion_fn in websocket_api.py), not
+                # just a full restart, so it's not a rare edge case. Left
+                # alone, any device that was mid-countdown (or had
+                # already reached "time to turn off" but lost its own
+                # timer to this exact reset first) is now stuck on with
+                # nothing to ever turn it off again - not even a fresh
+                # motion pulse necessarily helps, for a motion_on=False
+                # device (see _handle_motion_change). Re-arm a full-length
+                # timer for anything currently on that this definition's
+                # (already-inactive) motion would otherwise be timing out.
+                for room in cfg.get("rooms", []):
+                    schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
+                    period = _get_period(schedule_id)
+                    if period is None:
+                        continue
+                    for device in _motion_off_devices(room, period, definition["id"]):
+                        state = hass.states.get(device["entity_id"])
+                        if state and state.state == "on":
+                            _schedule_motion_off(room["id"], device, definition)
 
             def _make_handler(definition_id):
                 async def _handler(event: Event) -> None:

@@ -1291,3 +1291,85 @@ this sweep's four more) across the migration. It's worth treating any
 new "button doesn't do anything" report as this bug first, before
 assuming a code-level regression - check the device's Day-period
 `default.state` before spending time on event-listener debugging.
+
+## Tvättstugan (laundry room) (2026-09-14)
+
+The one room not covered by the 2026-09-11 to -13 sweep above (new since
+- it's on the ground floor, `hus/vaning/undervaning/rum/tvattstuga/`,
+13 legacy yaml files).
+
+### Found while auditing
+
+Same shape as toa/badrum's time-of-day scener system: almost entirely
+dead. `tvattstuga_scener_automations.yaml`'s `choose` block has every
+Morgon/Dag/Eftermiddag/Kväll branch (weekday *and* weekend) commented
+out - only "Natt" (`scene.tvattstuga_natt`, turns `light.tvattstugan_takbelysning`
+off) and "Ingen Hemma" (`light.turn_off` on the whole `tvattstuga` area)
+were still live. Someone had clearly already started migrating this room
+away from the scene system and never finished wiring it into RoomFlow.
+
+The physical button (`tvattstuga_knappar_automations.yaml`, a 2-channel
+Shelly, `device_id f5d3861b5c1a580d5cd7d914e0e78f49`) toggles
+`light.tvattstugan_takbelysning` on channel 1 - real and working
+(`light.tvattstugan_takbelysning` confirmed live, brightness-capable).
+**Channel 2 targets `light.tvattstuga_bollar`, which doesn't exist** -
+no such entity anywhere in the registry, so that channel has silently
+done nothing for as long as this automation existed. Unlike Naomi's/
+Nadine's broken bollar groups elsewhere in the house, there isn't even a
+plausible individual-bulb entity to fall back to here - nothing to
+migrate for channel 2, flag if real hardware for it ever gets installed.
+
+### What's live now
+
+`light.tvattstugan_takbelysning` only - control mode "button" for every
+period except Natt/Helg Natt ("schedule", explicit off default, matching
+the one still-live scene branch), away off. Channel 1
+(`event.tvattstugan_takbelysning_channel_1`, click_type "single" - this
+Shelly's own event_types are `["long", "single"]`, not the
+"single_push"-style vocabulary Nadine's Shelly Plus I4 uses) wired as a
+RoomFlow toggle trigger. Verified live by an actual physical press:
+device_log shows `source: button_toggle`, light went on -> off,
+`period_name: "Kväll"` - matches real time of day.
+
+Disabled (entity registry, `disabled_by: "user"`): `automation.tvattstuga_scener`,
+`automation.tvattstuga_stang_av_scener`, `automation.tvattstuga_knapp_1_taklampa`,
+`automation.tvattstuga_knapp_2_taklampa` (the last of these was already
+inert - see the broken channel-2 entity above). **Deliberately left
+running** - unrelated to lighting, no RoomFlow equivalent: the washer/
+dryer "done" notification automations
+(`automation.tvattstuga_notis_nar_tvattmaskinen_ar_klar`/
+`_torktumlaren_ar_klar`).
+
+## Badrum - one automation missed by the original sweep (2026-09-14)
+
+Re-checked Badrum's automations while starting a fresh room-by-room pass
+(before finding this file already covered it days ago - see above).
+8 of 9 were already `disabled_by: user`, exactly matching what's
+recorded above. The 9th, `automation.badrum_belysning_timerhantering`
+(starts/cancels `timer.badrum_belysning_timer` on every motion state
+change), was still live - genuinely missed originally, not a
+regression: every automation that ever *consumed* that timer finishing
+(`badrum_rorelsevakt_spegelbelysning`, `badrum_takbelysning_knapptryck_spegelbelysning`,
+`badrum_komplett_belysningssystem`, `badrum_takbelysning_knapp_och_rorelse`)
+is already disabled, so it had been running for days doing nothing but
+starting/cancelling a timer nothing was listening to. Disabled it too.
+
+Also re-confirmed Hall's `hall_scener_stang_av_stadning_scen_automatiskt`
+(auto-expires Städning after 2h) is still the one deliberate keeper
+noted above - matches exactly, left running.
+
+## Orphaned RoomFlow devices/entities found and fixed (2026-09-14)
+
+Unrelated to the legacy-automation migration above, but found while
+back in this area: repeated "Duplicera rum" testing (see `roomflow`
+repo's own `CHANGELOG.md`, not this config repo) had left 20 orphaned
+entities and 8 orphaned devices behind in Home Assistant's own
+registries - old room_ids (`room_xiut1ful`, `room_mdrdir83`, etc.) with
+no corresponding room left in RoomFlow's config, never cleaned up.
+Removed all of them directly via `config/entity_registry/remove`/
+`config/device_registry/remove_config_entry`. Root cause fixed in
+RoomFlow **v0.0.52**: `entity.async_remove()` alone never deleted the
+device a removed room/floor/schedule sensor belonged to, and the
+integration didn't even implement the hook Home Assistant requires to
+allow deleting an already-empty device by hand - both fixed, so this
+can't silently reaccumulate the same way going forward.

@@ -3115,8 +3115,38 @@ class RoomFlowCard extends HTMLElement {
       condition.entity_id = `input_boolean.${result.id}`;
       this._scheduleSave();
       this._render();
+      await this._tagConditionHelper(condition.entity_id, conditionName);
     } catch (err) {
       console.warn("RoomFlow: could not create a helper for this condition", err);
+    }
+  }
+
+  // Tags a freshly created condition helper with two labels, matching
+  // this household's own existing convention (see e.g. "Städning" - the
+  // label already on input_boolean.hus_scener_stadning): one matching
+  // the condition's own name (created if it doesn't exist yet - a
+  // second "Städning" condition elsewhere reuses the same label rather
+  // than creating a duplicate), and the standing "scener_knapp" label
+  // that marks it as a scene-toggle helper regardless of which
+  // condition it's for. Matched by name, not id, since a label's id is
+  // just its name auto-slugified by Home Assistant itself on creation -
+  // recomputing that slug here would be duplicating logic that already
+  // lives server-side for no benefit.
+  async _tagConditionHelper(entityId, conditionName) {
+    try {
+      const labels = await this._hass.callWS({ type: "config/label_registry/list" });
+      let conditionLabel = labels.find((l) => l.name.toLowerCase() === conditionName.toLowerCase());
+      if (!conditionLabel) {
+        conditionLabel = await this._hass.callWS({ type: "config/label_registry/create", name: conditionName });
+      }
+      let toggleLabel = labels.find((l) => l.name.toLowerCase() === "scener_knapp");
+      if (!toggleLabel) {
+        toggleLabel = await this._hass.callWS({ type: "config/label_registry/create", name: "scener_knapp" });
+      }
+      const labelIds = [...new Set([conditionLabel.label_id, toggleLabel.label_id])];
+      await this._hass.callWS({ type: "config/entity_registry/update", entity_id: entityId, labels: labelIds });
+    } catch (err) {
+      console.warn("RoomFlow: could not tag the new helper with labels", err);
     }
   }
 
@@ -3124,13 +3154,21 @@ class RoomFlowCard extends HTMLElement {
   // highest), unlike motion triggers which are unordered/OR-combined. Each
   // one gets its own per-period behavior variant on every device in the
   // room, same shape as the built-in weekend/away variants.
-  _addCustomCondition(roomId) {
+  async _addCustomCondition(roomId) {
     const room = this._config_data.rooms.find((r) => r.id === roomId);
     if (!room) return;
     if (!room.custom_conditions) room.custom_conditions = [];
-    room.custom_conditions.push({ id: uid(), name: this._t("new_condition_name"), entity_id: "", state: "on" });
+    const condition = { id: uid(), name: this._t("new_condition_name"), entity_id: "", state: "on" };
+    room.custom_conditions.push(condition);
     this._scheduleSave();
     this._render();
+    // A brand-new condition's helper is created automatically, right
+    // away - no reason to make every single one a manual extra step
+    // when the common case is "yes, make me one". The button next to
+    // the field (_createConditionInputBoolean) still covers the rest:
+    // a fresh helper if this one's since been pointed elsewhere or the
+    // field was cleared out.
+    await this._createConditionInputBoolean("room", roomId, condition.id);
   }
 
   _removeCustomCondition(roomId, conditionId) {
@@ -3170,11 +3208,13 @@ class RoomFlowCard extends HTMLElement {
   // room whose HA Area is on that floor. See _active_room_conditions in
   // the backend for the actual room > floor > house precedence.
 
-  _addHouseCondition() {
+  async _addHouseCondition() {
     if (!this._config_data.house_conditions) this._config_data.house_conditions = [];
-    this._config_data.house_conditions.push({ id: uid(), name: this._t("new_condition_name"), entity_id: "", state: "on" });
+    const condition = { id: uid(), name: this._t("new_condition_name"), entity_id: "", state: "on" };
+    this._config_data.house_conditions.push(condition);
     this._scheduleSave();
     this._render();
+    await this._createConditionInputBoolean("house", null, condition.id);
   }
 
   _removeHouseCondition(conditionId) {
@@ -3202,17 +3242,19 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
-  _addFloorCondition(floorId) {
+  async _addFloorCondition(floorId) {
     if (!this._config_data.floor_conditions) this._config_data.floor_conditions = [];
-    this._config_data.floor_conditions.push({
+    const condition = {
       id: uid(),
       name: this._t("new_condition_name"),
       entity_id: "",
       state: "on",
       floor_id: floorId,
-    });
+    };
+    this._config_data.floor_conditions.push(condition);
     this._scheduleSave();
     this._render();
+    await this._createConditionInputBoolean("floor", null, condition.id);
   }
 
   _removeFloorCondition(conditionId) {

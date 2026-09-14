@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Condition helpers are now created automatically, not just on
+  request** - adding a new room/house/floor condition creates its
+  input_boolean right away (the v0.0.50 button is still there, now
+  just a way to get a fresh one later if the field's been cleared or
+  pointed elsewhere). Newly created helpers also get tagged with two
+  labels, matching this household's own existing convention (see the
+  "Städning" label already on `input_boolean.hus_scener_stadning`):
+  one matching the condition's own name - reusing an existing label of
+  that name rather than creating a duplicate - and the standing
+  "scener_knapp" label that marks it as a scene-toggle helper.
+
 - **Added a "create a helper" button next to every condition's entity
   field** (room, house, and floor conditions alike) - previously the
   entity had to already exist (an input_boolean created ahead of time

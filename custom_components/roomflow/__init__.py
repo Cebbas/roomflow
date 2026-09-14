@@ -414,19 +414,28 @@ def _resolve_status_text(
     """The display text for a room/floor/house status: whichever
     condition is active wins (highest priority first - see
     _active_room_conditions/_active_floor_conditions/
-    _active_house_conditions), else away/weekend if those apply, else the
+    _active_house_conditions), else away if that applies, else the
     current period name. Shared by the Room/Floor/House status sensors
     (sensor.py) and the Overview tab's status summary (ws_get_dashboard
-    in websocket_api.py) so the two can never disagree. The away/weekend/
+    in websocket_api.py) so the two can never disagree. The away/
     no-name-active outcomes come back as sentinels (see
     STATUS_SENTINEL_TEXT above), not literal English words - this
-    function has no notion of the viewer's language."""
+    function has no notion of the viewer's language.
+
+    day_type deliberately isn't checked here (there used to be a blanket
+    "day_type == weekend -> show Weekend" fallback before period, taking
+    priority over it): a schedule that actually distinguishes weekday/
+    weekend already does so with separate periods (e.g. "Dag" vs "Helg
+    Dag" - see the main schedule), so the period name itself already
+    says "weekend" when it should. The blanket fallback only ever
+    masked that more specific name behind a generic "Weekend"/"Helg" -
+    for a schedule with no such split it simply shows the plain weekday
+    period name year-round, which beats a vague, time-of-day-blind
+    "Weekend" label."""
     if active_ids:
         return _condition_name(cfg, active_ids[0], room) or STATUS_SENTINEL_ACTIVE
     if home_state == "away":
         return STATUS_SENTINEL_AWAY
-    if day_type == "weekend":
-        return STATUS_SENTINEL_WEEKEND
     if period:
         return period.capitalize()
     return None

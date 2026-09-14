@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- **Removed the blanket "it's the weekend" status override**, now that a
+  schedule can distinguish weekday/weekend with its own periods (see
+  below) - it used to take priority over the period name, so even once
+  a schedule had a genuine "Helg Dag" period, the status text would
+  still show a plain, time-of-day-blind "Weekend"/"Helg" instead of
+  ever reaching it. The period name is now the only source of that
+  distinction, for whichever schedules actually have weekend-specific
+  periods; a schedule without any still just shows its plain period
+  name on a weekend, which was already more informative than the
+  generic label it's replacing.
+
+- **Added weekend-specific periods to the main schedule**: "Helg Dag",
+  "Helg Eftermiddag", "Helg Kväll" and "Helg Natt" alongside the
+  existing "Dag"/"Eftermiddag"/"Kväll"/"Natt" (Morgon already had its
+  own weekday/weekend time split within one period, left as-is). Each
+  starts out as an exact copy of its weekday counterpart's per-device
+  behavior/control/transition settings - so nothing changes in practice
+  until a room's devices are given their own settings for a weekend
+  period through the same per-period editor already used for the
+  others. Ordered immediately ahead of its weekday counterpart in each
+  case, gated on a day_type "weekend" condition, so weekday resolution
+  is completely unaffected and a weekend period is always checked (and
+  wins) before its weekday twin ever gets a chance to.
+
+  This is a different mechanism from the "Helg" behavior variant that
+  already existed *within* each period (visible in the per-device
+  variant tabs) - that one changes a device's behavior on a weekend
+  without changing which period (and so which status text) is shown;
+  these are full extra periods; for the main schedule's day/afternoon/
+  evening/night, the new weekend periods take over completely on a
+  weekend, so that per-period "Helg" variant is no longer reachable
+  there (harmless - just unused from now on, not removed).
+
 - **Localized the Overview tab's "Away"/"Weekend"/"Active" status
   words**, which had been hardcoded English regardless of the rest of
   the UI's language ever since the merged status card was added -

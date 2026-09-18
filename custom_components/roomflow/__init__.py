@@ -2,6 +2,7 @@
 presence, physical buttons and motion/threshold triggers."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import time as dt_time, timedelta
 from pathlib import Path
@@ -1999,7 +2000,64 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # their DeviceInfo, so only now does it exist to update.
     _refresh_device_registration()
 
+    hass.data[DOMAIN]["plejd_watchdog_unsub"] = _setup_plejd_watchdog(hass)
+
     return True
+
+
+# Probed unconditionally every tick, regardless of its current state -
+# Plejd's own async_turn_off() always issues the underlying mesh write
+# rather than short-circuiting a same-state call, so this is a real
+# round-trip test, not a no-op - see PlejdLight.async_turn_off in
+# custom_components/plejd/light.py. Picked for being normally off and
+# out of the way (a WC ceiling light) rather than for any RoomFlow
+# relevance; swap it if it's ever removed/renamed.
+PLEJD_WATCHDOG_PROBE_ENTITY = "light.toa_takbelysning"
+PLEJD_WATCHDOG_INTERVAL = timedelta(minutes=15)
+PLEJD_WATCHDOG_PROBE_TIMEOUT = timedelta(seconds=8)
+
+
+def _setup_plejd_watchdog(hass: HomeAssistant):
+    """Recover from the Plejd integration's BLE mesh silently wedging -
+    found live 2026-09-17: the local link to the gateway device can stay
+    "connected" (even after the pyplejd fix for BUG 9 - a dead client
+    object that never clears itself - see the dead-connection-detection
+    commit on the pyplejd fork this house runs) while writes to other
+    mesh devices just hang indefinitely, recovering only once something
+    reloads the integration and forces a fresh connection. Manually
+    reloading it after noticing lights not responding isn't sustainable,
+    so this periodically probes with a real service call under a timeout
+    and reloads the config entry itself the moment the probe hangs,
+    rather than waiting for a person to notice.
+    """
+
+    async def _tick(_now) -> None:
+        entries = hass.config_entries.async_entries("plejd")
+        if not entries:
+            return
+        entry = entries[0]
+        if hass.states.get(PLEJD_WATCHDOG_PROBE_ENTITY) is None:
+            return
+
+        try:
+            async with asyncio.timeout(PLEJD_WATCHDOG_PROBE_TIMEOUT.total_seconds()):
+                await hass.services.async_call(
+                    "light",
+                    "turn_off",
+                    {"entity_id": PLEJD_WATCHDOG_PROBE_ENTITY},
+                    blocking=True,
+                )
+        except (TimeoutError, asyncio.TimeoutError):
+            _LOGGER.warning(
+                "RoomFlow: Plejd mesh probe hung for over %ss - reloading the "
+                "Plejd integration to force a fresh connection",
+                PLEJD_WATCHDOG_PROBE_TIMEOUT.total_seconds(),
+            )
+            await hass.config_entries.async_reload(entry.entry_id)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("RoomFlow: Plejd mesh probe failed: %s", err)
+
+    return async_track_time_interval(hass, _tick, PLEJD_WATCHDOG_INTERVAL)
 
 
 async def _apply_behavior(
@@ -2061,6 +2119,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cancel()
     for cancel in hass.data[DOMAIN].get("hold_dim_pending", {}).values():
         cancel()
+    watchdog_unsub = hass.data[DOMAIN].get("plejd_watchdog_unsub")
+    if watchdog_unsub:
+        watchdog_unsub()
     try:
         async_remove_panel(hass, "roomflow")
     except ValueError:

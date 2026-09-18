@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Added a self-healing watchdog for Plejd's BLE mesh wedging** - found
+  live: the local Bluetooth link to the gateway device can stay
+  "connected" while writes to other mesh devices just hang indefinitely,
+  recovering only once something reloads the integration and forces a
+  fresh connection (a different failure mode than the dead-client-object
+  bug already fixed upstream in this house's pyplejd fork - both were
+  needed). Every 15 minutes, probes with a real `light.turn_off` call
+  against a normally-off Plejd light under an 8s timeout; if it hangs,
+  reloads the Plejd config entry itself rather than waiting for someone
+  to notice lights not responding.
+
 - **Added a per-device, per-period override for the motion "dim as a
   warning before turning off" brightness** (`warn_overrides` on
   `device.motion`, keyed by period id). Previously that brightness was

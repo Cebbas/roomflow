@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Added a per-device, per-period override for the motion "dim as a
+  warning before turning off" brightness** (`warn_overrides` on
+  `device.motion`, keyed by period id). Previously that brightness was
+  one value shared by every device on a room's motion sensor, at every
+  time of day - useful for e.g. dimming to 5% at night instead of the
+  usual daytime warning level, without affecting other devices on the
+  same sensor or other periods. No UI yet - set directly via
+  `roomflow/save_config` for now.
+
 - **Fixed deleting a room/floor/schedule leaving a permanently orphaned
   device behind** in Settings -> Devices (found live: 8 of them, from
   long-past room-duplication testing). `entity.async_remove()` alone

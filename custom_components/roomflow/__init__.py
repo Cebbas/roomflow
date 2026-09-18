@@ -1600,7 +1600,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             room, device, period, day_type, home_state, active_condition_ids, default_transitions, schedule_id, source
         )
 
-    def _schedule_motion_off(room_id: str, device: dict, motion_cfg: dict) -> None:
+    def _schedule_motion_off(room_id: str, device: dict, motion_cfg: dict, period_id: str | None = None) -> None:
         entity_id = device["entity_id"]
         key = _motion_key(room_id, entity_id)
         device_motion_cfg = device.get("motion", {})
@@ -1622,7 +1622,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         off_delay = max(0.0, off_delay - hold_seconds / 60)
         warn_enabled = motion_cfg.get("warn_enabled", False)
         warn_minutes = motion_cfg.get("warn_minutes", 3)
-        warn_brightness = motion_cfg.get("warn_brightness", 25)
+        # A device can override the shared warn brightness for one specific
+        # period (e.g. dim to 5% at night instead of the room's usual 25%)
+        # without affecting other devices on this same motion sensor or
+        # other times of day - see warn_overrides on device.motion.
+        warn_overrides = device_motion_cfg.get("warn_overrides", {}) or {}
+        period_override = warn_overrides.get(period_id, {}) if period_id else {}
+        warn_brightness = period_override.get("brightness", motion_cfg.get("warn_brightness", 25))
 
         async def _after_warn(_now) -> None:
             hass.data[DOMAIN]["motion_off_timers"].pop(key, None)
@@ -1757,7 +1763,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     key = _motion_key(room["id"], device["entity_id"])
                     if hass.data[DOMAIN]["motion_manual_override"].get(key):
                         continue
-                    _schedule_motion_off(room["id"], device, definition)
+                    _schedule_motion_off(room["id"], device, definition, period)
 
     def _setup_motion_listeners() -> None:
         for unsub in hass.data[DOMAIN].get("motion_unsubs", []):
@@ -1800,7 +1806,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     for device in _motion_off_devices(room, period, definition["id"]):
                         state = hass.states.get(device["entity_id"])
                         if state and state.state == "on":
-                            _schedule_motion_off(room["id"], device, definition)
+                            _schedule_motion_off(room["id"], device, definition, period)
 
             def _make_handler(definition_id):
                 async def _handler(event: Event) -> None:

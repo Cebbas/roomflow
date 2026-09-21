@@ -51,6 +51,7 @@ async def ws_save_config(hass: HomeAssistant, connection, msg):
         "refresh_periods_fn",
         "refresh_schedule_sensors_fn",
         "refresh_floor_sensors_fn",
+        "refresh_condition_switches_fn",
     ):
         refresh_fn = hass.data[DOMAIN].get(refresh_key)
         if refresh_fn:

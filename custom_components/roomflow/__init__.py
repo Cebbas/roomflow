@@ -113,7 +113,7 @@ STATUS_SENTINEL_TEXT = {
     STATUS_SENTINEL_WEEKEND: "Weekend",
 }
 
-PLATFORMS: list[str] = ["sensor", "binary_sensor"]
+PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch"]
 
 # The card lives inside this component (custom_components/roomflow/www/) so
 # copying just this one folder is enough - no separate copy into config/www

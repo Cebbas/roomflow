@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Added a `switch` platform so RoomFlow can own a house/floor/room
+  condition's toggle entity itself** instead of requiring a manually
+  pre-created `input_boolean` helper. Found live: this house's "Städning"/
+  "Mys"/"Bortrest"/"Natt" toggles were 18 legacy `input_boolean` helpers
+  wired into an old, parallel YAML scene system that set light brightness
+  directly - completely bypassing RoomFlow's own idempotent apply logic
+  (`_apply_single_device`), which then refused to "fight" a change it
+  didn't make itself once the toggle went back off, leaving lights stuck
+  at scene-set brightness. Marking a condition `"managed": true` now
+  creates and fully owns a `switch.roomflow_condition_<scope>_<id>`
+  entity for it (see `switch.py`) - condition-matching code in
+  `__init__.py` needed zero changes, since it only ever reads
+  `condition["entity_id"]` + its state, never caring what domain backs
+  it. The card's "create a helper for this condition" button now marks
+  the condition managed instead of calling `input_boolean/create`.
+  Migrated this household's 18 toggles to it and retired the old scene
+  layer for them.
+
 - **Added a self-healing watchdog for Plejd's BLE mesh wedging** - found
   live: the local Bluetooth link to the gateway device can stay
   "connected" while writes to other mesh devices just hang indefinitely,

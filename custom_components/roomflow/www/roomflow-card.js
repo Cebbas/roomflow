@@ -3082,72 +3082,39 @@ class RoomFlowCard extends HTMLElement {
     this._scheduleSave();
   }
 
-  // A condition's entity_id normally has to already exist (an
-  // input_boolean created ahead of time in Settings -> Helpers) before it
-  // can be typed into the field below - this creates one on the spot
-  // instead, the same way Home Assistant's own "Add helper" UI does
-  // (input_boolean/create is that same public, stable websocket command),
-  // and fills the field with the result. Named "<scope> <condition name>"
-  // so it's identifiable back in Settings -> Helpers; HA slugifies that
-  // into the actual entity_id itself.
+  // A condition's entity_id used to require a manually pre-created
+  // input_boolean helper (Settings -> Helpers) - this button used to
+  // create one on the spot via the core input_boolean/create websocket
+  // command. RoomFlow now owns this entity itself instead: marking the
+  // condition "managed" makes the backend's switch platform create and
+  // fully maintain a real switch entity for it (see switch.py) - created
+  // the moment this saves, removed automatically if the condition ever
+  // is, named/grouped to match. No separate helper-creation call needed,
+  // and nothing left behind to clean up by hand.
   async _createConditionInputBoolean(scope, roomId, conditionId) {
     let condition;
-    let scopeLabel;
+    let scopeId;
     if (scope === "room") {
       const room = this._config_data.rooms.find((r) => r.id === roomId);
       if (!room) return;
       condition = (room.custom_conditions || []).find((c) => c.id === conditionId);
-      scopeLabel = room.name;
+      scopeId = roomId;
     } else if (scope === "house") {
       condition = (this._config_data.house_conditions || []).find((c) => c.id === conditionId);
-      scopeLabel = this._t("house_conditions_header");
+      scopeId = "house";
     } else {
       condition = (this._config_data.floor_conditions || []).find((c) => c.id === conditionId);
-      const floor = (this._floors || []).find((f) => f.floor_id === condition?.floor_id);
-      scopeLabel = floor ? floor.name : "";
+      scopeId = condition?.floor_id || "house";
     }
     if (!condition) return;
 
-    const conditionName = condition.name || this._t("new_condition_name");
-    const helperName = `${scopeLabel} ${conditionName}`.trim();
-    try {
-      const result = await this._hass.callWS({ type: "input_boolean/create", name: helperName });
-      condition.entity_id = `input_boolean.${result.id}`;
-      this._scheduleSave();
-      this._render();
-      await this._tagConditionHelper(condition.entity_id, conditionName);
-    } catch (err) {
-      console.warn("RoomFlow: could not create a helper for this condition", err);
-    }
-  }
-
-  // Tags a freshly created condition helper with two labels, matching
-  // this household's own existing convention (see e.g. "Städning" - the
-  // label already on input_boolean.hus_scener_stadning): one matching
-  // the condition's own name (created if it doesn't exist yet - a
-  // second "Städning" condition elsewhere reuses the same label rather
-  // than creating a duplicate), and the standing "scener_knapp" label
-  // that marks it as a scene-toggle helper regardless of which
-  // condition it's for. Matched by name, not id, since a label's id is
-  // just its name auto-slugified by Home Assistant itself on creation -
-  // recomputing that slug here would be duplicating logic that already
-  // lives server-side for no benefit.
-  async _tagConditionHelper(entityId, conditionName) {
-    try {
-      const labels = await this._hass.callWS({ type: "config/label_registry/list" });
-      let conditionLabel = labels.find((l) => l.name.toLowerCase() === conditionName.toLowerCase());
-      if (!conditionLabel) {
-        conditionLabel = await this._hass.callWS({ type: "config/label_registry/create", name: conditionName });
-      }
-      let toggleLabel = labels.find((l) => l.name.toLowerCase() === "scener_knapp");
-      if (!toggleLabel) {
-        toggleLabel = await this._hass.callWS({ type: "config/label_registry/create", name: "scener_knapp" });
-      }
-      const labelIds = [...new Set([conditionLabel.label_id, toggleLabel.label_id])];
-      await this._hass.callWS({ type: "config/entity_registry/update", entity_id: entityId, labels: labelIds });
-    } catch (err) {
-      console.warn("RoomFlow: could not tag the new helper with labels", err);
-    }
+    // A condition's own id is only unique within its own list (e.g. every
+    // room's "Natt" condition shares the literal id "natt") - the entity
+    // id has to be qualified by scope too, matching switch.py exactly.
+    condition.managed = true;
+    condition.entity_id = `switch.roomflow_condition_${scope}_${scopeId}_${condition.id}`;
+    this._scheduleSave();
+    this._render();
   }
 
   // Room-level custom conditions: an ORDERED list (order = priority, top =

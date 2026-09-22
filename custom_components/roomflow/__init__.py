@@ -1718,10 +1718,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 restored = set()
                 for device in _motion_on_devices(room, period, definition_id):
                     key = _motion_key(room["id"], device["entity_id"])
+                    # A device with a warn-dim or off-countdown timer still
+                    # running needs the full re-apply below to restore it
+                    # (that's the actual point of "motion resumed") - but a
+                    # device that's already steadily on, with no timer
+                    # pending, has nothing to restore. Found live: Toa's
+                    # built-in Plejd motion sensor (binary_sensor.
+                    # toa_takbelysning) can briefly report inactive-then-
+                    # active again while someone is still in the room,
+                    # which used to unconditionally re-send "turn on" to an
+                    # already-lit ceiling light every time - harmless to
+                    # the light itself, but a visible re-trigger/flicker
+                    # for no reason.
+                    had_pending_timer = key in hass.data[DOMAIN]["motion_off_timers"]
+                    state = hass.states.get(device["entity_id"])
                     # A fresh motion cycle always releases any manual-mode
                     # lock from a prior button press, per RoomFlow's design.
                     hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
                     _cancel_motion_timer(key)
+                    if not had_pending_timer and state and state.state == "on":
+                        restored.add(device["entity_id"])
+                        continue
                     await _apply_motion_device_on(room, device)
                     restored.add(device["entity_id"])
                 # A motion_off-only device (e.g. turned on by a bound button,

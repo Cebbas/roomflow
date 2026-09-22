@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Fixed a fresh motion trigger always re-sending "turn on" even when the
+  device was already on with nothing pending.** Found live on Toa: its
+  built-in Plejd motion sensor (`binary_sensor.toa_takbelysning`) can
+  briefly report inactive-then-active again while someone is still in
+  the room, and every one of those re-triggers used to unconditionally
+  re-apply the motion-on behavior regardless of current state - visible
+  as the ceiling light flickering/re-triggering for no reason. Now skips
+  the re-apply when the device is already "on" *and* has no warn-dim or
+  off-countdown timer pending (a device that's mid-countdown still gets
+  the full restore, which is the actual point of "motion resumed").
+
 - **Added a `switch` platform so RoomFlow can own a house/floor/room
   condition's toggle entity itself** instead of requiring a manually
   pre-created `input_boolean` helper. Found live: this house's "Städning"/

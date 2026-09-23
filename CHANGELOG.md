@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **Managed condition switches can now be renamed** (Settings ->
+  Entities), and every switch created during this household's
+  input_boolean -> switch migration has been renamed back to its
+  original name (`switch.hus_scen_natt`, `switch.hall_scener_stadning`,
+  `switch.vardagsrum_scener_mys`, ...) instead of the generated
+  `switch.roomflow_condition_<scope>_<id>` form. A rename already
+  survived restarts with no code change needed - Home Assistant's entity
+  registry resolves an entity's id from its unique_id on every load, so
+  a stored rename always wins over whatever a fresh `__init__` proposes.
+
+- **The house-wide "Natt" toggle can now also be set independently per
+  room.** Kök, Vardagsrum, Entré, Hall, Naomis rum, Nadines rum, Sovrum
+  and Utomhusbelysning each got their own managed `<rum>_scen_natt`
+  switch alongside the existing `hus_scen_natt` - no code change needed
+  here either, since a room's own conditions and the house-wide ones it
+  inherits were already independently OR'd together (see
+  `_active_room_conditions`), so a local switch and the shared one both
+  keep working, in either combination.
+
+- **Fixed a leftover `input_boolean.hus_scen_natt` reappearing after the
+  input_boolean -> switch migration** (see below) - one file,
+  `packages/tid_pa_dygnet/tid_pa_dygnet_helpers.yaml`, was missed during
+  that migration's cleanup sweep and still defined it.
+
 - **Fixed a fresh motion trigger always re-sending "turn on" even when the
   device was already on with nothing pending.** Found live on Toa: its
   built-in Plejd motion sensor (`binary_sensor.toa_takbelysning`) can

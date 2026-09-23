@@ -109,12 +109,19 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
         self._condition_id = condition_id
         # scope_id is None for a house-wide condition - "house" fills that
         # slot so the id string stays fully qualified without a stray
-        # "None" in it. Explicitly setting entity_id (not just unique_id)
-        # guarantees this exact, predictable id rather than leaving it to
-        # HA's name-based slugify - the card writes this same string into
-        # the condition's entity_id field at the moment it flags a
-        # condition "managed", before this entity is ever created, so the
-        # two must match byte for byte.
+        # "None" in it. unique_id is what actually identifies this entity
+        # long-term (collision-free, based on ids that never change) - the
+        # card writes the matching predicted entity_id into the
+        # condition's entity_id field at the moment it flags a condition
+        # "managed", before this entity is ever created.
+        #
+        # Setting entity_id here only seeds it the FIRST time this
+        # unique_id is ever registered: entity_platform looks the
+        # unique_id up in the entity registry and, if an entry already
+        # exists (including a manually renamed one), uses ITS stored
+        # entity_id instead of whatever this constructor proposes - a
+        # rename via Settings -> Entities already survives every future
+        # restart with no extra code needed here.
         slug = f"{scope}_{scope_id or 'house'}_{condition_id}"
         self._attr_unique_id = f"{entry.entry_id}_condition_{slug}"
         self.entity_id = f"switch.roomflow_condition_{slug}"

@@ -23,8 +23,10 @@ from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.restore_state import RestoreEntity
 
+from . import _parse_hms
 from .const import DOMAIN, SIGNAL_RECOMPUTE
 
 
@@ -127,6 +129,8 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
         self.entity_id = f"switch.roomflow_condition_{slug}"
         self._attr_icon = "mdi:toggle-switch-outline"
         self._attr_is_on = False
+        self._auto_off_time: str | None = None
+        self._auto_off_unsub = None
         self._refresh_device_info()
 
     def _condition(self) -> dict | None:
@@ -156,21 +160,62 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
         condition = self._condition()
         self._attr_name = condition.get("name") if condition else self._condition_id
 
+    def _setup_auto_off(self) -> None:
+        """(Re)registers the daily auto-off time trigger from this
+        condition's own auto_off_time field, if any - e.g. Natt turning
+        itself back off at 05:00 every morning. Lives on the condition
+        (not hardcoded to one entity) so any managed switch can have
+        one; re-checked on every recompute signal so editing the time
+        from the card takes effect immediately, without recreating the
+        entity."""
+        condition = self._condition()
+        auto_off_time = condition.get("auto_off_time") if condition else None
+        if auto_off_time == self._auto_off_time:
+            return
+        self._auto_off_time = auto_off_time
+        if self._auto_off_unsub:
+            self._auto_off_unsub()
+            self._auto_off_unsub = None
+        if not auto_off_time:
+            return
+        boundary = _parse_hms(auto_off_time)
+        self._auto_off_unsub = async_track_time_change(
+            self.hass,
+            self._handle_auto_off,
+            hour=boundary.hour,
+            minute=boundary.minute,
+            second=boundary.second,
+        )
+
+    async def _handle_auto_off(self, _now) -> None:
+        if self._attr_is_on:
+            await self.async_turn_off()
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._attr_is_on = last_state.state == "on"
         self._update_name()
+        self._setup_auto_off()
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_RECOMPUTE, self._handle_signal)
         )
+        self.async_on_remove(self._cancel_auto_off)
+
+    @callback
+    def _cancel_auto_off(self) -> None:
+        if self._auto_off_unsub:
+            self._auto_off_unsub()
+            self._auto_off_unsub = None
 
     @callback
     def _handle_signal(self) -> None:
-        # Keeps the display name in sync if the condition is renamed from
-        # the card - mirrors the same pattern in binary_sensor.py/sensor.py.
+        # Keeps the display name and auto-off timer in sync if the
+        # condition is edited from the card - mirrors the same pattern
+        # binary_sensor.py/sensor.py use for their own display fields.
         self._update_name()
+        self._setup_auto_off()
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs) -> None:

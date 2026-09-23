@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **A managed condition switch can now turn itself off automatically at
+  a set time every day** (`auto_off_time` on the condition, a time
+  picker in the card next to any managed condition's row). Replaces
+  this household's standalone `natt_till_morgon` automation, which had
+  to be hand-kept in sync with every Natt switch that existed (and
+  broke silently the moment one got renamed - exactly what happened
+  earlier this session). Lives on `RoomFlowConditionSwitch` itself
+  (`_setup_auto_off`/`_handle_auto_off` in `switch.py`), re-registered
+  on every recompute signal so editing the time from the card takes
+  effect immediately. Migrated all 9 Natt switches to `05:00:00` and
+  removed the now-redundant YAML automation.
+
 - **Managed condition switches can now be renamed** (Settings ->
   Entities), and every switch created during this household's
   input_boolean -> switch migration has been renamed back to its

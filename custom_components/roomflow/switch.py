@@ -129,8 +129,8 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
         self.entity_id = f"switch.roomflow_condition_{slug}"
         self._attr_icon = "mdi:toggle-switch-outline"
         self._attr_is_on = False
-        self._auto_off_time: str | None = None
-        self._auto_off_unsub = None
+        self._auto_off_key: tuple[str | None, str | None] = (None, None)
+        self._auto_off_unsubs: list = []
         self._refresh_device_info()
 
     def _condition(self) -> dict | None:
@@ -161,35 +161,50 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
         self._attr_name = condition.get("name") if condition else self._condition_id
 
     def _setup_auto_off(self) -> None:
-        """(Re)registers the daily auto-off time trigger from this
-        condition's own auto_off_time field, if any - e.g. Natt turning
-        itself back off at 05:00 every morning. Lives on the condition
-        (not hardcoded to one entity) so any managed switch can have
-        one; re-checked on every recompute signal so editing the time
-        from the card takes effect immediately, without recreating the
-        entity."""
+        """(Re)registers the daily auto-off time trigger(s) from this
+        condition's own auto_off_time (+ optional auto_off_time_weekend)
+        fields, if any - e.g. Natt turning itself back off once morning
+        actually starts. Lives on the condition (not hardcoded to one
+        entity) so any managed switch can have one; re-checked on every
+        recompute signal so editing the time from the card takes effect
+        immediately, without recreating the entity.
+
+        Morning starts at a different clock time on weekdays vs weekends
+        (see the "morning"/"weekend_morning" periods), so a single daily
+        time isn't always enough to actually "hold until morning starts"
+        without either an early or a late gap on one of the two - if
+        auto_off_time_weekend is set too, each time only fires on its
+        own day type (checked via the same get_day_type_fn every ambient
+        tick already resolves periods with) instead of every day."""
         condition = self._condition()
         auto_off_time = condition.get("auto_off_time") if condition else None
-        if auto_off_time == self._auto_off_time:
+        auto_off_time_weekend = condition.get("auto_off_time_weekend") if condition else None
+        key = (auto_off_time, auto_off_time_weekend)
+        if key == self._auto_off_key:
             return
-        self._auto_off_time = auto_off_time
-        if self._auto_off_unsub:
-            self._auto_off_unsub()
-            self._auto_off_unsub = None
+        self._auto_off_key = key
+        self._cancel_auto_off()
         if not auto_off_time:
             return
-        boundary = _parse_hms(auto_off_time)
-        self._auto_off_unsub = async_track_time_change(
-            self.hass,
-            self._handle_auto_off,
-            hour=boundary.hour,
-            minute=boundary.minute,
-            second=boundary.second,
-        )
+        split_by_day_type = bool(auto_off_time_weekend)
+        self._auto_off_unsubs.append(self._track_auto_off(auto_off_time, "weekday" if split_by_day_type else None))
+        if auto_off_time_weekend:
+            self._auto_off_unsubs.append(self._track_auto_off(auto_off_time_weekend, "weekend"))
 
-    async def _handle_auto_off(self, _now) -> None:
-        if self._attr_is_on:
-            await self.async_turn_off()
+    def _track_auto_off(self, time_str: str, only_day_type: str | None):
+        boundary = _parse_hms(time_str)
+
+        async def _fire(_now) -> None:
+            if only_day_type:
+                get_day_type_fn = self.hass.data.get(DOMAIN, {}).get("get_day_type_fn")
+                if get_day_type_fn and get_day_type_fn() != only_day_type:
+                    return
+            if self._attr_is_on:
+                await self.async_turn_off()
+
+        return async_track_time_change(
+            self.hass, _fire, hour=boundary.hour, minute=boundary.minute, second=boundary.second
+        )
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -205,9 +220,9 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _cancel_auto_off(self) -> None:
-        if self._auto_off_unsub:
-            self._auto_off_unsub()
-            self._auto_off_unsub = None
+        for unsub in self._auto_off_unsubs:
+            unsub()
+        self._auto_off_unsubs = []
 
     @callback
     def _handle_signal(self) -> None:

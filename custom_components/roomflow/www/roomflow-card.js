@@ -667,6 +667,7 @@ const STRINGS = {
     status_weekend: "Weekend",
     create_helper_title: "Create a new helper for this",
     auto_off_time_title: "Turn itself off automatically at this time every day (blank = never)",
+    auto_off_time_weekend_title: "A different auto-off time for weekends (blank = same as weekdays, every day)",
 
     applying: "Applying…",
     done: "Done!",
@@ -918,6 +919,7 @@ const STRINGS = {
     status_weekend: "Helg",
     create_helper_title: "Skapa en ny hjälpare för det här",
     auto_off_time_title: "Stäng av sig själv automatiskt vid den här tiden varje dag (tomt = aldrig)",
+    auto_off_time_weekend_title: "Egen avstängningstid för helger (tomt = samma som vardagar, varje dag)",
 
     applying: "Tillämpar…",
     done: "Klart!",
@@ -4438,6 +4440,13 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const conditionAutoOffWeekend = e.target.closest("[data-condition-autooff-weekend]");
+    if (conditionAutoOffWeekend) {
+      const [roomId, conditionId] = conditionAutoOffWeekend.getAttribute("data-condition-autooff-weekend").split("|");
+      this._updateCustomCondition(roomId, conditionId, "auto_off_time_weekend", conditionAutoOffWeekend.value || null);
+      return;
+    }
+
     const houseConditionName = e.target.closest("[data-house-condition-name]");
     if (houseConditionName) {
       this._updateHouseCondition(
@@ -4478,6 +4487,16 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const houseConditionAutoOffWeekend = e.target.closest("[data-house-condition-autooff-weekend]");
+    if (houseConditionAutoOffWeekend) {
+      this._updateHouseCondition(
+        houseConditionAutoOffWeekend.getAttribute("data-house-condition-autooff-weekend"),
+        "auto_off_time_weekend",
+        houseConditionAutoOffWeekend.value || null
+      );
+      return;
+    }
+
     const floorConditionName = e.target.closest("[data-floor-condition-name]");
     if (floorConditionName) {
       this._updateFloorCondition(
@@ -4514,6 +4533,16 @@ class RoomFlowCard extends HTMLElement {
         floorConditionAutoOff.getAttribute("data-floor-condition-autooff"),
         "auto_off_time",
         floorConditionAutoOff.value || null
+      );
+      return;
+    }
+
+    const floorConditionAutoOffWeekend = e.target.closest("[data-floor-condition-autooff-weekend]");
+    if (floorConditionAutoOffWeekend) {
+      this._updateFloorCondition(
+        floorConditionAutoOffWeekend.getAttribute("data-floor-condition-autooff-weekend"),
+        "auto_off_time_weekend",
+        floorConditionAutoOffWeekend.value || null
       );
       return;
     }
@@ -5522,7 +5551,7 @@ class RoomFlowCard extends HTMLElement {
   // Shared row markup for a house/floor/room condition - only the fields
   // that vary (data-attribute key, list, move handlers) differ between
   // the three scopes, so this one renderer backs all of them.
-  _renderConditionRows(conditions, { nameAttr, entityAttr, createAttr, stateAttr, autoOffAttr, moveUpAttr, moveDownAttr, removeAttr }) {
+  _renderConditionRows(conditions, { nameAttr, entityAttr, createAttr, stateAttr, autoOffAttr, autoOffWeekendAttr, moveUpAttr, moveDownAttr, removeAttr }) {
     return conditions
       .map(
         (c, i) => `
@@ -5534,7 +5563,8 @@ class RoomFlowCard extends HTMLElement {
         <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
         ${textField(`${stateAttr(c)} value="${c.state || ""}" placeholder="on" style="width:70px"`)}
         ${c.managed
-          ? `<input type="time" ${autoOffAttr(c)} value="${(c.auto_off_time || "").slice(0, 5)}" title="${this._t("auto_off_time_title")}" style="width:110px" />`
+          ? `<input type="time" ${autoOffAttr(c)} value="${(c.auto_off_time || "").slice(0, 5)}" title="${this._t("auto_off_time_title")}" style="width:110px" />
+             <input type="time" ${autoOffWeekendAttr(c)} value="${(c.auto_off_time_weekend || "").slice(0, 5)}" title="${this._t("auto_off_time_weekend_title")}" style="width:110px" />`
           : ""}
         <button class="rf-icon-btn" ${moveUpAttr(c)} ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
         <button class="rf-icon-btn" ${moveDownAttr(c)} ${i === conditions.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
@@ -5552,6 +5582,7 @@ class RoomFlowCard extends HTMLElement {
       createAttr: (c) => `data-create-house-condition-input="${c.id}"`,
       stateAttr: (c) => `data-house-condition-state="${c.id}"`,
       autoOffAttr: (c) => `data-house-condition-autooff="${c.id}"`,
+      autoOffWeekendAttr: (c) => `data-house-condition-autooff-weekend="${c.id}"`,
       moveUpAttr: (c) => `data-move-house-condition-up="${c.id}"`,
       moveDownAttr: (c) => `data-move-house-condition-down="${c.id}"`,
       removeAttr: (c) => `data-remove-house-condition="${c.id}"`,
@@ -5577,6 +5608,7 @@ class RoomFlowCard extends HTMLElement {
       createAttr: (c) => `data-create-floor-condition-input="${c.id}"`,
       stateAttr: (c) => `data-floor-condition-state="${c.id}"`,
       autoOffAttr: (c) => `data-floor-condition-autooff="${c.id}"`,
+      autoOffWeekendAttr: (c) => `data-floor-condition-autooff-weekend="${c.id}"`,
       moveUpAttr: (c) => `data-move-floor-condition-up="${c.id}"`,
       moveDownAttr: (c) => `data-move-floor-condition-down="${c.id}"`,
       removeAttr: (c) => `data-remove-floor-condition="${c.id}"`,
@@ -5674,7 +5706,8 @@ class RoomFlowCard extends HTMLElement {
         <span style="opacity:0.7;font-size:0.85em">${this._t("condition_is")}</span>
         ${textField(`data-condition-state="${room.id}|${c.id}" value="${c.state || ""}" placeholder="on" style="width:70px"`)}
         ${c.managed
-          ? `<input type="time" data-condition-autooff="${room.id}|${c.id}" value="${(c.auto_off_time || "").slice(0, 5)}" title="${this._t("auto_off_time_title")}" style="width:110px" />`
+          ? `<input type="time" data-condition-autooff="${room.id}|${c.id}" value="${(c.auto_off_time || "").slice(0, 5)}" title="${this._t("auto_off_time_title")}" style="width:110px" />
+             <input type="time" data-condition-autooff-weekend="${room.id}|${c.id}" value="${(c.auto_off_time_weekend || "").slice(0, 5)}" title="${this._t("auto_off_time_weekend_title")}" style="width:110px" />`
           : ""}
         <button class="rf-icon-btn" data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
         <button class="rf-icon-btn" data-move-custom-condition-down="${room.id}|${c.id}" ${

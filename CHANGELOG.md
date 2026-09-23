@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **A managed condition can now have a separate weekend auto-off time**
+  (`auto_off_time_weekend`, a second time picker next to the first).
+  Needed because "morning" and "weekend_morning" start at different
+  clock times (06:00 vs 07:00 in this house's own schedule) - a single
+  daily auto-off time can't "hold until morning actually starts" on
+  both without either cutting a weekday short or leaving a weekend gap.
+  When set, each time only fires on its own day type (`get_day_type_fn`,
+  the same day-type resolution periods already use); when left blank,
+  `auto_off_time` alone still applies every day exactly as before.
+  Moved the Natt switches from a flat 05:00 to 06:00 weekdays / 07:00
+  weekends, matching this house's own morning/weekend_morning periods
+  exactly, so night-mode behavior now holds continuously until morning
+  genuinely starts instead of leaving an early gap.
+
 - **A managed condition switch can now turn itself off automatically at
   a set time every day** (`auto_off_time` on the condition, a time
   picker in the card next to any managed condition's row). Replaces

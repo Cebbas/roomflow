@@ -679,6 +679,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("motion_off_timers", {})
     hass.data[DOMAIN].setdefault("motion_active_state", {})
     hass.data[DOMAIN].setdefault("motion_manual_override", {})
+    hass.data[DOMAIN].setdefault("motion_expected_off", set())
     hass.data[DOMAIN].setdefault("forced_period", {})
     hass.data[DOMAIN].setdefault("last_logged_period", {})
     hass.data[DOMAIN].setdefault("last_applied_signature", {})
@@ -1567,6 +1568,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "RoomFlow: could not turn off %s: %s", device.get("entity_id"), err
             )
             return
+        # Plejd's own entities are the reason this exists: turn_off is a
+        # fire-and-forget mesh write, and the entity's reported state only
+        # updates once (if ever) the mesh confirms it with a broadcast -
+        # blocking=True above only waits for the write to be sent, not for
+        # that confirmation. hass.states.get(...).state can therefore still
+        # read "on" for a while (sometimes indefinitely, on a dropped
+        # write) right after this call - tracked here so callers that need
+        # to know "did we just tell this device to turn off" (the motion
+        # re-trigger skip-check below) aren't fooled by that lag into
+        # thinking the device is still genuinely on.
+        hass.data[DOMAIN]["motion_expected_off"].add(_motion_key(room["id"], device["entity_id"]))
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         _log_device_action(room, device, "off", schedule_id, _get_period(schedule_id), source)
 
@@ -1588,6 +1600,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     async def _apply_motion_device_on(room: dict, device: dict, source: str = "motion_on") -> None:
+        hass.data[DOMAIN]["motion_expected_off"].discard(_motion_key(room["id"], device["entity_id"]))
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         period = _get_period(schedule_id)
         if period is None:
@@ -1693,10 +1706,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if period is None:
                     continue
                 for device in _motion_on_devices(room, period, definition_id):
-                    state = hass.states.get(device["entity_id"])
-                    if state and state.state == "on":
-                        continue
                     key = _motion_key(room["id"], device["entity_id"])
+                    state = hass.states.get(device["entity_id"])
+                    # Same staleness concern as the fresh-trigger branch
+                    # below (see _turn_off_device) - don't let a live "on"
+                    # reading we haven't ourselves confirmed skip a device
+                    # we just told to turn off.
+                    if key not in hass.data[DOMAIN]["motion_expected_off"] and state and state.state == "on":
+                        continue
                     hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
                     _cancel_motion_timer(key)
                     await _apply_motion_device_on(room, device)
@@ -1731,12 +1748,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     # the light itself, but a visible re-trigger/flicker
                     # for no reason.
                     had_pending_timer = key in hass.data[DOMAIN]["motion_off_timers"]
+                    # hass.states, not motion_expected_off, is what can be
+                    # stale here (see _turn_off_device) - a device we
+                    # haven't ourselves just told to turn off is exactly
+                    # the case a live state read can be trusted for.
+                    expected_off = key in hass.data[DOMAIN]["motion_expected_off"]
                     state = hass.states.get(device["entity_id"])
                     # A fresh motion cycle always releases any manual-mode
                     # lock from a prior button press, per RoomFlow's design.
                     hass.data[DOMAIN]["motion_manual_override"].pop(key, None)
                     _cancel_motion_timer(key)
-                    if not had_pending_timer and state and state.state == "on":
+                    if not had_pending_timer and not expected_off and state and state.state == "on":
                         restored.add(device["entity_id"])
                         continue
                     await _apply_motion_device_on(room, device)

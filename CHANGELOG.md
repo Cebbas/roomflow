@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Fixed the v0.0.56 motion re-trigger fix itself being fooled by a
+  stale "on" state on Plejd entities.** That fix skips re-applying
+  motion-on when a device already reads "on" with nothing pending - but
+  `_turn_off_device`'s `light.turn_off` call to a Plejd entity is a
+  fire-and-forget mesh write (per this integration's own pyplejd fork
+  work): the entity's reported state only updates once (if ever) the
+  mesh confirms it, so `hass.states.get(...).state` can keep reading
+  "on" well after RoomFlow's own motion-off timer has already fired and
+  sent the off command - long enough for a Toa report that the ceiling
+  light stopped responding to fresh motion after its own timeout ran.
+  Tracks RoomFlow's own turn-off intent directly now (`motion_expected_off`,
+  set in `_turn_off_device`, cleared in `_apply_motion_device_on`) instead
+  of trusting that live read for the skip decision - a device we
+  haven't ourselves just told to turn off still gets the original
+  optimization, but one we have is never mistaken for "already fine".
+
 - **A managed condition can now have a separate weekend auto-off time**
   (`auto_off_time_weekend`, a second time picker next to the first).
   Needed because "morning" and "weekend_morning" start at different

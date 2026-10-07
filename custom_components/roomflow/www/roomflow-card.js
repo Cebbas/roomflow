@@ -613,11 +613,11 @@ const STRINGS = {
     season_mode_auto_label: "Automatic (label): only during this season",
     season_label_title: "HA label - lamps with this label are only used during this season",
     season_label_none: "No label",
-    season_label_used: "{n} labelled lamp(s) in RoomFlow follow this season automatically.",
-    season_label_missing: "Labelled but not added to any room yet:",
+    season_label_count: "{n} found, {r} in a room",
+    season_label_not_in_room: "not added to any room",
+    season_label_empty: "No lamps have this label.",
     season_mode_auto_hide_label: "Automatic (label): off during this season",
     season_hide_label_title: "HA label - lamps with this label are kept off during this season",
-    season_hide_label_used: "{n} lamp(s) with the off-label in RoomFlow are kept off during this season.",
     season_hide_label_prefix: "Not",
     floor_conditions_box_help: "Applies to every room on this floor when active.",
     no_motion_sensors_hint: "No motion sensors yet - add one in the Motion sensors tab first.",
@@ -887,11 +887,11 @@ const STRINGS = {
     season_mode_auto_label: "Automatiskt (etikett): endast under säsongen",
     season_label_title: "HA-etikett – lampor med etiketten används bara under säsongen",
     season_label_none: "Ingen etikett",
-    season_label_used: "{n} lampa/lampor med etiketten i RoomFlow följer säsongen automatiskt.",
-    season_label_missing: "Har etiketten men är inte tillagda i något rum än:",
+    season_label_count: "{n} hittade, {r} i ett rum",
+    season_label_not_in_room: "inte tillagd i något rum",
+    season_label_empty: "Inga lampor har den här etiketten.",
     season_mode_auto_hide_label: "Automatiskt (etikett): avstängd under säsongen",
     season_hide_label_title: "HA-etikett – lampor med etiketten hålls avstängda under säsongen",
-    season_hide_label_used: "{n} lampa/lampor med av-etiketten i RoomFlow hålls avstängda under säsongen.",
     season_hide_label_prefix: "Ej",
     floor_conditions_box_help: "Gäller alla rum på den här våningen när det är aktivt.",
     no_motion_sensors_hint: "Inga rörelsevakter än - lägg till en i fliken Rörelsevakter först.",
@@ -2475,6 +2475,7 @@ class RoomFlowCard extends HTMLElement {
     this._activeTab = {}; // deviceKey -> period
     this._activeRoomPeriod = {}; // room.id -> period, drives every device's tab in that room at once
     this._openDevices = {}; // deviceKey -> bool, undefined defaults to open (matches pre-collapse behavior)
+    this._openSeasonLabels = {}; // "<seasonId>|only|hide" -> bool, collapsed by default
     this._activeRoomId = null; // room.id | "__add__" | "__buttons__" | "__motion__" | "__settings__"
     this._newTriggerSource = "entity"; // "entity" | "event", drives the Add-button-trigger form only, not persisted
     this._newTriggerProfile = Object.keys(EVENT_DEVICE_PROFILES)[0];
@@ -4123,6 +4124,14 @@ class RoomFlowCard extends HTMLElement {
     if (moveConditionDownBtn) {
       const [roomId, conditionId] = moveConditionDownBtn.getAttribute("data-move-custom-condition-down").split("|");
       this._moveCustomCondition(roomId, conditionId, "down");
+      return;
+    }
+
+    const seasonLabelToggle = e.target.closest("[data-season-label-toggle]");
+    if (seasonLabelToggle) {
+      const key = seasonLabelToggle.getAttribute("data-season-label-toggle");
+      this._openSeasonLabels[key] = !this._openSeasonLabels[key];
+      this._render();
       return;
     }
 
@@ -5814,19 +5823,45 @@ class RoomFlowCard extends HTMLElement {
   // What a season's labels pick up: lamps already in a RoomFlow room
   // (controlled automatically) vs. labelled lamps not added to any room
   // yet (RoomFlow can't control those until they are).
+  // One collapsible line per linked label ("Jul" / "Ej Jul"): label name,
+  // how many lamps carry it and how many of those are in a room, with an
+  // arrow that expands the full list (open state in _openSeasonLabels,
+  // keyed "<seasonId>|only" / "<seasonId>|hide", collapsed by default).
   _renderSeasonLabelInfo(season) {
-    const inRooms = new Set(this._config_data.rooms.flatMap((r) => (r.devices || []).map((d) => d.entity_id)));
-    const line = (labelId, usedKey) => {
+    const roomByEntity = {};
+    this._config_data.rooms.forEach((r) => (r.devices || []).forEach((d) => (roomByEntity[d.entity_id] = r.name)));
+    const line = (labelId, kind, iconName) => {
       if (!labelId) return "";
-      const labelled = (this._entities || []).filter((e) => (e.labels || []).includes(labelId));
-      const missing = labelled.filter((e) => !inRooms.has(e.entity_id));
+      const label = (this._labels || []).find((l) => l.label_id === labelId);
+      const labelled = (this._entities || [])
+        .filter((e) => (e.labels || []).includes(labelId))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const inRooms = labelled.filter((e) => roomByEntity[e.entity_id]).length;
+      const key = `${season.id}|${kind}`;
+      const isOpen = !!this._openSeasonLabels[key];
+      const listHtml = isOpen
+        ? `<div style="margin:2px 0 4px 28px">
+            ${labelled.length
+              ? labelled
+                  .map(
+                    (e) => `<div>${e.name} <small style="opacity:0.7">(${
+                      roomByEntity[e.entity_id] || `<span style="color:var(--warning-color)">${this._t("season_label_not_in_room")}</span>`
+                    })</small></div>`
+                  )
+                  .join("")
+              : `<div>${this._t("season_label_empty")}</div>`}
+          </div>`
+        : "";
       return `
-        <div>
-          ${this._t(usedKey, { n: labelled.length - missing.length })}
-          ${missing.length ? `<br>${this._t("season_label_missing")} ${missing.map((e) => e.name).join(", ")}` : ""}
-        </div>`;
+        <div class="rf-season-label-toggle" data-season-label-toggle="${key}" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:2px">
+          ${icon(isOpen ? "mdi:chevron-down" : "mdi:chevron-right")}
+          ${icon(iconName)}
+          <span>${label ? label.name : labelId}: ${this._t("season_label_count", { n: labelled.length, r: inRooms })}</span>
+        </div>
+        ${listHtml}`;
     };
-    const html = line(season.label_id, "season_label_used") + line(season.hide_label_id, "season_hide_label_used");
+    const html =
+      line(season.label_id, "only", "mdi:label-outline") + line(season.hide_label_id, "hide", "mdi:label-off-outline");
     return html ? `<div class="rf-help" style="margin:2px 0 0 0">${html}</div>` : "";
   }
 

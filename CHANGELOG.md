@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Season label overview is now collapsible.** Under each season, both
+  linked labels ("Jul" / "Ej Jul") show their name and "N found, M in a
+  room"; an arrow expands the full list of labelled lamps with the room
+  each one is in, or "not added to any room" - collapsed by default.
+
 - **Seasons (e.g. Vinter, Jul)** - a new house-wide `seasons` list,
   edited at the top of the card's "House & floors" tab. Each season gets
   its own RoomFlow-managed switch (`switch.roomflow_season_<id>`, id

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **A condition can now switch itself off when the house becomes empty**
+  (`off_when_away` on any house/floor/room condition, an "Off when away"
+  toggle on each condition row in the card). On a home -> away
+  transition RoomFlow turns off every active condition flagged this way
+  (`homeassistant.turn_off`, so managed switches and external
+  input_booleans alike) before re-applying the room behaviors - a Mys or
+  Städning scene left on no longer outlives everyone leaving and keeps
+  winning over the away tier. Fires only on the transition itself, not
+  on every tick while away, so a scene turned back on remotely is left
+  alone; the last known home state is seeded at startup so a restart
+  while already away isn't mistaken for a fresh departure. Replaces the
+  per-room legacy `*_stang_av_scener` automations' scene-clearing half.
+
 - **Fixed the v0.0.56 motion re-trigger fix itself being fooled by a
   stale "on" state on Plejd entities.** That fix skips re-applying
   motion-on when a device already reads "on" with nothing pending - but

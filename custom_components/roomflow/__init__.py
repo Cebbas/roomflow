@@ -386,6 +386,23 @@ def _active_room_conditions(hass: HomeAssistant, room: dict, cfg: dict) -> list[
     return active
 
 
+def _off_when_away_entities(hass: HomeAssistant, cfg: dict) -> list[str]:
+    """Entity ids of every house/floor/room condition flagged
+    off_when_away that's currently active - the scenes (Mys, Städning,
+    Natt, ...) to switch off the moment the house goes from home to away,
+    so none of them outlives everyone leaving. Deduplicated, since several
+    rooms' conditions can point at the same shared helper."""
+    conditions = list(cfg.get("house_conditions", [])) + list(cfg.get("floor_conditions", []))
+    for room in cfg.get("rooms", []):
+        conditions.extend(room.get("custom_conditions", []))
+    result: list[str] = []
+    for condition in conditions:
+        entity_id = condition.get("entity_id")
+        if condition.get("off_when_away") and entity_id not in result and _condition_active(hass, condition):
+            result.append(entity_id)
+    return result
+
+
 def _condition_name(cfg: dict, condition_id: str, room: dict | None = None) -> str | None:
     """Looks up a condition id's display name across every tier it could
     have come from - a room's own custom_conditions (only searched when a
@@ -1869,11 +1886,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # the current period to the rooms, then tell the sensor platform (which
     # has no entity of its own to watch in built-in modes) to recompute too.
 
+    async def _turn_off_scenes_on_leave() -> None:
+        """On a home -> away transition, switch off every active condition
+        flagged off_when_away (see _off_when_away_entities). Only on the
+        transition itself, not on every tick while away - someone turning
+        a scene back on remotely while away is left alone."""
+        home_state = _get_home_state()
+        previous = hass.data[DOMAIN].get("last_home_state")
+        hass.data[DOMAIN]["last_home_state"] = home_state
+        if previous != "home" or home_state != "away":
+            return
+        for entity_id in _off_when_away_entities(hass, hass.data[DOMAIN]["config"]):
+            try:
+                await hass.services.async_call(
+                    "homeassistant", "turn_off", {"entity_id": entity_id}, blocking=True
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("RoomFlow: could not turn off %s on leaving: %s", entity_id, err)
+                continue
+            _LOGGER.info("RoomFlow: house became empty - turned off %s", entity_id)
+
+    # Seeded once so a restart while already away isn't mistaken for a
+    # fresh home -> away transition.
+    hass.data[DOMAIN]["last_home_state"] = _get_home_state()
+
     async def _handle_relevant_change(*_args) -> None:
         # A real ambient trigger firing means whatever period a button
         # forced earlier is no longer the last word - let the naturally
         # resolved period win again.
         hass.data[DOMAIN]["forced_period"].clear()
+        await _turn_off_scenes_on_leave()
         await apply_current_period()
         async_dispatcher_send(hass, SIGNAL_RECOMPUTE)
 

@@ -49,6 +49,10 @@ def _iter_managed_conditions(cfg: dict):
         for condition in room.get("custom_conditions", []):
             if condition.get("managed"):
                 yield "room", room.get("id"), condition
+    # Seasons (Vinter, Jul, ...) are always RoomFlow-managed - same switch
+    # entity, just keyed under their own scope (see SEASON_MODE_* in const.py).
+    for season in cfg.get("seasons", []):
+        yield "season", None, season
 
 
 async def async_setup_entry(
@@ -124,10 +128,17 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
         # entity_id instead of whatever this constructor proposes - a
         # rename via Settings -> Entities already survives every future
         # restart with no extra code needed here.
-        slug = f"{scope}_{scope_id or 'house'}_{condition_id}"
-        self._attr_unique_id = f"{entry.entry_id}_condition_{slug}"
-        self.entity_id = f"switch.roomflow_condition_{slug}"
-        self._attr_icon = "mdi:toggle-switch-outline"
+        if scope == "season":
+            # Seasons have one flat, house-wide list with unique ids, so
+            # no scope qualification needed - switch.roomflow_season_jul.
+            self._attr_unique_id = f"{entry.entry_id}_season_{condition_id}"
+            self.entity_id = f"switch.roomflow_season_{condition_id}"
+            self._attr_icon = "mdi:calendar-star"
+        else:
+            slug = f"{scope}_{scope_id or 'house'}_{condition_id}"
+            self._attr_unique_id = f"{entry.entry_id}_condition_{slug}"
+            self.entity_id = f"switch.roomflow_condition_{slug}"
+            self._attr_icon = "mdi:toggle-switch-outline"
         self._attr_is_on = False
         self._auto_off_key: tuple[str | None, str | None] = (None, None)
         self._auto_off_unsubs: list = []
@@ -139,13 +150,15 @@ class RoomFlowConditionSwitch(SwitchEntity, RestoreEntity):
             pool = cfg.get("house_conditions", [])
         elif self._scope == "floor":
             pool = cfg.get("floor_conditions", [])
+        elif self._scope == "season":
+            pool = cfg.get("seasons", [])
         else:
             room = next((r for r in cfg.get("rooms", []) if r.get("id") == self._scope_id), None)
             pool = room.get("custom_conditions", []) if room else []
         return next((c for c in pool if c.get("id") == self._condition_id), None)
 
     def _refresh_device_info(self) -> None:
-        if self._scope == "house":
+        if self._scope in ("house", "season"):
             identifier = self._entry.entry_id
         elif self._scope == "floor":
             identifier = f"floor_{self._scope_id}"

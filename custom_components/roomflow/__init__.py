@@ -12,7 +12,7 @@ from homeassistant.components.frontend import async_remove_panel, add_extra_js_u
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, Event
-from homeassistant.helpers import area_registry as ar, device_registry as dr
+from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -65,6 +65,8 @@ from .const import (
     DEVICE_TYPE_OUTLET,
     EVENT_DEVICE_PROFILES,
     TIMED_CLICK_TYPES,
+    SEASON_MODE_ONLY,
+    SEASON_MODE_HIDE,
     CLICK_TYPE_SHORT_TIMED,
     CLICK_TYPE_LONG_TIMED,
     DEFAULT_LONG_PRESS_MS,
@@ -384,6 +386,74 @@ def _active_room_conditions(hass: HomeAssistant, room: dict, cfg: dict) -> list[
     active.extend(_active_floor_conditions(hass, cfg, _room_floor_id(hass, room)))
     active.extend(_active_house_conditions(hass, cfg))
     return active
+
+
+def _active_season_ids(hass: HomeAssistant, cfg: dict) -> set[str]:
+    """IDs of the seasons (cfg.seasons, e.g. Vinter/Jul) whose backing
+    switch is currently on. Same {id, name, entity_id, state} shape as a
+    condition, so _condition_active matches them the same way."""
+    return {season["id"] for season in cfg.get("seasons", []) if _condition_active(hass, season)}
+
+
+def _entity_label_ids(hass: HomeAssistant, entity_id: str | None) -> set[str]:
+    """HA label ids on an entity plus on the device it belongs to - a label
+    is as often put on the device (Settings -> Devices) as on the entity."""
+    if not entity_id:
+        return set()
+    entry = er.async_get(hass).async_get(entity_id)
+    if entry is None:
+        return set()
+    labels = set(entry.labels)
+    if entry.device_id:
+        device_entry = dr.async_get(hass).async_get(entry.device_id)
+        if device_entry:
+            labels |= device_entry.labels
+    return labels
+
+
+def _device_season_rules(hass: HomeAssistant, device: dict, cfg: dict) -> dict[str, str]:
+    """Effective {season_id: mode} for a device: its explicit choice in
+    device.seasons wins (including "none", an explicit opt-out), otherwise
+    the season's HA labels decide - label_id implies "only" (e.g. label
+    "Jul" on all Christmas lights), hide_label_id implies "hide" (e.g.
+    "Ej Jul" on the lamps they replace); "hide" wins if a device has both.
+    Rules for a since-deleted season are dropped."""
+    explicit = device.get("seasons") or {}
+    rules: dict[str, str] = {}
+    labels: set[str] | None = None
+    for season in cfg.get("seasons", []):
+        season_id = season["id"]
+        if season_id in explicit:
+            rules[season_id] = explicit[season_id]
+            continue
+        if not (season.get("label_id") or season.get("hide_label_id")):
+            continue
+        if labels is None:
+            labels = _entity_label_ids(hass, device.get("entity_id"))
+        if season.get("hide_label_id") in labels:
+            rules[season_id] = SEASON_MODE_HIDE
+        elif season.get("label_id") in labels:
+            rules[season_id] = SEASON_MODE_ONLY
+    return rules
+
+
+def _device_season_blocked(hass: HomeAssistant, device: dict, cfg: dict) -> bool:
+    """True if a device's season rules (see _device_season_rules) currently
+    keep it switched off - either a season it's hidden during is active
+    (e.g. the lamp a Christmas star replaces), or it's limited to seasons
+    and none of them is active (the Christmas star itself, outside Jul).
+    "hide" wins over "only" if both apply."""
+    rules = _device_season_rules(hass, device, cfg)
+    if not rules:
+        return False
+    active_ids = _active_season_ids(hass, cfg)
+    only_ids = []
+    for season_id, mode in rules.items():
+        if mode == SEASON_MODE_HIDE and season_id in active_ids:
+            return True
+        if mode == SEASON_MODE_ONLY:
+            only_ids.append(season_id)
+    return bool(only_ids) and not any(season_id in active_ids for season_id in only_ids)
 
 
 def _off_when_away_entities(hass: HomeAssistant, cfg: dict) -> list[str]:
@@ -864,21 +934,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         source: str,
         respect_manual_override: bool = False,
     ) -> None:
-        raw_behaviors = device.get("behaviors", {}).get(period)
-        if not raw_behaviors:
-            return
-        behaviors = _normalize_behaviors(raw_behaviors)
-        control = _control_mode(device, period)
-        behavior = _pick_behavior(
-            behaviors,
-            active_condition_ids,
-            day_type,
-            home_state,
-            default_enabled=control["mode"] != "button",
-            away_default=device.get("away_default"),
-        )
-        if not behavior:
-            return
+        if _device_season_blocked(hass, device, hass.data[DOMAIN]["config"]):
+            # Out of season (or hidden by an active one) - kept off
+            # regardless of period, control mode, condition or away state.
+            behavior = {"state": "off"}
+        else:
+            raw_behaviors = device.get("behaviors", {}).get(period)
+            if not raw_behaviors:
+                return
+            behaviors = _normalize_behaviors(raw_behaviors)
+            control = _control_mode(device, period)
+            behavior = _pick_behavior(
+                behaviors,
+                active_condition_ids,
+                day_type,
+                home_state,
+                default_enabled=control["mode"] != "button",
+                away_default=device.get("away_default"),
+            )
+            if not behavior:
+                return
 
         entity_id = device["entity_id"]
         signature_key = f"{room['id']}:{entity_id}"
@@ -950,7 +1025,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # on regardless of actual motion. Explicit triggers (Test
                 # now, apply_now/force_period buttons) still touch
                 # everything, same as before.
-                if respect_motion_control and _control_mode(device, period)["mode"] == "motion":
+                # A season-blocked motion device still goes through, so a
+                # season switching on turns it off without waiting for motion.
+                if (
+                    respect_motion_control
+                    and _control_mode(device, period)["mode"] == "motion"
+                    and not _device_season_blocked(hass, device, cfg)
+                ):
                     continue
                 await _apply_single_device(
                     room,
@@ -1009,6 +1090,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cfg = hass.data[DOMAIN]["config"]
         schedule_id = room.get("schedule_id") or DEFAULT_SCHEDULE_ID
         period = _get_period(schedule_id)
+        if _device_season_blocked(hass, device, cfg):
+            # Not even a manual press turns on an out-of-season device.
+            return {"state": "off"}, schedule_id, period, None
         if period is None:
             return None, schedule_id, None, None
         raw_behaviors = device.get("behaviors", {}).get(period)
@@ -1965,7 +2049,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 entity_id = condition.get("entity_id")
                 if entity_id:
                     tracked_entities.append(entity_id)
-        for condition in cfg.get("floor_conditions", []) + cfg.get("house_conditions", []):
+        for condition in cfg.get("floor_conditions", []) + cfg.get("house_conditions", []) + cfg.get("seasons", []):
             entity_id = condition.get("entity_id")
             if entity_id:
                 tracked_entities.append(entity_id)

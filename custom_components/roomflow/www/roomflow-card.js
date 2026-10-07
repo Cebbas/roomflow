@@ -599,6 +599,26 @@ const STRINGS = {
       "A house-wide condition (e.g. \"Cleaning\", \"Away trip\") applies to every room; a floor condition applies to every room on that floor - a room's own condition still wins over its floor's, which wins over the house's. Each device still needs its own per-period behavior set for a condition here, same as a room's own conditions, in that device's period editor.",
     house_conditions_header: "Whole house",
     house_conditions_box_help: "Applies to every room in the house when active.",
+    seasons_header: "Seasons",
+    seasons_help:
+      "Seasons such as Winter or Christmas, switched on and off by hand. Each one gets its own RoomFlow switch. Pick per device whether it's only active during a season, or hidden during it.",
+    season_name_placeholder: "e.g. Christmas",
+    new_season_name: "New season",
+    season_toggle_title: "Turn this season on/off",
+    device_seasons_header: "Seasons",
+    device_seasons_help: "Outside its season (or while hidden) the device is kept off.",
+    season_mode_none: "Not affected",
+    season_mode_only: "Only during this season",
+    season_mode_hide: "Off during this season",
+    season_mode_auto_label: "Automatic (label): only during this season",
+    season_label_title: "HA label - lamps with this label are only used during this season",
+    season_label_none: "No label",
+    season_label_used: "{n} labelled lamp(s) in RoomFlow follow this season automatically.",
+    season_label_missing: "Labelled but not added to any room yet:",
+    season_mode_auto_hide_label: "Automatic (label): off during this season",
+    season_hide_label_title: "HA label - lamps with this label are kept off during this season",
+    season_hide_label_used: "{n} lamp(s) with the off-label in RoomFlow are kept off during this season.",
+    season_hide_label_prefix: "Not",
     floor_conditions_box_help: "Applies to every room on this floor when active.",
     no_motion_sensors_hint: "No motion sensors yet - add one in the Motion sensors tab first.",
     motion_sensor_which_label: "Which motion sensor:",
@@ -853,6 +873,26 @@ const STRINGS = {
       "Ett husomfattande villkor (t.ex. \"Städning\", \"Bortrest\") gäller alla rum; ett våningsvillkor gäller alla rum på den våningen - ett rums eget villkor vinner ändå över våningens, som vinner över husets. Varje enhet behöver fortfarande ett eget beteende per period för ett villkor här, precis som för rummets egna villkor, i den enhetens periodredigerare.",
     house_conditions_header: "Hela huset",
     house_conditions_box_help: "Gäller alla rum i huset när det är aktivt.",
+    seasons_header: "Säsonger",
+    seasons_help:
+      "Säsonger som Vinter eller Jul, som slås på och av manuellt. Varje säsong får en egen RoomFlow-switch. Välj per enhet om den bara är aktiv under en säsong, eller bortplockad under den.",
+    season_name_placeholder: "t.ex. Jul",
+    new_season_name: "Ny säsong",
+    season_toggle_title: "Slå på/av säsongen",
+    device_seasons_header: "Säsonger",
+    device_seasons_help: "Utanför sin säsong (eller när den är bortplockad) hålls enheten avstängd.",
+    season_mode_none: "Påverkas inte",
+    season_mode_only: "Endast under säsongen",
+    season_mode_hide: "Avstängd under säsongen",
+    season_mode_auto_label: "Automatiskt (etikett): endast under säsongen",
+    season_label_title: "HA-etikett – lampor med etiketten används bara under säsongen",
+    season_label_none: "Ingen etikett",
+    season_label_used: "{n} lampa/lampor med etiketten i RoomFlow följer säsongen automatiskt.",
+    season_label_missing: "Har etiketten men är inte tillagda i något rum än:",
+    season_mode_auto_hide_label: "Automatiskt (etikett): avstängd under säsongen",
+    season_hide_label_title: "HA-etikett – lampor med etiketten hålls avstängda under säsongen",
+    season_hide_label_used: "{n} lampa/lampor med av-etiketten i RoomFlow hålls avstängda under säsongen.",
+    season_hide_label_prefix: "Ej",
     floor_conditions_box_help: "Gäller alla rum på den här våningen när det är aktivt.",
     no_motion_sensors_hint: "Inga rörelsevakter än - lägg till en i fliken Rörelsevakter först.",
     motion_sensor_which_label: "Vilken rörelsevakt:",
@@ -2508,10 +2548,14 @@ class RoomFlowCard extends HTMLElement {
       this._hass.callWS({ type: "roomflow/list_entities" }),
       this._hass.callWS({ type: "roomflow/list_floors" }),
     ]);
+    // HA's own label registry, for linking a season to a label - optional,
+    // so a failure here (no permission, older core) never blocks loading.
+    const labels = await this._hass.callWS({ type: "config/label_registry/list" }).catch(() => []);
     this._config_data = config && config.rooms ? config : { rooms: [] };
     this._areas = areas;
     this._entities = entities;
     this._floors = floors;
+    this._labels = labels || [];
     this._migrateConfig();
     this._render();
   }
@@ -2567,6 +2611,7 @@ class RoomFlowCard extends HTMLElement {
     if (!cd.button_triggers) cd.button_triggers = [];
     if (!cd.house_conditions) cd.house_conditions = [];
     if (!cd.floor_conditions) cd.floor_conditions = [];
+    if (!cd.seasons) cd.seasons = [];
 
     // Schedules: a named, independent periods list of its own (see
     // DEFAULT_SCHEDULE_ID docs above) - a room follows one via its
@@ -3217,6 +3262,85 @@ class RoomFlowCard extends HTMLElement {
     this._render();
   }
 
+  // Seasons (Vinter, Jul, ...): a house-wide ordered list, each one backed
+  // by its own RoomFlow-managed switch (switch.roomflow_season_<id>, see
+  // switch.py) - the id is a slug of the name given at creation so the
+  // entity id stays readable, and never changes on a later rename. A
+  // device opts in per season via device.seasons = {season_id: "only" |
+  // "hide"} - see SEASON_MODE_* in const.py.
+  _addSeason(name) {
+    if (!this._config_data.seasons) this._config_data.seasons = [];
+    const seasons = this._config_data.seasons;
+    const displayName = name || this._t("new_season_name");
+    const base =
+      displayName
+        .toLowerCase()
+        .replace(/[åä]/g, "a")
+        .replace(/ö/g, "o")
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "") || uid();
+    let id = base;
+    for (let n = 2; seasons.some((s) => s.id === id); n++) id = `${base}_${n}`;
+    // Pre-link HA labels by name: "Jul" -> only during, "Ej Jul" -> off during.
+    // Off-label prefix matched in any UI language ("Ej Jul", "Not Jul", ...),
+    // since label names needn't follow the HA frontend language.
+    const labelNamed = (...names) =>
+      (this._labels || []).find((l) => names.some((n) => l.name.toLowerCase() === n.toLowerCase()))?.label_id || null;
+    const hidePrefixes = [...new Set(Object.values(STRINGS).map((s) => s.season_hide_label_prefix).filter(Boolean))];
+    seasons.push({
+      id,
+      name: displayName,
+      entity_id: `switch.roomflow_season_${id}`,
+      state: "on",
+      managed: true,
+      label_id: labelNamed(displayName),
+      hide_label_id: labelNamed(...hidePrefixes.map((p) => `${p} ${displayName}`)),
+    });
+    this._scheduleSave();
+    this._render();
+  }
+
+  _removeSeason(seasonId) {
+    this._config_data.seasons = (this._config_data.seasons || []).filter((s) => s.id !== seasonId);
+    this._config_data.rooms.forEach((room) =>
+      (room.devices || []).forEach((device) => {
+        if (device.seasons) delete device.seasons[seasonId];
+      })
+    );
+    this._scheduleSave();
+    this._render();
+  }
+
+  _updateSeason(seasonId, field, value) {
+    const season = (this._config_data.seasons || []).find((s) => s.id === seasonId);
+    if (!season) return;
+    season[field] = value;
+    this._scheduleSave();
+  }
+
+  _moveSeason(seasonId, direction) {
+    const seasons = this._config_data.seasons;
+    if (!seasons) return;
+    const index = seasons.findIndex((s) => s.id === seasonId);
+    if (index === -1) return;
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= seasons.length) return;
+    [seasons[index], seasons[swapWith]] = [seasons[swapWith], seasons[index]];
+    this._scheduleSave();
+    this._render();
+  }
+
+  _setDeviceSeason(deviceKey, seasonId, mode) {
+    const { roomId, entityId } = parseDeviceKey(deviceKey);
+    const device = this._findDevice(roomId, entityId);
+    if (!device) return;
+    if (!device.seasons) device.seasons = {};
+    if (mode) device.seasons[seasonId] = mode;
+    else delete device.seasons[seasonId];
+    this._scheduleSave();
+    this._render();
+  }
+
   async _addFloorCondition(floorId) {
     if (!this._config_data.floor_conditions) this._config_data.floor_conditions = [];
     const condition = {
@@ -3817,6 +3941,11 @@ class RoomFlowCard extends HTMLElement {
   }
 
   _updateLiveStatusTexts() {
+    this.querySelectorAll("[data-season-toggle]").forEach((el) => {
+      const season = (this._config_data.seasons || []).find((s) => s.id === el.getAttribute("data-season-toggle"));
+      const st = season && this._hass && this._hass.states[season.entity_id];
+      el.checked = !!st && st.state === "on";
+    });
     this.querySelectorAll("[data-live-status]").forEach((el) => {
       const { roomId, entityId } = parseDeviceKey(el.getAttribute("data-live-status"));
       const device = this._findDevice(roomId, entityId);
@@ -3994,6 +4123,30 @@ class RoomFlowCard extends HTMLElement {
     if (moveConditionDownBtn) {
       const [roomId, conditionId] = moveConditionDownBtn.getAttribute("data-move-custom-condition-down").split("|");
       this._moveCustomCondition(roomId, conditionId, "down");
+      return;
+    }
+
+    if (e.target.closest("#add-season-btn")) {
+      const nameInput = this.querySelector("#new-season-name");
+      this._addSeason(nameInput ? nameInput.value.trim() : "");
+      return;
+    }
+
+    const removeSeasonBtn = e.target.closest("[data-remove-season]");
+    if (removeSeasonBtn) {
+      this._removeSeason(removeSeasonBtn.getAttribute("data-remove-season"));
+      return;
+    }
+
+    const moveSeasonUpBtn = e.target.closest("[data-move-season-up]");
+    if (moveSeasonUpBtn) {
+      this._moveSeason(moveSeasonUpBtn.getAttribute("data-move-season-up"), "up");
+      return;
+    }
+
+    const moveSeasonDownBtn = e.target.closest("[data-move-season-down]");
+    if (moveSeasonDownBtn) {
+      this._moveSeason(moveSeasonDownBtn.getAttribute("data-move-season-down"), "down");
       return;
     }
 
@@ -4475,6 +4628,49 @@ class RoomFlowCard extends HTMLElement {
         "off_when_away",
         floorConditionOffAway.checked
       );
+      return;
+    }
+
+    const seasonName = e.target.closest("[data-season-name]");
+    if (seasonName) {
+      this._updateSeason(
+        seasonName.getAttribute("data-season-name"),
+        "name",
+        seasonName.value.trim() || this._t("new_season_name")
+      );
+      return;
+    }
+
+    const seasonToggle = e.target.closest("[data-season-toggle]");
+    if (seasonToggle) {
+      const season = (this._config_data.seasons || []).find(
+        (s) => s.id === seasonToggle.getAttribute("data-season-toggle")
+      );
+      if (season && this._hass) {
+        this._hass.callService("switch", seasonToggle.checked ? "turn_on" : "turn_off", { entity_id: season.entity_id });
+      }
+      return;
+    }
+
+    const seasonLabel = e.target.closest("[data-season-label]");
+    if (seasonLabel) {
+      this._updateSeason(seasonLabel.getAttribute("data-season-label"), "label_id", seasonLabel.value || null);
+      this._render();
+      return;
+    }
+
+    const seasonHideLabel = e.target.closest("[data-season-hide-label]");
+    if (seasonHideLabel) {
+      this._updateSeason(seasonHideLabel.getAttribute("data-season-hide-label"), "hide_label_id", seasonHideLabel.value || null);
+      this._render();
+      return;
+    }
+
+    const deviceSeason = e.target.closest("[data-device-season]");
+    if (deviceSeason) {
+      const value = deviceSeason.getAttribute("data-device-season");
+      const sep = value.lastIndexOf("|");
+      this._setDeviceSeason(value.slice(0, sep), value.slice(sep + 1), deviceSeason.value);
       return;
     }
 
@@ -5573,6 +5769,7 @@ class RoomFlowCard extends HTMLElement {
       <div>
         <div class="rf-section-title">${icon("mdi:home-city-outline")}${this._t("tab_house_conditions")}</div>
         <div class="rf-help">${this._t("house_conditions_help")}</div>
+        ${this._renderSeasonsBox()}
         ${this._renderHouseConditionsBox()}
         ${floorBoxesHtml}
       </div>
@@ -5606,6 +5803,118 @@ class RoomFlowCard extends HTMLElement {
       </div>`
       )
       .join("");
+  }
+
+  // Entity + device label ids for one entity, as reported by list_entities.
+  _entityLabels(entityId) {
+    const entity = (this._entities || []).find((e) => e.entity_id === entityId);
+    return (entity && entity.labels) || [];
+  }
+
+  // What a season's labels pick up: lamps already in a RoomFlow room
+  // (controlled automatically) vs. labelled lamps not added to any room
+  // yet (RoomFlow can't control those until they are).
+  _renderSeasonLabelInfo(season) {
+    const inRooms = new Set(this._config_data.rooms.flatMap((r) => (r.devices || []).map((d) => d.entity_id)));
+    const line = (labelId, usedKey) => {
+      if (!labelId) return "";
+      const labelled = (this._entities || []).filter((e) => (e.labels || []).includes(labelId));
+      const missing = labelled.filter((e) => !inRooms.has(e.entity_id));
+      return `
+        <div>
+          ${this._t(usedKey, { n: labelled.length - missing.length })}
+          ${missing.length ? `<br>${this._t("season_label_missing")} ${missing.map((e) => e.name).join(", ")}` : ""}
+        </div>`;
+    };
+    const html = line(season.label_id, "season_label_used") + line(season.hide_label_id, "season_hide_label_used");
+    return html ? `<div class="rf-help" style="margin:2px 0 0 0">${html}</div>` : "";
+  }
+
+  _renderSeasonsBox() {
+    const seasons = this._config_data.seasons || [];
+    const labels = this._labels || [];
+    const rows = seasons
+      .map((s, i) => {
+        const st = this._hass && this._hass.states[s.entity_id];
+        const labelSelect = (attr, selectedId, titleKey) => `
+          <select ${attr}="${s.id}" title="${this._t(titleKey)}">
+            <option value="">${this._t("season_label_none")}</option>
+            ${labels
+              .map((l) => `<option value="${l.label_id}" ${l.label_id === selectedId ? "selected" : ""}>${l.name}</option>`)
+              .join("")}
+          </select>`;
+        return `
+      <div style="margin-top:6px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${switchEl(`data-season-toggle="${s.id}" ${st && st.state === "on" ? "checked" : ""} title="${this._t("season_toggle_title")}"`)}
+          ${textField(`data-season-name="${s.id}" value="${s.name || ""}" placeholder="${this._t("name_placeholder")}" style="width:140px"`)}
+          <small style="opacity:0.7">${s.entity_id}</small>
+          <span title="${this._t("season_label_title")}" style="opacity:0.7;font-size:0.85em">${icon("mdi:label-outline")}</span>
+          ${labelSelect("data-season-label", s.label_id, "season_label_title")}
+          <span title="${this._t("season_hide_label_title")}" style="opacity:0.7;font-size:0.85em">${icon("mdi:label-off-outline")}</span>
+          ${labelSelect("data-season-hide-label", s.hide_label_id, "season_hide_label_title")}
+          <button class="rf-icon-btn" data-move-season-up="${s.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
+          <button class="rf-icon-btn" data-move-season-down="${s.id}" ${i === seasons.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
+          <button class="rf-icon-btn rf-danger" data-remove-season="${s.id}">${icon("mdi:close")}</button>
+        </div>
+        ${this._renderSeasonLabelInfo(s)}
+      </div>`;
+      })
+      .join("");
+
+    return `
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:calendar-star")}${this._t("seasons_header")}</div>
+        <div class="rf-help" style="margin-top:0">${this._t("seasons_help")}</div>
+        ${rows}
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <input id="new-season-name" placeholder="${this._t("season_name_placeholder")}" style="width:180px" />
+          <button id="add-season-btn" class="rf-btn rf-btn-flat">${icon("mdi:plus")}${this._t("add")}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Per-device season rules - only rendered once at least one season exists.
+  _renderDeviceSeasons(deviceKey, device) {
+    const seasons = this._config_data.seasons || [];
+    if (!seasons.length) return "";
+    const rules = device.seasons || {};
+    const entityLabels = this._entityLabels(device.entity_id);
+    const rows = seasons
+      .map((s) => {
+        const mode = rules[s.id] || "";
+        // Same precedence as _device_season_rules: hide label beats only label.
+        const hideLabelled = !!s.hide_label_id && entityLabels.includes(s.hide_label_id);
+        const onlyLabelled = !!s.label_id && entityLabels.includes(s.label_id);
+        const labelled = hideLabelled || onlyLabelled;
+        const option = (value, label) => `<option value="${value}" ${mode === value ? "selected" : ""}>${label}</option>`;
+        // "" = no explicit choice: follows the season's labels if this
+        // lamp has one, else unaffected.
+        const autoText = hideLabelled
+          ? this._t("season_mode_auto_hide_label")
+          : onlyLabelled
+            ? this._t("season_mode_auto_label")
+            : this._t("season_mode_none");
+        return `
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <span style="min-width:90px">${s.name}</span>
+          <select data-device-season="${deviceKey}|${s.id}">
+            ${option("", autoText)}
+            ${labelled ? option("none", this._t("season_mode_none")) : ""}
+            ${option("only", this._t("season_mode_only"))}
+            ${option("hide", this._t("season_mode_hide"))}
+          </select>
+        </div>`;
+      })
+      .join("");
+    return `
+      <div class="rf-card" style="margin-top:8px">
+        <div class="rf-card-title" style="font-size:0.95em">${icon("mdi:calendar-star")}${this._t("device_seasons_header")}</div>
+        <div class="rf-help" style="margin-top:0">${this._t("device_seasons_help")}</div>
+        ${rows}
+      </div>
+    `;
   }
 
   _renderHouseConditionsBox() {
@@ -6110,10 +6419,12 @@ class RoomFlowCard extends HTMLElement {
 
       const awayDefaultHtml = this._hasHome() ? this._renderAwayDefault(deviceKey, device) : "";
       const deviceButtonsHtml = this._renderDeviceButtons(deviceKey, device);
+      const deviceSeasonsHtml = this._renderDeviceSeasons(deviceKey, device);
 
       bodyHtml = `
         <div class="rf-device-body">
           <div class="rf-chip-row">${tabsHtml}</div>
+          ${deviceSeasonsHtml}
           ${deviceButtonsHtml}
           ${awayDefaultHtml}
           <div style="margin-top:8px">${controlsHtml}</div>

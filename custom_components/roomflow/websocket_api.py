@@ -126,12 +126,17 @@ async def ws_list_entities(hass: HomeAssistant, connection, msg):
         # (set via "Settings -> Devices" on the device, not the entity) -
         # only fall back to that when the entity has no area of its own.
         area_id = None
+        labels: set[str] = set()
         if entry:
             area_id = entry.area_id
-            if area_id is None and entry.device_id:
-                device = device_registry.async_get(entry.device_id)
-                if device:
+            labels = set(entry.labels)
+            device = device_registry.async_get(entry.device_id) if entry.device_id else None
+            if device:
+                if area_id is None:
                     area_id = device.area_id
+                # Same entity + device label union as _entity_label_ids,
+                # so the card can show which lamps a season label picks up.
+                labels |= device.labels
 
         supported_color_modes = (
             state.attributes.get("supported_color_modes", []) if domain == "light" else []
@@ -145,6 +150,7 @@ async def ws_list_entities(hass: HomeAssistant, connection, msg):
                 "name": state.attributes.get("friendly_name", state.entity_id),
                 "domain": domain,
                 "area_id": area_id,
+                "labels": sorted(labels),
                 "supports_brightness": supports_brightness,
                 "supports_color_temp": supports_color_temp,
             }

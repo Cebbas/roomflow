@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- **Seasons (e.g. Vinter, Jul)** - a new house-wide `seasons` list,
+  edited at the top of the card's "House & floors" tab. Each season gets
+  its own RoomFlow-managed switch (`switch.roomflow_season_<id>`, id
+  slugged from the name at creation) that is turned on/off by hand - no
+  dates involved. Per device, a new "Seasons" box picks "Only during
+  this season" (e.g. a Christmas star - kept off unless one of its
+  seasons is on) or "Off during this season" (e.g. the lamp the star
+  replaces). A season-blocked device is forced off by every path that
+  could otherwise turn it on - ambient re-applies, motion, and manual
+  button toggles - and a motion-controlled device is turned off right
+  away when its season changes instead of waiting for motion. "Off
+  during" wins if both apply. See `_device_season_blocked` in
+  `__init__.py`.
+- **Seasons can follow HA labels.** Each season can be linked to two
+  Home Assistant labels: an "only during" label (`label_id`, e.g. "Jul")
+  and an "off during" label (`hide_label_id`, e.g. "Ej Jul"), both
+  picked per season row and pre-linked automatically by name when the
+  season is created ("<name>" / "Ej <name>", "Not <name>", ...). Every
+  RoomFlow device whose entity or device carries one of them is then
+  treated as "Only during" / "Off during" this season without
+  configuring it per lamp - the off-label wins if a lamp has both, and an
+  explicit per-device choice (including the new "Not affected" opt-out)
+  still wins over either. The season row shows how many labelled lamps
+  each label picks up and lists labelled lamps not added to any room
+  yet. `list_entities` now also returns each entity's labels (entity +
+  device).
 - **A condition can now switch itself off when the house becomes empty**
   (`off_when_away` on any house/floor/room condition, an "Off when away"
   toggle on each condition row in the card). On a home -> away

@@ -42,6 +42,12 @@ reason) - confirmed a second time in the vardagsrum migration
 the regular Morgon/Dag/Eftermiddag scenes with no date gating of its own
 in the source YAML), also left out for the same reason.
 
+Partly built: manually-switched seasons (`cfg.seasons`, each with its
+own RoomFlow switch, devices set to "only during"/"off during" a season)
+now cover the Christmas-star case. Still missing: anything *date-driven*
+(auto-on from a calendar or date range) and per-period season variants
+(different brightness/color during a season rather than just on/off).
+
 Possible approach: a new override tier (checked in precedence alongside/
 above weekend, similar to how away/weekend/default already stack) driven
 by either a `calendar.*` entity (Home Assistant's built-in calendar

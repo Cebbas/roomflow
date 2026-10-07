@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.61"
+VERSION = "0.0.62"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -535,6 +535,22 @@ CLICK_TYPE_HOLD = "hold"
 # hold-to-dim automations this replaces used (10/255 every 50ms).
 HOLD_DIM_STEP = 10
 HOLD_DIM_INTERVAL_SECONDS = 0.05
+
+# Seasons (cfg.seasons, e.g. Vinter/Jul): house-wide, each backed by a
+# RoomFlow-managed switch (switch.roomflow_season_<id>, see switch.py)
+# instead of a date range. A device opts in per season via
+# device.seasons = {season_id: mode}:
+#   "only" - the device is only active while (one of) these seasons is
+#            on, and kept off otherwise (e.g. a Christmas star);
+#   "hide" - the device is kept off while this season is on (e.g. the
+#            lamp the Christmas star stands in for);
+#   "none" - explicitly not affected, overriding the season's label.
+# A season can also carry HA labels: any device whose entity/device has
+# its label_id is treated as "only", its hide_label_id as "hide" (e.g.
+# "Jul" / "Ej Jul"), unless the device has an explicit choice.
+# See _device_season_rules/_device_season_blocked in __init__.py.
+SEASON_MODE_ONLY = "only"
+SEASON_MODE_HIDE = "hide"
 
 # A flaky BLE/mesh link (observed with a Plejd device losing and regaining
 # its connection every so often) can make an `event.*` entity cycle

@@ -50,6 +50,30 @@ next to the click-type picker when adding the trigger). Bind two separate
 triggers on the same entity, one with each click type, to get distinct
 short-press and long-press actions from a single physical button.
 
+#### Patched Plejd: `single_press` / `long_press` / `release`
+
+With the patched Plejd event entity (pyplejd fork + `plejd_patches/
+event.py`, applied by `plejd_ccl01_fix_reapply.sh` in the HA config
+repo) the entity's `event_types` are `["release", "single_press",
+"long_press"]` instead - there is no bare `press` any more, so the
+**Press** and the **timed** click types above no longer apply to it:
+
+- `single_press` fires on release of a short tap;
+- `long_press` fires the moment the button has been held past the
+  threshold, *while it's still held*;
+- `release` always fires when the button is let go.
+
+Set up a button like this:
+
+- **Toggle on a tap**: click type **Single** (substring match on
+  `single_press`). Don't use **Press** - it would match `long_press`
+  too, so every hold would also toggle the light.
+- **Dim while held**: a second trigger on the same entity with click
+  type **Hold**, attached to the device with the "hold to dim" action.
+  `long_press` starts ramping immediately (no extra delay - the hold is
+  already confirmed), `release` stops it, and a `single_press` is never
+  treated as the start of a hold.
+
 ## Built-in profiles
 
 ### Shelly (gen1) button — `shelly_gen1_click`

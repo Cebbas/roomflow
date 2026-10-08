@@ -73,6 +73,7 @@ from .const import (
     CLICK_TYPE_HOLD,
     HOLD_DIM_STEP,
     HOLD_DIM_INTERVAL_SECONDS,
+    HOLD_DIM_MAX_SECONDS,
     STALE_EVENT_MAX_AGE_SECONDS,
     WEEKEND_STATES,
     HOME_STATES,
@@ -1361,13 +1362,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             direction = hass.data[DOMAIN]["hold_dim_direction"].get(key, "up")
         hass.data[DOMAIN]["hold_dim_direction"][key] = "down" if direction == "up" else "up"
 
+        started = dt_util.utcnow()
+
+        def _stop() -> None:
+            cancel = hass.data[DOMAIN]["hold_dim_timers"].pop(key, None)
+            if cancel:
+                cancel()
+
         async def _tick(_now) -> None:
+            # Never ramp unattended: a button that doesn't send a release
+            # (some Plejd modules don't - the patched entity then reports
+            # every tap as long_press) would otherwise keep firing a
+            # turn_on every tick forever and flood the mesh. Stop at the
+            # brightness limit, and after HOLD_DIM_MAX_SECONDS regardless.
+            if (dt_util.utcnow() - started).total_seconds() > HOLD_DIM_MAX_SECONDS:
+                _stop()
+                return
             tick_state = hass.states.get(device["entity_id"])
             tick_current = (
                 tick_state.attributes.get("brightness") if tick_state and tick_state.state == "on" else 0
             ) or 0
             delta = HOLD_DIM_STEP if direction == "up" else -HOLD_DIM_STEP
             new_brightness = max(1, min(255, tick_current + delta))
+            if new_brightness == tick_current:
+                _stop()
+                return
             try:
                 await hass.services.async_call(
                     "light", "turn_on", {"entity_id": device["entity_id"], "brightness": new_brightness}
@@ -1397,14 +1416,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not entity_id or new_state is None:
             return
         domain = entity_id.split(".")[0]
+        is_confirmed_hold = False
         if domain == "binary_sensor":
             is_press = new_state.state == "on"
             is_release = new_state.state == "off"
         else:
-            candidates = [new_state.state or "", (new_state.attributes or {}).get("event_type") or ""]
-            is_release = any("release" in c.lower() for c in candidates)
-            is_press = not is_release and any("press" in c.lower() for c in candidates)
-        if not is_press and not is_release:
+            candidates = [
+                (new_state.state or "").lower(),
+                ((new_state.attributes or {}).get("event_type") or "").lower(),
+            ]
+            is_release = any("release" in c for c in candidates)
+            # A classified "long_press" fired while the button is still
+            # held (the patched Plejd event entity: release / single_press
+            # / long_press, see BUTTON_PROFILES.md) is already a confirmed
+            # hold - ramp right away instead of waiting out the press-to-
+            # hold delay below a second time. A completed tap
+            # ("single_press"/"double_press"/"short_press") is never the
+            # start of a hold, even though it contains "press".
+            is_confirmed_hold = not is_release and any("long_press" in c for c in candidates)
+            is_completed_tap = any(k in c for c in candidates for k in ("single", "double", "short"))
+            is_press = (
+                not is_release
+                and not is_confirmed_hold
+                and not is_completed_tap
+                and any("press" in c for c in candidates)
+            )
+        if not is_press and not is_release and not is_confirmed_hold:
             return
 
         cfg = hass.data[DOMAIN]["config"]
@@ -1414,7 +1451,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if attachment.get("action") == "hold_dim" and device is not None
         ]
 
-        if is_press:
+        if is_confirmed_hold:
+            for room, device in attachments:
+                key = _motion_key(room["id"], device["entity_id"])
+                pending_cancel = hass.data[DOMAIN]["hold_dim_pending"].pop(key, None)
+                if pending_cancel:
+                    pending_cancel()
+                _start_hold_dim(room, device)
+        elif is_press:
             for room, device in attachments:
                 key = _motion_key(room["id"], device["entity_id"])
                 # Don't start ramping the instant the input goes "on" - a
@@ -1444,7 +1488,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass,
             trigger_name=trigger_name,
             entity_id=entity_id,
-            state_label="held" if is_press else "released",
+            state_label="released" if is_release else "held",
             outcome="ran" if attachments else "no_attachments",
             detail=str(len(attachments)) if attachments else None,
         )
@@ -2103,6 +2147,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN]["refresh_time_fn"] = _setup_time_listeners
     _setup_time_listeners()
+
+    async def _handle_label_change(event: Event) -> None:
+        """A label added to/removed from an entity or device can flip a
+        lamp in/out of a season (season label_id/hide_label_id, see
+        _device_season_rules) - re-apply right away instead of waiting for
+        the next unrelated ambient tick. Only label edits count, and only
+        while some season is actually linked to a label."""
+        if event.data.get("action") != "update" or "labels" not in (event.data.get("changes") or {}):
+            return
+        cfg = hass.data[DOMAIN]["config"]
+        if not any(s.get("label_id") or s.get("hide_label_id") for s in cfg.get("seasons", [])):
+            return
+        await apply_current_period()
+        async_dispatcher_send(hass, SIGNAL_RECOMPUTE)
+
+    for registry_event in (er.EVENT_ENTITY_REGISTRY_UPDATED, dr.EVENT_DEVICE_REGISTRY_UPDATED):
+        entry.async_on_unload(hass.bus.async_listen(registry_event, _handle_label_change))
 
     def _refresh_device_registration() -> None:
         cfg = hass.data[DOMAIN]["config"]

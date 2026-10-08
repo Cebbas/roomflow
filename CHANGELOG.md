@@ -15,6 +15,30 @@
   behavior, and motion-controlled devices are still left to their own
   timeout.
 
+- **Hold-to-dim follows the patched Plejd buttons' `long_press`.** The
+  patched Plejd event entity now reports `single_press` / `long_press` /
+  `release` (no bare `press`), with `long_press` fired while the button
+  is still held. A "Hold" trigger now treats `long_press` as an already
+  confirmed hold and starts ramping immediately - previously it was read
+  as a plain press and waited another 500ms on top of Plejd's own
+  threshold, so dimming started about a second after pressing. A
+  completed tap (`single_press`/`double_press`/`short_press`) is no
+  longer mistaken for the start of a hold. The bare `press`/`release`
+  vocabulary (stock Plejd, other integrations) works as before. Pair it
+  with a **Single** toggle trigger on the same entity - see
+  `BUTTON_PROFILES.md`. A ramp now also stops by itself once the light
+  reaches full or minimum brightness, and after `HOLD_DIM_MAX_SECONDS`
+  (15s) at the latest, so a button whose release never arrives can no
+  longer keep sending `light.turn_on` every 50ms indefinitely.
+
+- **Label changes take effect immediately.** Adding or removing an HA
+  label on an entity or device (e.g. putting "Jul" on a new Christmas
+  light) now re-applies the rooms right away, instead of only on the
+  next unrelated period/condition/season change. Listens to
+  `entity_registry_updated`/`device_registry_updated`, reacts only to
+  label edits and only while some season is linked to a label
+  (`_handle_label_change`).
+
 - **Season label overview is now collapsible.** Under each season, both
   linked labels ("Jul" / "Ej Jul") show their name and "N found, M in a
   room"; an arrow expands the full list of labelled lamps with the room

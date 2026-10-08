@@ -639,7 +639,8 @@ Assistant is restarted.
 - `light.kok_adventsljusstake` (advent candlestick) is the concrete
   kitchen example already cited in `IDEAS.md`'s Holidays/seasons entry -
   confirmed by this reading, already correctly absent from the live
-  config.
+  config. **Unblocked by seasons in v0.0.62** - see "Seasonal lights
+  - plan now that seasons exist" at the end of this file.
 
 ### Live discrepancies - checked and fixed (2026-09-11)
 
@@ -952,7 +953,9 @@ undervaning/status/` chain it falls back through, 2026-09-11.
   "Holidays / specific dates and seasons" in `IDEAS.md`) - same reason
   this was already left out of the kitchen migration. Left out of the
   RoomFlow plan below; keep controlling it manually or via the existing
-  YAML during the season until that feature exists.
+  YAML during the season until that feature exists. **Unblocked by seasons
+  in v0.0.62** - see "Seasonal lights - plan now that seasons exist"
+  at the end of this file.
 
 ### Design notes for anyone extending this later
 
@@ -1373,3 +1376,124 @@ device a removed room/floor/schedule sensor belonged to, and the
 integration didn't even implement the hook Home Assistant requires to
 allow deleting an already-empty device by hand - both fixed, so this
 can't silently reaccumulate the same way going forward.
+
+## Seasonal lights - plan now that seasons exist (2026-10-07)
+
+RoomFlow **v0.0.62** added seasons (`cfg.seasons`, each with its own
+`switch.roomflow_season_<id>`, linkable to an "only during" and an "off
+during" HA label - see `CHANGELOG.md`), which unblocks the two seasonal
+devices left out above (Kök's advent candlestick, Vardagsrum's stars).
+**Applied live 2026-10-07** (see "What's live now" at the end of this
+section). Values below come straight from the legacy scenes in
+`filler från HA/.../scener/*_scenes_tid_pa_dygnet.yaml`.
+
+### Setup
+
+1. HA labels: create **Jul** (and **Ej Jul** if anything should go dark
+   during Christmas - nothing in the legacy YAML does that today).
+2. Put label **Jul** on `light.vardagsrum_stjarnor` and
+   `light.kok_adventsljusstake`. The stars group is a YAML `platform:
+   group` light with `unique_id: vardagsrum_stjärnor`, so it *can* carry
+   a label, but it has no device of its own - the label must go on the
+   entity itself. Don't label the individual `light.vardagsrum_stjarna_1/
+   2/3` bulbs as well: they'd only show up as "not added to any room" in
+   the season's label list (RoomFlow controls the group, not the bulbs).
+3. Card -> "House & floors" -> Seasons: add **Jul** (pre-links the Jul /
+   Ej Jul labels by name) - and **Vinter** if wanted, nothing uses it yet.
+4. Add both lamps as devices in their rooms with the per-period values
+   below. Their season box then shows "Automatic (label): only during
+   this season" - nothing to set per device.
+
+### Vardagsrum - `light.vardagsrum_stjarnor`
+
+| Period | Legacy scene | RoomFlow default |
+|---|---|---|
+| Morgon | on, brightness 61, color_temp 294 mired | on, 61, 3400 K |
+| Dag | off | off |
+| Eftermiddag | on, 61, 294 mired | on, 61, 3400 K |
+| Kväll | *not touched* (its block is commented out, with 333 mired) - so in practice it stayed on from Eftermiddag | on, 61, 3400 K - decided 2026-10-07: keep what actually happened, not the commented-out 3000 K |
+| Natt | no Natt scene exists for this room (see above) | off, same as the room's other devices |
+
+Away: the legacy area-wide `light.turn_off` turned the stars off too
+(see "Area-wide vs. device-list mismatch on away" above) - give the
+device an away override of off to keep that. Weekend periods weren't
+separate in the legacy scenes, so mirror the weekday values.
+
+### Kök - `light.kok_adventsljusstake`
+
+| Period | Legacy scene | RoomFlow default |
+|---|---|---|
+| Morgon | on | on |
+| Dag | off | off |
+| Eftermiddag | on | on |
+| Kväll | on | on |
+| Natt | off | off |
+
+No brightness in the source - plain on/off. Away: off, same as the
+rest of the kitchen.
+
+### Hall's two "Hall Stjärna" bulbs
+
+Never had any automated behavior (see Hall above) - nothing to migrate,
+but if they're Christmas lights too, labelling them **Jul** and adding
+them to Hall with simple on/off periods now makes them seasonal for
+free.
+
+### Found while writing this
+
+`vardagsrum_lampor.yaml`'s `customize` block targets
+`light.vardagsrum_stjarnaor` (typo - extra "a"), so the `phu:star-light`
+icon was never actually applied to the stars group. Harmless, cosmetic.
+
+### What's live now (2026-10-07)
+
+Config backed up first (`roomflow/get_config`), then saved in one
+`roomflow/save_config` and read back identical.
+
+- The **Jul** label was already in place: on the `light.vardagsrum_stjarnor`
+  and `light.kok_adventsljusstake` entities, and on the devices of every
+  individual star bulb, Hall/Naomi/Nadine stars, `light.gran` and
+  `light.framsida_stupror_1`. Seasons Jul (linked to label `jul`) and
+  Vinter already existed, both off.
+- Added `light.vardagsrum_stjarnor` ("Stjärnor") to Vardagsrum and
+  `light.kok_adventsljusstake` ("Adventsljusstake") to Kök exactly per the
+  tables above, schedule mode in every period, weekend periods mirroring
+  weekday, away off, the room's **Natt** condition off, Städning/Mys/TV
+  left disabled (never touched these lamps). Neither has an explicit
+  season choice - both follow the Jul label automatically. Both entities
+  are `unavailable` right now (bulbs disabled/unplugged out of season),
+  so the stars group only reports `onoff`; the device record still
+  carries brightness 61 / 3400 K for when the TRADFRI WS bulbs return.
+- **Not added** (labelled Jul, but no known behavior to migrate):
+  `light.gran`, `light.framsida_stupror_1`, and the Hall/Naomi/Nadine
+  stars (all three `light.*` entities currently disabled).
+
+#### Plejd buttons moved to single_press / long_press (same save)
+
+The patched Plejd event entities now report `release` / `single_press` /
+`long_press` with no bare `press` (see `BUTTON_PROFILES.md`), so every
+RoomFlow trigger on a Plejd `event.*` entity with click type `press`
+(which would now also match `long_press`) was switched to `single`:
+Toa/Badrum spegelbelysning knapp, Vardagsrum knapp 2-6. Each one that
+toggles a light also got a second trigger on the same entity, click
+type `hold`, attached as `hold_dim` to the same light (toa/badrum
+takbelysning, vardagsrum golvlampa/fönsterlampor/högtalare/
+skåpsbelysning). Knapp 5 (Mys, `toggle_condition`) got no hold.
+`event.vardagsrum_taklampa` (button 1) had **no working trigger at
+all**: taklampa's only button attachment pointed at trigger `szosq7bd`,
+which no longer exists in `button_triggers` (deleted at some point,
+attachment left dangling), and nothing else - no automation, no Plejd
+local binding - turns the light on from it (history: repeated presses at
+22:35 and 22:42 on 2026-10-07, taklampa stayed `off` throughout). The
+legacy `vardagsrum_knapp_1_dimmer`/`vardagsrum_plejd_knapp_1` hold-to-dim
+automations the Vardagsrum section above says to keep running are gone
+too. Added "Vardagsrum knapp 1 (taklampa)" (`single` -> toggle) and
+"Vardagsrum knapp 1 håll" (`hold` -> `hold_dim`) on taklampa, in a
+second save. The dangling `szosq7bd` attachment was left in place
+(harmless - an attachment to a missing trigger never fires).
+
+`automation.plejd_knappar_klassificera_tryck_single_double_long` is
+still on but now obsolete - it classifies from bare `press` events,
+which no longer exist, and only ever fired counters/a custom event
+(nothing controls lights through it). Left running, harmless; disable
+whenever convenient.

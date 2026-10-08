@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.64"
+VERSION = "0.0.65"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -535,6 +535,9 @@ CLICK_TYPE_HOLD = "hold"
 # hold-to-dim automations this replaces used (10/255 every 50ms).
 HOLD_DIM_STEP = 10
 HOLD_DIM_INTERVAL_SECONDS = 0.05
+# Hard cap on one hold-to-dim ramp - full 1->255 sweep takes ~1.3s at the
+# rate above, so anything longer means the release never arrived.
+HOLD_DIM_MAX_SECONDS = 15
 
 # Seasons (cfg.seasons, e.g. Vinter/Jul): house-wide, each backed by a
 # RoomFlow-managed switch (switch.roomflow_season_<id>, see switch.py)

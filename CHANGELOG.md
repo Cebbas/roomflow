@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Leaving the house now enforces the away targets on every device.**
+  Ambient re-applies skip a device whose resolved target hasn't changed
+  since RoomFlow last set it, so a person's own manual change survives.
+  That also meant a light switched on by hand while its target was
+  already "off" (e.g. under an off-resolving Mys or Natt condition, or
+  turned on after an earlier away) was skipped on the home -> away
+  transition too - seen live on 2026-10-08, when Nadine's ceiling light
+  and the living room ceiling light stayed on all morning after
+  everyone left. The transition now re-applies every room with
+  respect_manual_override=False; ticks while already away keep the old
+  behavior, and motion-controlled devices are still left to their own
+  timeout.
+
 - **Season label overview is now collapsible.** Under each season, both
   linked labels ("Jul" / "Ej Jul") show their name and "N found, M in a
   room"; an arrow expands the full list of labelled lamps with the room

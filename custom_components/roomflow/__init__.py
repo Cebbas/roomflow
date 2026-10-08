@@ -1970,16 +1970,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # the current period to the rooms, then tell the sensor platform (which
     # has no entity of its own to watch in built-in modes) to recompute too.
 
-    async def _turn_off_scenes_on_leave() -> None:
+    async def _turn_off_scenes_on_leave() -> bool:
         """On a home -> away transition, switch off every active condition
         flagged off_when_away (see _off_when_away_entities). Only on the
         transition itself, not on every tick while away - someone turning
-        a scene back on remotely while away is left alone."""
+        a scene back on remotely while away is left alone. Returns True if
+        this call was that transition."""
         home_state = _get_home_state()
         previous = hass.data[DOMAIN].get("last_home_state")
         hass.data[DOMAIN]["last_home_state"] = home_state
         if previous != "home" or home_state != "away":
-            return
+            return False
         for entity_id in _off_when_away_entities(hass, hass.data[DOMAIN]["config"]):
             try:
                 await hass.services.async_call(
@@ -1989,6 +1990,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.warning("RoomFlow: could not turn off %s on leaving: %s", entity_id, err)
                 continue
             _LOGGER.info("RoomFlow: house became empty - turned off %s", entity_id)
+        return True
 
     # Seeded once so a restart while already away isn't mistaken for a
     # fresh home -> away transition.
@@ -1999,8 +2001,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # forced earlier is no longer the last word - let the naturally
         # resolved period win again.
         hass.data[DOMAIN]["forced_period"].clear()
-        await _turn_off_scenes_on_leave()
-        await apply_current_period()
+        if await _turn_off_scenes_on_leave():
+            # The house just emptied: enforce the away targets on every
+            # device, not only on those whose target changed. A light
+            # someone switched on by hand after its target was already
+            # "off" (e.g. under an off-resolving Mys/Natt condition) would
+            # otherwise be skipped as a manual override and stay on all
+            # day. Motion-controlled devices still time out on their own.
+            await _apply_to_rooms(
+                hass.data[DOMAIN]["config"].get("rooms", []),
+                respect_motion_control=True,
+                respect_manual_override=False,
+            )
+        else:
+            await apply_current_period()
         async_dispatcher_send(hass, SIGNAL_RECOMPUTE)
 
     def _setup_time_listeners() -> None:

@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.66"
+VERSION = "0.0.67"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -531,12 +531,12 @@ DEFAULT_LONG_PRESS_MS = 500
 CLICK_TYPE_HOLD = "hold"
 
 # Small brightness step (0-255 scale) per hold_dim tick and the interval
-# between ticks: a full 1->255 sweep in ~4s, slow enough to let go at the
-# level you want and ~7 writes/s, which a Plejd BLE mesh keeps up with
-# (the old 50ms cadence was ~20 writes/s and swept the range in ~1.3s).
-HOLD_DIM_STEP = 10
-HOLD_DIM_INTERVAL_SECONDS = 0.15
-# Hard cap on one hold-to-dim ramp - a full sweep takes ~4s at the rate
+# between ticks: a full 1->255 sweep in ~6.5s, slow enough to let go at
+# the level you want (~4s felt too fast in use) and ~5 writes/s, which a
+# Plejd BLE mesh keeps up with.
+HOLD_DIM_STEP = 8
+HOLD_DIM_INTERVAL_SECONDS = 0.2
+# Hard cap on one hold-to-dim ramp - a full sweep takes ~6.5s at the rate
 # above, so anything much longer means the release never arrived.
 HOLD_DIM_MAX_SECONDS = 15
 

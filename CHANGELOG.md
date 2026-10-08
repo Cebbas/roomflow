@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Hold-to-dim ramps slower: a full sweep takes ~6.5s instead of ~4s**
+  (`HOLD_DIM_STEP` 10 -> 8, `HOLD_DIM_INTERVAL_SECONDS` 0.15 -> 0.2),
+  after ~4s turned out a bit too fast to stop at the wanted level.
+
 - **Hold-to-dim actually dims Plejd lights now.** Each ramp tick
   re-read the light's brightness from its HA state, but Plejd only
   reports a new brightness seconds after a write - so every tick

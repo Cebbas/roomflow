@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Hold-to-dim actually dims Plejd lights now.** Each ramp tick
+  re-read the light's brightness from its HA state, but Plejd only
+  reports a new brightness seconds after a write - so every tick
+  recomputed from the same stale value and sent the same target again,
+  and a 4s hold moved the living room ceiling light by a single step
+  (255 -> 245). The ramp now reads the brightness once when the hold
+  starts and keeps its own running level. Also slowed to one step every
+  150ms (`HOLD_DIM_INTERVAL_SECONDS`): a full sweep takes ~4s instead of
+  ~1.3s, slow enough to let go at the level you want, and ~7 writes/s
+  instead of ~20 for the BLE mesh.
+
 - **Leaving the house now enforces the away targets on every device.**
   Ambient re-applies skip a device whose resolved target hasn't changed
   since RoomFlow last set it, so a person's own manual change survives.

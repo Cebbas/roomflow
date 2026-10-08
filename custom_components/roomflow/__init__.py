@@ -1363,6 +1363,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["hold_dim_direction"][key] = "down" if direction == "up" else "up"
 
         started = dt_util.utcnow()
+        # The ramp keeps its own running level instead of re-reading the
+        # light's state every tick: Plejd only reports a new brightness
+        # seconds after a write, so a state-based ramp kept recomputing
+        # from the same stale value and only ever moved one step per hold
+        # (seen live: 255 -> 245 after a 4s hold).
+        level = {"value": int(current)}
 
         def _stop() -> None:
             cancel = hass.data[DOMAIN]["hold_dim_timers"].pop(key, None)
@@ -1378,15 +1384,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if (dt_util.utcnow() - started).total_seconds() > HOLD_DIM_MAX_SECONDS:
                 _stop()
                 return
-            tick_state = hass.states.get(device["entity_id"])
-            tick_current = (
-                tick_state.attributes.get("brightness") if tick_state and tick_state.state == "on" else 0
-            ) or 0
             delta = HOLD_DIM_STEP if direction == "up" else -HOLD_DIM_STEP
-            new_brightness = max(1, min(255, tick_current + delta))
-            if new_brightness == tick_current:
+            new_brightness = max(1, min(255, level["value"] + delta))
+            if new_brightness == level["value"]:
                 _stop()
                 return
+            level["value"] = new_brightness
             try:
                 await hass.services.async_call(
                     "light", "turn_on", {"entity_id": device["entity_id"], "brightness": new_brightness}

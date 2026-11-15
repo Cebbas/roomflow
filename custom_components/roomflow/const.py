@@ -1,7 +1,7 @@
 import uuid
 
 DOMAIN = "roomflow"
-VERSION = "0.0.67"
+VERSION = "0.0.68"
 STORAGE_KEY = "roomflow.rooms"
 STORAGE_VERSION = 1
 
@@ -123,6 +123,12 @@ CONF_PERIODS = "periods"  # ordered list of {id, name, condition_groups}
 # an explicit schedule_id keeps behaving exactly as before.
 CONF_SCHEDULES = "schedules"  # ordered list of {id, name, periods}
 DEFAULT_SCHEDULE_ID = "main"
+
+# Services (see services.yaml and force_schedule_period in __init__.py).
+SERVICE_FORCE_PERIOD = "force_period"
+SERVICE_CLEAR_FORCED_PERIOD = "clear_forced_period"
+ATTR_SCHEDULE_ID = "schedule_id"
+ATTR_PERIOD_ID = "period_id"
 DEFAULT_SCHEDULE_NAME = "Main"
 
 CONDITION_TYPE_TIME = "time"          # operator: after/before; value: "HH:MM:SS"

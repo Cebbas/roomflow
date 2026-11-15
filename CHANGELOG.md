@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Force period from the Overview tab, or as an action.** A new "Force
+  period" card holds a schedule in a chosen period (e.g. Day on a gloomy
+  weekend, when the weekend afternoon's lux condition starts it at noon)
+  and re-applies every device on it right away, overriding manual
+  changes; motion-controlled devices keep following motion. The hold
+  lasts until the schedule's own conditions resolve to a different period
+  than when it was forced, the house empties, or "Release" is pressed
+  (`period_override` / `force_schedule_period` / `_expire_period_overrides`).
+  Also exposed as the `roomflow.force_period` and
+  `roomflow.clear_forced_period` actions, and as the websocket commands
+  `roomflow/force_period` / `roomflow/clear_forced_period`;
+  `roomflow/get_dashboard` now lists each schedule's periods and its
+  `override_period_id`. A button's `force_period` attachment is
+  unchanged (one-shot, its own room only) - before this, there was no way
+  to make a forced period last: any ambient tick (the 1-minute sun poll,
+  any lux update) cleared it within a minute.
+
+- **Config backup: export / import in Settings.** "Export configuration"
+  downloads the full config store as JSON (entity IDs included, unlike
+  diagnostics); "Import configuration" validates the file (must have a
+  `rooms` list), asks for confirmation, saves it with `save_config` and
+  reloads the card.
+
 - **Hold-to-dim ramps slower: a full sweep takes ~6.5s instead of ~4s**
   (`HOLD_DIM_STEP` 10 -> 8, `HOLD_DIM_INTERVAL_SECONDS` 0.15 -> 0.2),
   after ~4s turned out a bit too fast to stop at the wanted level.

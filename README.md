@@ -313,6 +313,20 @@ period, and *why* — schedule, motion, a specific button, etc.) and every
 time a schedule's resolved period actually changed. The **Buttons** tab has
 its own dedicated log, described next.
 
+#### Forcing a period
+
+**Force period** on the Overview tab holds a schedule in the period you
+pick - e.g. *Day* on a gloomy weekend when the afternoon would otherwise
+start at noon. Every device on that schedule is re-applied right away
+(manual changes included; motion-controlled devices keep following
+motion), and the hold lasts until the schedule's own conditions move on to
+a different period than the one they were in when you forced it, until the
+house empties, or until you press **Release**. The same is available to
+automations as the `roomflow.force_period` (`period_id`, optional
+`schedule_id`, default `main`) and `roomflow.clear_forced_period` actions.
+It isn't kept across a Home Assistant restart. A button's "force period"
+action is different: a one-shot apply to its own room only.
+
 #### Diagnosing a button that "does nothing"
 
 The **Button activity** log (Buttons tab) records *every* recognized press
@@ -340,6 +354,11 @@ Everything that isn't specific to one room, button, or motion definition:
 Weekday/weekend and Home/away sourcing (above), managing schedules, and
 RoomFlow's own device name/Area (used to group its own Day type/Home state
 sensors — see below).
+
+**Backup** at the bottom exports the whole configuration (rooms, devices,
+schedules, buttons, conditions, seasons - entity IDs included) as a JSON
+file, and imports one back. Importing replaces the current configuration
+completely, so export first if you might want it back.
 
 ### Entities RoomFlow creates
 

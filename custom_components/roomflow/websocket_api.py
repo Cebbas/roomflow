@@ -174,12 +174,17 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
         schedule_id = schedule["id"]
         period_id = forced.get(schedule_id) or (get_period_fn(schedule_id) if get_period_fn else None)
         period = next((p for p in schedule["periods"] if p["id"] == period_id), None)
+        override = domain_data.get("period_override", {}).get(schedule_id)
         schedules.append(
             {
                 "id": schedule_id,
                 "name": schedule.get("name", schedule_id),
                 "period_id": period_id,
                 "period_name": period.get("name", period_id) if period else period_id,
+                # Set while the card's "Force period" holds this schedule
+                # (see force_schedule_period in __init__.py).
+                "override_period_id": override["period"] if override else None,
+                "periods": [{"id": p["id"], "name": p.get("name", p["id"])} for p in schedule["periods"]],
             }
         )
 
@@ -272,6 +277,37 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
     )
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/force_period",
+        vol.Optional("schedule_id", default=DEFAULT_SCHEDULE_ID): str,
+        vol.Required("period_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_force_period(hass: HomeAssistant, connection, msg):
+    """Hold a schedule in a period until it naturally moves on - see
+    force_schedule_period in __init__.py."""
+    try:
+        await hass.data[DOMAIN]["force_period_fn"](msg["schedule_id"], msg["period_id"])
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_period", str(err))
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/clear_forced_period",
+        vol.Optional("schedule_id", default=DEFAULT_SCHEDULE_ID): str,
+    }
+)
+@websocket_api.async_response
+async def ws_clear_forced_period(hass: HomeAssistant, connection, msg):
+    await hass.data[DOMAIN]["clear_period_fn"](msg["schedule_id"])
+    connection.send_result(msg["id"], {"ok": True})
+
+
 def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_config)
     websocket_api.async_register_command(hass, ws_save_config)
@@ -281,3 +317,5 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_list_floors)
     websocket_api.async_register_command(hass, ws_list_entities)
     websocket_api.async_register_command(hass, ws_get_dashboard)
+    websocket_api.async_register_command(hass, ws_force_period)
+    websocket_api.async_register_command(hass, ws_clear_forced_period)

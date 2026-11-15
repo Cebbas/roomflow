@@ -77,20 +77,6 @@ have `_active_room_conditions` branch on it the same way `_is_trigger_active`
 already does for motion triggers. The card's condition-row UI would need an
 operator `<select>` alongside the existing state-value `<input>`.
 
-### Config export / import
-
-There's no way to back up or move a RoomFlow configuration other than the
-existing diagnostics download (which intentionally strips entity_ids) or
-manually recreating every room/device/period/button/condition through the
-card. Useful both for backups and for migrating to a new Home Assistant
-instance - increasingly risky the more rooms get hand-configured with no
-way to snapshot the result.
-
-Possible approach: a "download config" / "upload config" pair in the
-card's Settings tab that reads/writes the same config-store shape
-diagnostics already partially exposes, but with entity_ids intact -
-essentially a raw dump/restore of the integration's config entry data.
-
 ## Medium priority
 
 ### Get into the HACS default store (no more "add as custom repository")
@@ -387,6 +373,18 @@ room id, similar to the existing `forced_period` override map) so a
 browser refresh doesn't silently drop back to real conditions while
 still "in test mode", and a clear always-visible indicator + one-click
 exit that restores the room to its real current-period behavior.
+
+### Make a button's "force period" last
+
+A button attachment's `force_period` action applies the period to its own
+room once and records it in `forced_period`, which `_handle_relevant_change`
+clears on the very next ambient tick (the 1-minute sun poll, any lux
+update) - after which the natural period's targets come straight back, so
+in practice it only lasts about a minute. The card's "Force period"
+(`period_override`) lasts until the schedule naturally changes period, but
+is schedule-wide, which is wrong for a room-level button. Possible
+approach: a per-room override with the same expiry rule as
+`_expire_period_overrides`, consulted when resolving that room's period.
 
 ## Low priority
 

@@ -403,6 +403,11 @@ function buildPeriodsFromLegacy(cd) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+const escapeAttr = escapeHtml;
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -428,6 +433,19 @@ function emptyVariant(base, withToggle) {
 // in themselves are data, not UI copy, and are never looked up here.
 const STRINGS = {
   en: {
+    force_period_header: "Force period",
+    force_period_help: "Holds the schedule in the chosen period until its own conditions move on to another period (or the house empties). Every device is re-applied right away, manual changes included; motion-controlled devices keep following motion.",
+    force_period_button: "Force",
+    force_period_clear: "Release",
+    force_period_active: "Forced: {period}",
+    backup_header: "Backup",
+    backup_help: "Download the whole RoomFlow configuration as a JSON file, or restore one. Importing replaces the current configuration completely.",
+    backup_export: "Export configuration",
+    backup_import: "Import configuration",
+    backup_import_confirm: "Replace the entire RoomFlow configuration with \"{file}\" ({rooms} rooms)? The current configuration is overwritten - export it first if you may want it back.",
+    backup_import_invalid: "That file isn't a RoomFlow configuration export.",
+    backup_import_done: "Configuration imported.",
+    backup_import_failed: "Import failed: {error}",
     tab_add_room: "+ Room",
     tab_buttons: "Buttons",
     tab_motion_sensors: "Motion sensors",
@@ -702,6 +720,19 @@ const STRINGS = {
   },
 
   sv: {
+    force_period_header: "Tvinga period",
+    force_period_help: "Håller schemat i vald period tills dess egna villkor går över till en annan period (eller huset blir tomt). Alla enheter tillämpas direkt, även manuellt ändrade; rörelsestyrda enheter fortsätter följa rörelse.",
+    force_period_button: "Tvinga",
+    force_period_clear: "Släpp",
+    force_period_active: "Tvingad: {period}",
+    backup_header: "Backup",
+    backup_help: "Ladda ner hela RoomFlow-konfigurationen som en JSON-fil, eller återställ en. Import ersätter den nuvarande konfigurationen helt.",
+    backup_export: "Exportera konfiguration",
+    backup_import: "Importera konfiguration",
+    backup_import_confirm: "Ersätta hela RoomFlow-konfigurationen med \"{file}\" ({rooms} rum)? Den nuvarande skrivs över - exportera den först om du kan vilja ha tillbaka den.",
+    backup_import_invalid: "Filen är inte en exporterad RoomFlow-konfiguration.",
+    backup_import_done: "Konfigurationen är importerad.",
+    backup_import_failed: "Importen misslyckades: {error}",
     tab_add_room: "+ Rum",
     tab_buttons: "Knappar",
     tab_motion_sensors: "Rörelsevakter",
@@ -976,6 +1007,19 @@ const STRINGS = {
   },
 
   no: {
+    force_period_header: "Tving periode",
+    force_period_help: "Holder planen i valgt periode til dens egne betingelser går over til en annen periode (eller huset blir tomt). Alle enheter brukes med en gang, også manuelt endrede; bevegelsesstyrte enheter fortsetter å følge bevegelse.",
+    force_period_button: "Tving",
+    force_period_clear: "Slipp",
+    force_period_active: "Tvunget: {period}",
+    backup_header: "Sikkerhetskopi",
+    backup_help: "Last ned hele RoomFlow-konfigurasjonen som en JSON-fil, eller gjenopprett en. Import erstatter den nåværende konfigurasjonen helt.",
+    backup_export: "Eksporter konfigurasjon",
+    backup_import: "Importer konfigurasjon",
+    backup_import_confirm: "Erstatte hele RoomFlow-konfigurasjonen med \"{file}\" ({rooms} rom)? Den nåværende overskrives - eksporter den først hvis du kan ville ha den tilbake.",
+    backup_import_invalid: "Filen er ikke en eksportert RoomFlow-konfigurasjon.",
+    backup_import_done: "Konfigurasjonen er importert.",
+    backup_import_failed: "Importen mislyktes: {error}",
     tab_add_room: "+ Rom",
     tab_buttons: "Knapper",
     tab_motion_sensors: "Bevegelsessensorer",
@@ -1177,6 +1221,19 @@ const STRINGS = {
   },
 
   da: {
+    force_period_header: "Gennemtving periode",
+    force_period_help: "Holder planen i den valgte periode, indtil dens egne betingelser skifter til en anden periode (eller huset bliver tomt). Alle enheder anvendes med det samme, også manuelt ændrede; bevægelsesstyrede enheder følger fortsat bevægelse.",
+    force_period_button: "Gennemtving",
+    force_period_clear: "Slip",
+    force_period_active: "Gennemtvunget: {period}",
+    backup_header: "Backup",
+    backup_help: "Download hele RoomFlow-konfigurationen som en JSON-fil, eller gendan en. Import erstatter den nuværende konfiguration fuldstændigt.",
+    backup_export: "Eksportér konfiguration",
+    backup_import: "Importér konfiguration",
+    backup_import_confirm: "Erstat hele RoomFlow-konfigurationen med \"{file}\" ({rooms} rum)? Den nuværende overskrives - eksportér den først, hvis du måske vil have den tilbage.",
+    backup_import_invalid: "Filen er ikke en eksporteret RoomFlow-konfiguration.",
+    backup_import_done: "Konfigurationen er importeret.",
+    backup_import_failed: "Import mislykkedes: {error}",
     tab_add_room: "+ Rum",
     tab_buttons: "Knapper",
     tab_motion_sensors: "Bevægelsessensorer",
@@ -1378,6 +1435,19 @@ const STRINGS = {
   },
 
   fi: {
+    force_period_header: "Pakota jakso",
+    force_period_help: "Pitää aikataulun valitussa jaksossa, kunnes sen omat ehdot vaihtuvat toiseen jaksoon (tai talo tyhjenee). Kaikki laitteet päivitetään heti, myös käsin muutetut; liiketunnistimella ohjatut laitteet seuraavat edelleen liikettä.",
+    force_period_button: "Pakota",
+    force_period_clear: "Vapauta",
+    force_period_active: "Pakotettu: {period}",
+    backup_header: "Varmuuskopio",
+    backup_help: "Lataa koko RoomFlow-määritys JSON-tiedostona tai palauta se. Tuonti korvaa nykyisen määrityksen kokonaan.",
+    backup_export: "Vie määritys",
+    backup_import: "Tuo määritys",
+    backup_import_confirm: "Korvataanko koko RoomFlow-määritys tiedostolla \"{file}\" ({rooms} huonetta)? Nykyinen määritys korvataan - vie se ensin, jos saatat haluta sen takaisin.",
+    backup_import_invalid: "Tiedosto ei ole viety RoomFlow-määritys.",
+    backup_import_done: "Määritys tuotu.",
+    backup_import_failed: "Tuonti epäonnistui: {error}",
     tab_add_room: "+ Huone",
     tab_buttons: "Painikkeet",
     tab_motion_sensors: "Liiketunnistimet",
@@ -1579,6 +1649,19 @@ const STRINGS = {
   },
 
   de: {
+    force_period_header: "Zeitraum erzwingen",
+    force_period_help: "Hält den Zeitplan im gewählten Zeitraum, bis seine eigenen Bedingungen zu einem anderen Zeitraum wechseln (oder das Haus leer wird). Alle Geräte werden sofort neu angewendet, auch manuell geänderte; bewegungsgesteuerte Geräte folgen weiter der Bewegung.",
+    force_period_button: "Erzwingen",
+    force_period_clear: "Freigeben",
+    force_period_active: "Erzwungen: {period}",
+    backup_header: "Sicherung",
+    backup_help: "Die gesamte RoomFlow-Konfiguration als JSON-Datei herunterladen oder wiederherstellen. Ein Import ersetzt die aktuelle Konfiguration vollständig.",
+    backup_export: "Konfiguration exportieren",
+    backup_import: "Konfiguration importieren",
+    backup_import_confirm: "Die gesamte RoomFlow-Konfiguration durch \"{file}\" ({rooms} Räume) ersetzen? Die aktuelle wird überschrieben - exportiere sie vorher, falls du sie zurückhaben möchtest.",
+    backup_import_invalid: "Diese Datei ist kein RoomFlow-Konfigurationsexport.",
+    backup_import_done: "Konfiguration importiert.",
+    backup_import_failed: "Import fehlgeschlagen: {error}",
     tab_add_room: "+ Raum",
     tab_buttons: "Tasten",
     tab_motion_sensors: "Bewegungssensoren",
@@ -1780,6 +1863,19 @@ const STRINGS = {
   },
 
   fr: {
+    force_period_header: "Forcer une période",
+    force_period_help: "Maintient le planning dans la période choisie jusqu'à ce que ses propres conditions passent à une autre période (ou que la maison se vide). Tous les appareils sont réappliqués immédiatement, y compris ceux modifiés manuellement ; les appareils pilotés par le mouvement continuent de suivre le mouvement.",
+    force_period_button: "Forcer",
+    force_period_clear: "Libérer",
+    force_period_active: "Forcée : {period}",
+    backup_header: "Sauvegarde",
+    backup_help: "Télécharger toute la configuration RoomFlow en fichier JSON, ou en restaurer une. L'import remplace entièrement la configuration actuelle.",
+    backup_export: "Exporter la configuration",
+    backup_import: "Importer une configuration",
+    backup_import_confirm: "Remplacer toute la configuration RoomFlow par « {file} » ({rooms} pièces) ? La configuration actuelle sera écrasée - exportez-la d'abord si vous pourriez la vouloir.",
+    backup_import_invalid: "Ce fichier n'est pas un export de configuration RoomFlow.",
+    backup_import_done: "Configuration importée.",
+    backup_import_failed: "Échec de l'import : {error}",
     tab_add_room: "+ Pièce",
     tab_buttons: "Boutons",
     tab_motion_sensors: "Détecteurs de mouvement",
@@ -1981,6 +2077,19 @@ const STRINGS = {
   },
 
   nl: {
+    force_period_header: "Periode forceren",
+    force_period_help: "Houdt het schema in de gekozen periode tot de eigen voorwaarden naar een andere periode gaan (of het huis leeg raakt). Alle apparaten worden direct opnieuw toegepast, ook handmatig gewijzigde; bewegingsgestuurde apparaten blijven beweging volgen.",
+    force_period_button: "Forceren",
+    force_period_clear: "Vrijgeven",
+    force_period_active: "Geforceerd: {period}",
+    backup_header: "Back-up",
+    backup_help: "Download de hele RoomFlow-configuratie als JSON-bestand, of zet er een terug. Importeren vervangt de huidige configuratie volledig.",
+    backup_export: "Configuratie exporteren",
+    backup_import: "Configuratie importeren",
+    backup_import_confirm: "De hele RoomFlow-configuratie vervangen door \"{file}\" ({rooms} kamers)? De huidige wordt overschreven - exporteer die eerst als je hem misschien terug wilt.",
+    backup_import_invalid: "Dit bestand is geen RoomFlow-configuratie-export.",
+    backup_import_done: "Configuratie geïmporteerd.",
+    backup_import_failed: "Importeren mislukt: {error}",
     tab_add_room: "+ Kamer",
     tab_buttons: "Knoppen",
     tab_motion_sensors: "Bewegingssensoren",
@@ -3930,6 +4039,7 @@ class RoomFlowCard extends HTMLElement {
         </div>
         ${currentStatusHtml}
       </div>
+      ${this._renderForcePeriodCard(dash.schedules || [])}
       <div class="rf-card">
         <div class="rf-card-title">${icon("mdi:swap-horizontal")}${this._t("overview_device_log_header")}</div>
         ${deviceLogHtml}
@@ -3939,6 +4049,118 @@ class RoomFlowCard extends HTMLElement {
         ${periodLogHtml}
       </div>
     `;
+  }
+
+  // "Force period": hold a schedule in a chosen period until its own
+  // conditions move on (roomflow/force_period, see force_schedule_period
+  // in __init__.py), or release an active hold.
+  _renderForcePeriodCard(schedules) {
+    if (!schedules.length) return "";
+    const rows = schedules
+      .map((s) => {
+        const periods = s.periods || [];
+        const selected = s.override_period_id || s.period_id;
+        const options = periods
+          .map((p) => `<option value="${escapeAttr(p.id)}" ${p.id === selected ? "selected" : ""}>${escapeHtml(p.name)}</option>`)
+          .join("");
+        const active = s.override_period_id
+          ? `<span class="rf-badge">${icon("mdi:lock-clock")}${escapeHtml(this._t("force_period_active", { period: s.period_name || s.override_period_id }))}</span>
+             <button class="rf-btn rf-btn-flat" data-clear-forced-period="${escapeAttr(s.id)}">${icon("mdi:lock-open-variant-outline")}${this._t("force_period_clear")}</button>`
+          : "";
+        return `
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+            ${schedules.length > 1 ? `<b>${escapeHtml(s.name)}</b>` : ""}
+            <select data-force-period-select="${escapeAttr(s.id)}">${options}</select>
+            <button class="rf-btn" data-force-period="${escapeAttr(s.id)}">${icon("mdi:clock-fast")}${this._t("force_period_button")}</button>
+            ${active}
+          </div>`;
+      })
+      .join("");
+    return `
+      <div class="rf-card">
+        <div class="rf-card-title">${icon("mdi:clock-fast")}${this._t("force_period_header")}</div>
+        <div class="rf-help" style="margin-top:0">${this._t("force_period_help")}</div>
+        ${rows}
+      </div>`;
+  }
+
+  _runBusyButton(btn, promise) {
+    const original = btn.innerHTML;
+    btn.textContent = this._t("applying");
+    btn.disabled = true;
+    return promise
+      .then(() => {
+        btn.textContent = this._t("done");
+      })
+      .catch((err) => {
+        console.error("RoomFlow:", err);
+        btn.textContent = (err && err.message) || "Error";
+      })
+      .finally(() => {
+        setTimeout(() => {
+          btn.innerHTML = original;
+          btn.disabled = false;
+          this._loadDashboard();
+        }, 1200);
+      });
+  }
+
+  // ---------- Backup (export / import) ----------
+
+  _exportConfig() {
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+    const blob = new Blob([JSON.stringify(this._config_data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `roomflow-config-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async _importConfigFile(file) {
+    let parsed;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch (err) {
+      alert(this._t("backup_import_invalid"));
+      return;
+    }
+    // Accept a raw export, or a roomflow/get_config websocket result
+    // wrapped as {"result": {...}}.
+    if (parsed && parsed.result && Array.isArray(parsed.result.rooms)) parsed = parsed.result;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.rooms)) {
+      alert(this._t("backup_import_invalid"));
+      return;
+    }
+    const msg = this._t("backup_import_confirm", { file: file.name, rooms: parsed.rooms.length });
+    if (!confirm(msg)) return;
+    // A pending debounced save of the old config must not land on top.
+    if (this._saveTimeout) clearTimeout(this._saveTimeout);
+    try {
+      await this._hass.callWS({ type: "roomflow/save_config", config: parsed });
+    } catch (err) {
+      console.error("RoomFlow: import failed", err);
+      alert(this._t("backup_import_failed", { error: (err && err.message) || err }));
+      return;
+    }
+    await this._loadAll();
+    alert(this._t("backup_import_done"));
+  }
+
+  _renderBackupSection() {
+    return `
+      <div style="margin-top:16px;border-top:1px solid var(--divider-color);padding-top:12px">
+        <div class="rf-section-title">${icon("mdi:backup-restore")}${this._t("backup_header")}</div>
+        <div class="rf-help">${this._t("backup_help")}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="rf-btn" id="export-config-btn">${icon("mdi:download")}${this._t("backup_export")}</button>
+          <button class="rf-btn rf-btn-flat" id="import-config-btn">${icon("mdi:upload")}${this._t("backup_import")}</button>
+          <input type="file" id="import-config-file" accept="application/json,.json" style="display:none" />
+        </div>
+      </div>`;
   }
 
   _updateLiveStatusTexts() {
@@ -3991,6 +4213,49 @@ class RoomFlowCard extends HTMLElement {
       this._activeRoomId = roomTab.getAttribute("data-room-tab");
       this._render();
       if (this._activeRoomId === "__overview__" || this._activeRoomId === "__buttons__") this._loadDashboard();
+      return;
+    }
+
+    const forcePeriodBtn = e.target.closest("[data-force-period]");
+    if (forcePeriodBtn) {
+      const scheduleId = forcePeriodBtn.getAttribute("data-force-period");
+      const select = [...this.querySelectorAll("[data-force-period-select]")].find(
+        (el) => el.getAttribute("data-force-period-select") === scheduleId
+      );
+      if (!select) return;
+      this._runBusyButton(
+        forcePeriodBtn,
+        this._hass.callWS({ type: "roomflow/force_period", schedule_id: scheduleId, period_id: select.value })
+      );
+      return;
+    }
+
+    const clearForcedBtn = e.target.closest("[data-clear-forced-period]");
+    if (clearForcedBtn) {
+      this._runBusyButton(
+        clearForcedBtn,
+        this._hass.callWS({
+          type: "roomflow/clear_forced_period",
+          schedule_id: clearForcedBtn.getAttribute("data-clear-forced-period"),
+        })
+      );
+      return;
+    }
+
+    if (e.target.closest("#export-config-btn")) {
+      this._exportConfig();
+      return;
+    }
+
+    if (e.target.closest("#import-config-btn")) {
+      const input = this.querySelector("#import-config-file");
+      if (input) {
+        input.value = "";
+        input.onchange = () => {
+          if (input.files && input.files[0]) this._importConfigFile(input.files[0]);
+        };
+        input.click();
+      }
       return;
     }
 
@@ -5245,6 +5510,7 @@ class RoomFlowCard extends HTMLElement {
           ${this._renderDayTypeSection()}
           ${this._renderHomeSection()}
           ${this._renderDeviceSection()}
+          ${this._renderBackupSection()}
         </div>
       </div>
     `;

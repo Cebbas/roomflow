@@ -9,5 +9,31 @@
     "abort": {
       "single_instance_allowed": "RoomFlow är redan konfigurerat."
     }
+  },
+  "services": {
+    "force_period": {
+      "name": "Tvinga period",
+      "description": "Håller ett schema i en period tills dess egna villkor går över till en annan period. Tillämpas direkt på alla enheter; rörelsestyrda enheter fortsätter följa rörelse.",
+      "fields": {
+        "period_id": {
+          "name": "Period",
+          "description": "Periodens ID, t.ex. weekend_day."
+        },
+        "schedule_id": {
+          "name": "Schema",
+          "description": "Schemats ID. Standard är huvudschemat."
+        }
+      }
+    },
+    "clear_forced_period": {
+      "name": "Släpp tvingad period",
+      "description": "Avslutar en tvingad period och tillämpar schemats egen period på alla enheter.",
+      "fields": {
+        "schedule_id": {
+          "name": "Schema",
+          "description": "Schemats ID. Standard är huvudschemat."
+        }
+      }
+    }
   }
 }

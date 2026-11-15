@@ -9,5 +9,31 @@
     "abort": {
       "single_instance_allowed": "RoomFlow is already configured."
     }
+  },
+  "services": {
+    "force_period": {
+      "name": "Force period",
+      "description": "Holds a schedule in a period until its own conditions move on to a different period. Re-applies every device right away; motion-controlled devices keep following motion.",
+      "fields": {
+        "period_id": {
+          "name": "Period",
+          "description": "Period ID, e.g. weekend_day."
+        },
+        "schedule_id": {
+          "name": "Schedule",
+          "description": "Schedule ID. Defaults to the main schedule."
+        }
+      }
+    },
+    "clear_forced_period": {
+      "name": "Clear forced period",
+      "description": "Ends a forced period and re-applies the schedule's own period to every device.",
+      "fields": {
+        "schedule_id": {
+          "name": "Schedule",
+          "description": "Schedule ID. Defaults to the main schedule."
+        }
+      }
+    }
   }
 }

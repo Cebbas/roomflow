@@ -1,0 +1,22 @@
+force_period:
+  fields:
+    period_id:
+      required: true
+      example: weekend_day
+      selector:
+        text:
+    schedule_id:
+      required: false
+      default: main
+      example: main
+      selector:
+        text:
+
+clear_forced_period:
+  fields:
+    schedule_id:
+      required: false
+      default: main
+      example: main
+      selector:
+        text:

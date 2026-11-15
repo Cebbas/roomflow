@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import voluptuous as vol
 from datetime import time as dt_time, timedelta
 from pathlib import Path
 
@@ -11,7 +12,9 @@ from homeassistant.components import panel_custom
 from homeassistant.components.frontend import async_remove_panel, add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, Event
+from homeassistant.core import HomeAssistant, Event, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
@@ -25,6 +28,10 @@ from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ATTR_PERIOD_ID,
+    ATTR_SCHEDULE_ID,
+    SERVICE_CLEAR_FORCED_PERIOD,
+    SERVICE_FORCE_PERIOD,
     DOMAIN,
     VERSION,
     STORAGE_KEY,
@@ -769,6 +776,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("motion_manual_override", {})
     hass.data[DOMAIN].setdefault("motion_expected_off", set())
     hass.data[DOMAIN].setdefault("forced_period", {})
+    # {schedule_id: {"period": forced period id, "natural": the naturally
+    # resolved period when it was forced}} - see _get_period and
+    # _expire_period_overrides. In memory only: a restart drops it.
+    hass.data[DOMAIN].setdefault("period_override", {})
     hass.data[DOMAIN].setdefault("last_logged_period", {})
     hass.data[DOMAIN].setdefault("last_applied_signature", {})
     await async_load_logs(hass)
@@ -786,6 +797,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # as how _apply_to_rooms already re-reads "default_transitions" below.
 
     def _get_period(schedule_id: str | None = None) -> str | None:
+        """The period a schedule is in right now: a period override (the
+        card's "Force period" / the roomflow.force_period service) wins
+        while it lasts, otherwise the naturally resolved one
+        (_natural_period). A button's one-shot force_period is separate -
+        see "forced_period" in _apply_to_rooms."""
+        override = hass.data[DOMAIN]["period_override"].get(schedule_id or DEFAULT_SCHEDULE_ID)
+        if override is not None:
+            return override["period"]
+        return _natural_period(schedule_id)
+
+    def _natural_period(schedule_id: str | None = None) -> str | None:
+        """The period a schedule's own conditions resolve to, ignoring any
+        forced period."""
         cfg = hass.data[DOMAIN]["config"]
         periods = periods_for_schedule(cfg, schedule_id)  # already priority-ordered (top = highest)
         is_weekend = _get_day_type() == "weekend"
@@ -1013,7 +1037,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     )
                     continue
 
-            source = "forced" if forced_period is not None else "schedule"
+            if forced_period is not None or schedule_id in hass.data[DOMAIN]["period_override"]:
+                source = "forced"
+            else:
+                source = "schedule"
             _record_period_change(schedule_id, period, source)
 
             default_transitions = transitions_for_schedule(cfg, schedule_id)
@@ -1061,6 +1088,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cfg = hass.data[DOMAIN]["config"]
         rooms = [r for r in cfg.get("rooms", []) if r.get("id") == room_id]
         await _apply_to_rooms(rooms)
+
+    def _rooms_on_schedule(schedule_id: str) -> list:
+        return [
+            r
+            for r in hass.data[DOMAIN]["config"].get("rooms", [])
+            if (r.get("schedule_id") or DEFAULT_SCHEDULE_ID) == schedule_id
+        ]
+
+    async def force_schedule_period(schedule_id: str, period_id: str) -> None:
+        """Hold a schedule in one period (card "Force period" / the
+        roomflow.force_period service) until its own conditions move on to
+        a different period than the one they resolved to when it was forced
+        (_expire_period_overrides) - e.g. forcing Day during a gloomy
+        Weekend afternoon holds Day until the evening starts. Unlike a
+        button's one-shot force_period, every room on the schedule follows
+        it, and it survives ambient ticks. Re-applied to every device right
+        away, overriding manual changes; motion-controlled devices keep
+        following motion."""
+        cfg = hass.data[DOMAIN]["config"]
+        if period_id not in {p["id"] for p in periods_for_schedule(cfg, schedule_id)}:
+            raise ValueError(f"unknown period '{period_id}' for schedule '{schedule_id}'")
+        hass.data[DOMAIN]["period_override"][schedule_id] = {
+            "period": period_id,
+            "natural": _natural_period(schedule_id),
+        }
+        await _apply_to_rooms(_rooms_on_schedule(schedule_id), respect_motion_control=True)
+        async_dispatcher_send(hass, SIGNAL_RECOMPUTE)
+
+    async def clear_schedule_period(schedule_id: str) -> None:
+        """Drop a schedule's period override and re-apply its natural
+        period to every device right away."""
+        if hass.data[DOMAIN]["period_override"].pop(schedule_id, None) is None:
+            return
+        await _apply_to_rooms(_rooms_on_schedule(schedule_id), respect_motion_control=True)
+        async_dispatcher_send(hass, SIGNAL_RECOMPUTE)
+
+    def _expire_period_overrides() -> None:
+        """Drop each period override whose schedule has naturally moved on
+        to another period since it was forced."""
+        overrides = hass.data[DOMAIN]["period_override"]
+        for schedule_id, override in list(overrides.items()):
+            if _natural_period(schedule_id) != override["natural"]:
+                overrides.pop(schedule_id, None)
 
     def _get_room(room_id: str) -> dict | None:
         cfg = hass.data[DOMAIN]["config"]
@@ -1212,6 +1282,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN]["apply_fn"] = apply_current_period
     hass.data[DOMAIN]["apply_room_fn"] = apply_room
+    hass.data[DOMAIN]["force_period_fn"] = force_schedule_period
+    hass.data[DOMAIN]["clear_period_fn"] = clear_schedule_period
+
+    # Services - thin wrappers that always call the current entry's
+    # functions via hass.data, so they keep working across a reload.
+    async def _svc_force_period(call: ServiceCall) -> None:
+        try:
+            await hass.data[DOMAIN]["force_period_fn"](call.data[ATTR_SCHEDULE_ID], call.data[ATTR_PERIOD_ID])
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+
+    async def _svc_clear_forced_period(call: ServiceCall) -> None:
+        await hass.data[DOMAIN]["clear_period_fn"](call.data[ATTR_SCHEDULE_ID])
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_FORCE_PERIOD,
+        _svc_force_period,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_PERIOD_ID): cv.string,
+                vol.Optional(ATTR_SCHEDULE_ID, default=DEFAULT_SCHEDULE_ID): cv.string,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_FORCED_PERIOD,
+        _svc_clear_forced_period,
+        schema=vol.Schema({vol.Optional(ATTR_SCHEDULE_ID, default=DEFAULT_SCHEDULE_ID): cv.string}),
+    )
 
     # ---------- Physical buttons ----------
 
@@ -2048,7 +2149,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # forced earlier is no longer the last word - let the naturally
         # resolved period win again.
         hass.data[DOMAIN]["forced_period"].clear()
+        _expire_period_overrides()
         if await _turn_off_scenes_on_leave():
+            # Leaving the house ends any period override too - the away
+            # targets below must win, not a period someone forced earlier.
+            hass.data[DOMAIN]["period_override"].clear()
             # The house just emptied: enforce the away targets on every
             # device, not only on those whose target changed. A light
             # someone switched on by hand after its target was already
@@ -2365,6 +2470,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     watchdog_unsub = hass.data[DOMAIN].get("plejd_watchdog_unsub")
     if watchdog_unsub:
         watchdog_unsub()
+    hass.data[DOMAIN].get("period_override", {}).clear()
+    for service in (SERVICE_FORCE_PERIOD, SERVICE_CLEAR_FORCED_PERIOD):
+        hass.services.async_remove(DOMAIN, service)
     try:
         async_remove_panel(hass, "roomflow")
     except ValueError:

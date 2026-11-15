@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Room conditions now work on motion-controlled devices.** A
+  condition's own enabled variant on a motion device used to be ignored
+  when the condition switched on (ambient re-applies skip motion devices)
+  and was then switched off by motion's countdown anyway. Now that variant
+  holds while the condition is on - applied right away, with no off/dim
+  countdown (`_condition_pins_device`, `condition_pinned`) - and motion
+  takes over again when it ends (`_resume_motion_control`: the motion-on
+  behavior if the sensor is active, otherwise a fresh countdown). Built
+  for a "Mys bad" bath scene in a bathroom whose lights are motion-driven.
+  No existing config had such variants, so nothing else changes.
+
 - **Time conditions can be a range: "between 22:00 and 06:00".** New
   `between` operator on the time condition (`value` = start, `end` =
   end, `_time_between_ok`); a start later than the end wraps past

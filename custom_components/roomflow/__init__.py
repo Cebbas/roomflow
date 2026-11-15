@@ -234,6 +234,18 @@ def _control_mode(device: dict, period: str) -> dict:
     return {"mode": "schedule", "motion_sensor_id": None, "motion_on": True, "motion_off": True}
 
 
+def _condition_pins_device(device: dict, period: str, active_condition_ids: list[str]) -> bool:
+    """True while one of the room's active conditions (e.g. a "Mys bad"
+    switch) has its own enabled variant for this device this period. For a
+    motion-controlled device that variant then holds for as long as the
+    condition is on: ambient re-applies set it like a schedule device, and
+    motion's off/dim countdown leaves it alone - nobody wants the bathroom
+    to go dark ten minutes into a bath. Motion takes over again when the
+    condition ends (see _resume_motion_control)."""
+    behaviors = _normalize_behaviors(device.get("behaviors", {}).get(period))
+    return any((behaviors.get(cid) or {}).get("enabled") for cid in active_condition_ids)
+
+
 def _behavior_signature(behavior: dict) -> tuple:
     """A comparable snapshot of what a behavior asks for, used to tell
     "the schedule's target actually changed" apart from "we're just being
@@ -798,6 +810,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # resolved period when it was forced}} - see _get_period and
     # _expire_period_overrides. In memory only: a restart drops it.
     hass.data[DOMAIN].setdefault("period_override", {})
+    # "room_id:entity_id" of motion devices currently held by an active
+    # room condition's own variant - see _condition_pins_device.
+    hass.data[DOMAIN].setdefault("condition_pinned", set())
     hass.data[DOMAIN].setdefault("last_logged_period", {})
     hass.data[DOMAIN].setdefault("last_applied_signature", {})
     await async_load_logs(hass)
@@ -1063,7 +1078,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             default_transitions = transitions_for_schedule(cfg, schedule_id)
             active_condition_ids = _active_room_conditions(hass, room, cfg)
+            pinned = hass.data[DOMAIN]["condition_pinned"]
             for device in room.get("devices", []):
+                key = f"{room['id']}:{device['entity_id']}"
+                is_motion = _control_mode(device, period)["mode"] == "motion"
+                pins = is_motion and _condition_pins_device(device, period, active_condition_ids)
+                if pins and key not in pinned:
+                    pinned.add(key)
+                    _cancel_motion_timer(key)
+                elif not pins and key in pinned:
+                    pinned.discard(key)
+                    if is_motion:
+                        await _resume_motion_control(room, device, period)
+                        continue
                 # Devices whose control mode is "motion" for this period are
                 # exclusively controlled by the motion subsystem during
                 # routine ambient reapplies (time/day-type/home-state
@@ -1073,9 +1100,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # everything, same as before.
                 # A season-blocked motion device still goes through, so a
                 # season switching on turns it off without waiting for motion.
+                # A motion device pinned by an active condition goes through
+                # too (see _condition_pins_device).
                 if (
                     respect_motion_control
-                    and _control_mode(device, period)["mode"] == "motion"
+                    and is_motion
+                    and not pins
                     and not _device_season_blocked(hass, device, cfg)
                 ):
                     continue
@@ -1883,6 +1913,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             room, device, period, day_type, home_state, active_condition_ids, default_transitions, schedule_id, source
         )
 
+    async def _resume_motion_control(room: dict, device: dict, period: str) -> None:
+        """A condition that held a motion device just ended: hand it back
+        to motion - the motion-on behavior if its sensor is active right
+        now, otherwise the usual off/dim countdown starting now."""
+        control = _control_mode(device, period)
+        definition = next(
+            (m for m in hass.data[DOMAIN]["config"].get("motion_sensors", []) if m.get("id") == control["motion_sensor_id"]),
+            None,
+        )
+        if definition is None:
+            return
+        if _is_definition_active(definition):
+            if control["motion_on"]:
+                await _apply_motion_device_on(room, device)
+        elif control["motion_off"]:
+            _schedule_motion_off(room["id"], device, definition, period)
+
     def _schedule_motion_off(room_id: str, device: dict, motion_cfg: dict, period_id: str | None = None) -> None:
         entity_id = device["entity_id"]
         key = _motion_key(room_id, entity_id)
@@ -1915,6 +1962,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         async def _after_warn(_now) -> None:
             hass.data[DOMAIN]["motion_off_timers"].pop(key, None)
+            if key in hass.data[DOMAIN]["condition_pinned"]:
+                return
             final_room = _get_room(room_id)
             if not final_room:
                 return
@@ -1926,6 +1975,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         async def _after_off_delay(_now) -> None:
             hass.data[DOMAIN]["motion_off_timers"].pop(key, None)
+            if key in hass.data[DOMAIN]["condition_pinned"]:
+                return
             current_room = _get_room(room_id)
             if not current_room:
                 return
@@ -2071,6 +2122,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 for device in _motion_off_devices(room, period, definition_id):
                     key = _motion_key(room["id"], device["entity_id"])
                     if hass.data[DOMAIN]["motion_manual_override"].get(key):
+                        continue
+                    if key in hass.data[DOMAIN]["condition_pinned"]:
+                        # Held by an active condition - no countdown.
                         continue
                     _schedule_motion_off(room["id"], device, definition, period)
 
@@ -2499,6 +2553,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if watchdog_unsub:
         watchdog_unsub()
     hass.data[DOMAIN].get("period_override", {}).clear()
+    hass.data[DOMAIN].get("condition_pinned", set()).clear()
     for service in (SERVICE_FORCE_PERIOD, SERVICE_CLEAR_FORCED_PERIOD):
         hass.services.async_remove(DOMAIN, service)
     try:

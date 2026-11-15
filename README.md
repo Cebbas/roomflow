@@ -286,6 +286,13 @@ behavior per device, exactly like Weekend/Away — useful for anything specific
 to that room rather than the whole house (a particular person's presence, a
 manual "cleaning mode" toggle, a TV/media-player state, and so on).
 
+On a **motion-controlled** device, a condition variant you've enabled holds
+for as long as the condition is on: the device is set to it right away, and
+motion's off/dim countdown leaves it alone - e.g. a "Bath" condition that
+keeps the bathroom dimmed while you lie still in the tub. When the condition
+ends, motion takes over again (the usual countdown starts from then, or the
+motion-on behavior if someone is moving in the room).
+
 ### Weekday/weekend and home/away
 
 Configured once, globally, from **⚙ Settings**, and used everywhere

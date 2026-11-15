@@ -112,12 +112,15 @@ og bevægelses-/sensortriggere oven i det.
 
 ## Installation
 
-### Via HACS (brugerdefineret repository)
+### Via Marketplace (brugerdefineret repository)
 
-1. HACS → Integrationer → tre-prikkers-menuen → **Brugerdefinerede
-   repositories**
-2. Tilføj URL'en til dette repository, kategori **Integration**
-3. Installer "RoomFlow", genstart Home Assistant
+1. **Indstillinger → Marketplace** → tilføj fra link ("Add from link", øverst til højre)
+2. Angiv URL'en til dette repository som GitHub-link, type **Integration**, og tilføj
+3. Åbn "RoomFlow" → installer, genstart Home Assistant
+
+Opdateringer vises derefter under **Indstillinger → Opdateringer**. På
+Home Assistant ældre end 2026.11 bruges HACS på samme måde: HACS →
+tre-prikkers-menuen → **Brugerdefinerede repositories**, kategori **Integration**.
 
 ### Manuel
 

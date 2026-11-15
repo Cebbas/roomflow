@@ -123,12 +123,15 @@ physische Tasten und Bewegungs-/Sensor-Trigger.
 
 ## Installation
 
-### Über HACS (benutzerdefiniertes Repository)
+### Über den Marketplace (benutzerdefiniertes Repository)
 
-1. HACS → Integrationen → Drei-Punkte-Menü → **Benutzerdefinierte
-   Repositories**
-2. Füge die URL dieses Repositorys hinzu, Kategorie **Integration**
-3. Installiere "RoomFlow", starte Home Assistant neu
+1. **Einstellungen → Marketplace** → aus Link hinzufügen ("Add from link", oben rechts)
+2. Die URL dieses Repositorys als GitHub-Link eingeben, Typ **Integration**, hinzufügen
+3. "RoomFlow" öffnen → installieren, Home Assistant neu starten
+
+Updates erscheinen danach unter **Einstellungen → Updates**. Bei Home
+Assistant älter als 2026.11 funktioniert HACS genauso: HACS →
+Drei-Punkte-Menü → **Benutzerdefinierte Repositories**, Kategorie **Integration**.
 
 ### Manuell
 

@@ -62,11 +62,15 @@ schedule instead of quietly overriding each other.
 
 ## Installation
 
-### Via HACS (custom repository)
+### Via Marketplace (custom repository)
 
-1. HACS → Integrations → the three-dot menu → **Custom repositories**
-2. Add this repository URL, category **Integration**
-3. Install "RoomFlow", restart Home Assistant
+1. **Settings → Marketplace** → **Add from link** (upper-right corner)
+2. Enter this repository's URL under **GitHub link**, type **Integration**, then **Add**
+3. Open "RoomFlow" → **Install**, restart Home Assistant
+
+Updates then show up under **Settings → Updates**. On Home Assistant older
+than 2026.11, use HACS the same way: HACS → the three-dot menu → **Custom
+repositories**, category **Integration**.
 
 ### Manual
 

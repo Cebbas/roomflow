@@ -79,11 +79,15 @@ operator `<select>` alongside the existing state-value `<input>`.
 
 ## Medium priority
 
-### Get into the HACS default store (no more "add as custom repository")
+### Get into the Marketplace catalog (no more "add from link")
+
+HACS became Home Assistant's built-in Marketplace in 2026.11; getting
+listed still works the same way, through `hacs/default` - the steps below
+are unchanged.
 
 Confirmed (checked live, 2026-07-31): RoomFlow isn't in `home-assistant/brands`
 yet (`gh api repos/home-assistant/brands/contents/custom_integrations/roomflow`
-→ 404) and there's no open PR for it. Everything else HACS requires is
+→ 404) and there's no open PR for it. Everything else the catalog requires is
 already in place - public repo, description, topics, MIT `LICENSE`,
 README, `hacs.json`, `manifest.json` with all mandatory keys, an in-repo
 `custom_components/roomflow/brand/` directory, `.github/workflows/
@@ -95,7 +99,7 @@ Two remaining steps, both external PRs against repos RoomFlow doesn't
 own - do deliberately, not as a routine push:
 
 1. Submit the icon/logo to `home-assistant/brands`. The exact folder
-   HACS/brands expects already exists locally at
+   the catalog/brands expects already exists locally at
    `brands/custom_integrations/roomflow/` (icon.png, icon@2x.png,
    logo.png, logo@2x.png) - fork `home-assistant/brands`, drop that
    folder in as-is, PR it.

@@ -109,11 +109,15 @@ triggere på toppen av det.
 
 ## Installasjon
 
-### Via HACS (egendefinert repository)
+### Via Marketplace (egendefinert repository)
 
-1. HACS → Integrasjoner → tre-punktsmenyen → **Egendefinerte repositorier**
-2. Legg til URL-en til dette repositoriet, kategori **Integration**
-3. Installer "RoomFlow", start Home Assistant på nytt
+1. **Innstillinger → Marketplace** → legg til fra lenke ("Add from link", øverst til høyre)
+2. Oppgi URL-en til dette repositoriet som GitHub-lenke, type **Integration**, og legg til
+3. Åpne "RoomFlow" → installer, start Home Assistant på nytt
+
+Oppdateringer vises deretter under **Innstillinger → Oppdateringer**. På
+Home Assistant eldre enn 2026.11 brukes HACS på samme måte: HACS →
+tre-punktsmenyen → **Egendefinerte repositorier**, kategori **Integration**.
 
 ### Manuelt
 

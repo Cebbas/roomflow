@@ -111,11 +111,15 @@ rörelse-/sensortriggers ovanpå det.
 
 ## Installation
 
-### Via HACS (anpassat arkiv)
+### Via Marketplace (anpassat arkiv)
 
-1. HACS → Integrationer → tre-punktsmenyn → **Anpassade arkiv**
-2. Lägg till URL:en till det här arkivet, kategori **Integration**
-3. Installera "RoomFlow", starta om Home Assistant
+1. **Inställningar → Marketplace** → lägg till från länk ("Add from link", uppe till höger)
+2. Ange URL:en till det här arkivet som GitHub-länk, typ **Integration**, och lägg till
+3. Öppna "RoomFlow" → installera, starta om Home Assistant
+
+Uppdateringar dyker sedan upp under **Inställningar → Uppdateringar**. På
+Home Assistant äldre än 2026.11 används HACS på samma sätt: HACS →
+tre-punktsmenyn → **Anpassade arkiv**, kategori **Integration**.
 
 ### Manuell
 

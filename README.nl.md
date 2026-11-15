@@ -117,12 +117,15 @@ fysieke knoppen en beweging-/sensortriggers.
 
 ## Installatie
 
-### Via HACS (aangepaste repository)
+### Via de Marketplace (aangepaste repository)
 
-1. HACS → Integraties → menu met drie stippen → **Aangepaste
-   repositories**
-2. Voeg de URL van deze repository toe, categorie **Integration**
-3. Installeer "RoomFlow", herstart Home Assistant
+1. **Instellingen → Marketplace** → toevoegen via link ("Add from link", rechtsboven)
+2. Vul de URL van deze repository in als GitHub-link, type **Integration**, en voeg toe
+3. Open "RoomFlow" → installeren, herstart Home Assistant
+
+Updates verschijnen daarna onder **Instellingen → Updates**. Bij Home
+Assistant ouder dan 2026.11 werkt HACS op dezelfde manier: HACS → menu met
+drie stippen → **Aangepaste repositories**, categorie **Integration**.
 
 ### Handmatig
 

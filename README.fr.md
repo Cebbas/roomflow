@@ -126,11 +126,15 @@ mouvement/capteurs.
 
 ## Installation
 
-### Via HACS (dépôt personnalisé)
+### Via le Marketplace (dépôt personnalisé)
 
-1. HACS → Intégrations → menu à trois points → **Dépôts personnalisés**
-2. Ajoutez l'URL de ce dépôt, catégorie **Integration**
-3. Installez "RoomFlow", redémarrez Home Assistant
+1. **Paramètres → Marketplace** → ajouter depuis un lien (« Add from link », en haut à droite)
+2. Saisissez l'URL de ce dépôt comme lien GitHub, type **Integration**, puis ajoutez
+3. Ouvrez « RoomFlow » → installer, redémarrez Home Assistant
+
+Les mises à jour apparaissent ensuite sous **Paramètres → Mises à jour**.
+Avec Home Assistant antérieur à 2026.11, utilisez HACS de la même façon :
+HACS → menu à trois points → **Dépôts personnalisés**, catégorie **Integration**.
 
 ### Manuelle
 

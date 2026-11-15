@@ -73,11 +73,16 @@ toisensa huomaamatta.
 
 ## Asennus
 
-### HACS:n kautta (mukautettu tietovarasto)
+### Marketplacen kautta (mukautettu tietovarasto)
 
-1. HACS → Integrations → the three-dot menu → **Custom repositories**
-2. Lisää tämän tietovaraston URL-osoite, kategoria **Integration**
-3. Asenna "RoomFlow", käynnistä Home Assistant uudelleen
+1. **Asetukset → Marketplace** → lisää linkistä ("Add from link", oikeassa yläkulmassa)
+2. Anna tämän tietovaraston URL-osoite GitHub-linkiksi, tyyppi **Integration**, ja lisää
+3. Avaa "RoomFlow" → asenna, käynnistä Home Assistant uudelleen
+
+Päivitykset näkyvät sen jälkeen kohdassa **Asetukset → Päivitykset**.
+Vanhemmissa kuin 2026.11 Home Assistant -versioissa HACSia käytetään samalla
+tavalla: HACS → kolmen pisteen valikko → **Custom repositories**, kategoria
+**Integration**.
 
 ### Manuaalisesti
 

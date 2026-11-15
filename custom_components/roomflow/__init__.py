@@ -9,12 +9,13 @@ from datetime import time as dt_time, timedelta
 from pathlib import Path
 
 from homeassistant.components import panel_custom
-from homeassistant.components.frontend import async_remove_panel, add_extra_js_url
+from homeassistant.components.frontend import async_remove_panel
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, Event, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
@@ -642,6 +643,21 @@ def _state_condition_ok(hass: HomeAssistant, condition: dict) -> bool:
     return matches if condition.get("operator", "is") == "is" else not matches
 
 
+def _time_between_ok(condition: dict, now_time: dt_time) -> bool:
+    """A time condition with operator "between": true from `value`
+    (inclusive) to `end` (exclusive). A start later than the end wraps past
+    midnight - "22:00 to 06:00" holds at 23:00 and at 05:00. Equal start
+    and end never match; a missing or malformed clock value fails closed."""
+    try:
+        start = _parse_hms(condition.get("value") or "")
+        end = _parse_hms(condition.get("end") or "")
+    except ValueError:
+        return False
+    if start <= end:
+        return start <= now_time < end
+    return now_time >= start or now_time < end
+
+
 def _condition_ok(
     hass: HomeAssistant, condition: dict, now_time: dt_time, is_weekend: bool, home_state: str
 ) -> bool:
@@ -649,6 +665,8 @@ def _condition_ok(
     types fail closed (never match) rather than raising, so one bad entry
     can't take down the rest of the room's period resolution."""
     ctype = condition.get("type")
+    if ctype == CONDITION_TYPE_TIME and condition.get("operator") == "between":
+        return _time_between_ok(condition, now_time)
     if ctype in (CONDITION_TYPE_TIME, CONDITION_TYPE_SUN):
         boundary = _condition_boundary(hass, condition)
         if boundary is None:
@@ -1296,7 +1314,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _svc_clear_forced_period(call: ServiceCall) -> None:
         await hass.data[DOMAIN]["clear_period_fn"](call.data[ATTR_SCHEDULE_ID])
 
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_FORCE_PERIOD,
         _svc_force_period,
@@ -1307,7 +1326,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }
         ),
     )
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_CLEAR_FORCED_PERIOD,
         _svc_clear_forced_period,
@@ -2201,6 +2221,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         value = condition.get("value")
                         if value:
                             time_boundary_values.add(value)
+                        end = condition.get("end")
+                        if end and condition.get("operator") == "between":
+                            time_boundary_values.add(end)
                     elif ctype == CONDITION_TYPE_SUN:
                         has_sun_condition = True
 
@@ -2289,10 +2312,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Apply immediately on start/reload so the current state takes effect
     await apply_current_period()
 
-    # Serve the card straight from this component's own www/ folder and
-    # auto-register it as a Lovelace resource, so installing/copying just
-    # this one folder is enough for both the sidebar page and any dashboard
-    # card - no manual config/www copy or Resources entry needed.
+    # Serve the card straight from this component's own www/ folder, so
+    # installing/copying just this one folder is enough for the sidebar
+    # page - no manual config/www copy needed.
     try:
         await hass.http.async_register_static_paths(
             [StaticPathConfig(_CARD_URL_PATH, str(Path(__file__).parent / "www"), cache_headers=False)]
@@ -2300,7 +2322,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except (RuntimeError, ValueError):
         # Already registered (e.g. on entry reload)
         pass
-    add_extra_js_url(hass, _CARD_JS_URL)
+    # Not add_extra_js_url (v0.0.69): that injected the whole ~300 kB card
+    # into every page of the frontend, for every user, through the same
+    # extra_module_url mechanism the REMOVED note below shows can race the
+    # frontend's bootstrap - while only RoomFlow's own panel needs it, and
+    # the panel loads module_url itself. To put the card on a dashboard,
+    # add /roomflow_static/roomflow-card.js as a JavaScript module resource
+    # (README, "Using the card on a dashboard").
 
     # REMOVED (v0.0.41): this used to mirror every registered Lovelace
     # resource into RoomFlow's own panel via add_extra_js_url, so a custom
@@ -2335,7 +2363,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             sidebar_icon="mdi:home-lightning-bolt-outline",
             module_url=_CARD_JS_URL,
             embed_iframe=False,
-            require_admin=False,
+            require_admin=True,
             config={},
         )
     except ValueError:

@@ -498,6 +498,8 @@ const STRINGS = {
     operator_equals: "equals",
     operator_after: "after",
     operator_before: "before",
+    operator_between: "between",
+    between_and: "and",
     operator_is: "is",
     operator_is_not: "is not",
 
@@ -785,6 +787,8 @@ const STRINGS = {
     operator_equals: "är lika med",
     operator_after: "efter",
     operator_before: "före",
+    operator_between: "mellan",
+    between_and: "och",
     operator_is: "är",
     operator_is_not: "är inte",
 
@@ -3649,6 +3653,13 @@ class RoomFlowCard extends HTMLElement {
     const condition = group && group.conditions.find((c) => c.id === conditionId);
     if (!condition) return;
     condition[field] = value;
+    if (condition.type === "time" && field === "operator") {
+      // Show/hide the "between" end-time field.
+      if (value === "between" && !condition.end) condition.end = "06:00:00";
+      this._scheduleSave();
+      this._render();
+      return;
+    }
     this._scheduleSave();
   }
 
@@ -5523,12 +5534,20 @@ class RoomFlowCard extends HTMLElement {
     const path = `${scheduleId}|${p.id}|${groupId}|${c.id}`;
 
     if (c.type === "time") {
-      const operatorOptions = ["after", "before"]
+      const operatorOptions = ["after", "before", "between"]
         .map((op) => `<option value="${op}" ${op === c.operator ? "selected" : ""}>${this._t(`operator_${op}`)}</option>`)
         .join("");
+      // "between" takes a second clock value; a start later than the end
+      // wraps past midnight (22:00-06:00), see _time_between_ok.
+      const endField =
+        c.operator === "between"
+          ? `<span>${this._t("between_and")}</span>
+        <input type="time" step="1" data-condition="${path}|end" value="${c.end || "06:00:00"}" style="width:110px" />`
+          : "";
       return `
         <select data-condition="${path}|operator">${operatorOptions}</select>
-        <input type="time" step="1" data-condition="${path}|value" value="${c.value || "00:00:00"}" style="width:110px" />`;
+        <input type="time" step="1" data-condition="${path}|value" value="${c.value || "00:00:00"}" style="width:110px" />
+        ${endField}`;
     }
 
     if (c.type === "sun") {

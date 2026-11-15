@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Time conditions can be a range: "between 22:00 and 06:00".** New
+  `between` operator on the time condition (`value` = start, `end` =
+  end, `_time_between_ok`); a start later than the end wraps past
+  midnight. Both clock values get their own boundary listener. Fixes
+  periods that tried to say "night" with `after 22:00` AND `before 06:00`
+  in one group, which can never be true - seen live on 2026-11-13, when
+  the house was empty all night and Natt never started.
+
+- **RoomFlow is admin-only.** The sidebar panel now has
+  `require_admin=True` (non-admin users no longer see it), every
+  `roomflow/*` websocket command requires an admin, and
+  `roomflow.force_period` / `roomflow.clear_forced_period` are admin
+  services. Previously any logged-in user could rewrite - or, with
+  import, replace - the whole configuration.
+
+- **The card is no longer injected into every frontend page.** It was
+  loaded on every page for every user via `add_extra_js_url` (~300 kB,
+  and the same `extra_module_url` mechanism that once crashed the whole
+  frontend - see the v0.0.41 note in `__init__.py`), though only the
+  RoomFlow panel needs it and the panel loads it itself. **Breaking for
+  dashboard use:** to keep `type: custom:roomflow-card` on a dashboard,
+  add `/roomflow_static/roomflow-card.js` as a JavaScript module resource.
+
 - **Force period from the Overview tab, or as an action.** A new "Force
   period" card holds a schedule in a chosen period (e.g. Day on a gloomy
   weekend, when the weekend afternoon's lux condition starts it at noon)

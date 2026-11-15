@@ -132,10 +132,11 @@ tre-punktsmenyen → **Egendefinerte repositorier**, kategori **Integration**.
    RoomFlow** — det er ingenting å fylle ut, bare bekreft. Alt annet skjer
    i kortet.
 
-   RoomFlow serverer sitt eget kort og registrerer det automatisk — ingen
-   `config/www`-kopiering og ingen manuell oppføring under **Innstillinger
-   → Dashbord → Ressurser** nødvendig. Den legger også til seg selv som en
-   side i sidepanelet. Du kan også legge til kortet i et dashbord manuelt:
+   RoomFlow serverer sitt eget kort og legger til seg selv som en side i
+   sidepanelet (kun for administratorer) - ingen `config/www`-kopiering
+   nødvendig. Vil du også ha kortet i et dashbord, legger du først til
+   `/roomflow_static/roomflow-card.js` som **JavaScript-modul** under
+   **Innstillinger → Dashbord → Ressurser**, og deretter:
    ```yaml
    type: custom:roomflow-card
    ```

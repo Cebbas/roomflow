@@ -22,6 +22,7 @@ from .const import DOMAIN, DEFAULT_SCHEDULE_ID, infer_schedules
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_config"})
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_get_config(hass: HomeAssistant, connection, msg):
     data = hass.data[DOMAIN]["config"]
@@ -34,6 +35,7 @@ async def ws_get_config(hass: HomeAssistant, connection, msg):
         vol.Required("config"): dict,
     }
 )
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_save_config(hass: HomeAssistant, connection, msg):
     hass.data[DOMAIN]["config"] = msg["config"]
@@ -66,6 +68,7 @@ async def ws_save_config(hass: HomeAssistant, connection, msg):
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/apply_now"})
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_apply_now(hass: HomeAssistant, connection, msg):
     apply_fn = hass.data[DOMAIN].get("apply_fn")
@@ -80,6 +83,7 @@ async def ws_apply_now(hass: HomeAssistant, connection, msg):
         vol.Required("room_id"): str,
     }
 )
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_apply_room(hass: HomeAssistant, connection, msg):
     apply_room_fn = hass.data[DOMAIN].get("apply_room_fn")
@@ -89,6 +93,7 @@ async def ws_apply_room(hass: HomeAssistant, connection, msg):
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_areas"})
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_list_areas(hass: HomeAssistant, connection, msg):
     registry = ar.async_get(hass)
@@ -100,6 +105,7 @@ async def ws_list_areas(hass: HomeAssistant, connection, msg):
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_floors"})
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_list_floors(hass: HomeAssistant, connection, msg):
     registry = fr.async_get(hass)
@@ -111,6 +117,7 @@ async def ws_list_floors(hass: HomeAssistant, connection, msg):
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_entities"})
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_list_entities(hass: HomeAssistant, connection, msg):
     entity_registry = er.async_get(hass)
@@ -159,6 +166,7 @@ async def ws_list_entities(hass: HomeAssistant, connection, msg):
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_dashboard"})
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
     """Overview tab data: each schedule's currently resolved period (forced
@@ -284,6 +292,7 @@ async def ws_get_dashboard(hass: HomeAssistant, connection, msg):
         vol.Required("period_id"): str,
     }
 )
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_force_period(hass: HomeAssistant, connection, msg):
     """Hold a schedule in a period until it naturally moves on - see
@@ -302,6 +311,7 @@ async def ws_force_period(hass: HomeAssistant, connection, msg):
         vol.Optional("schedule_id", default=DEFAULT_SCHEDULE_ID): str,
     }
 )
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_clear_forced_period(hass: HomeAssistant, connection, msg):
     await hass.data[DOMAIN]["clear_period_fn"](msg["schedule_id"])

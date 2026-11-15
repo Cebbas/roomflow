@@ -82,10 +82,11 @@ repositories**, category **Integration**.
 ### First-time setup
 
 **Settings → Devices & services → Add integration → RoomFlow** — there's
-nothing to fill in, just confirm. RoomFlow serves its own card and registers
-it automatically: no `config/www` copy, no manual **Settings → Dashboards →
-Resources** entry, and it adds itself as its own page in the sidebar. You can
-still add the card to any dashboard manually too, if you'd rather:
+nothing to fill in, just confirm. RoomFlow serves its own card and adds
+itself as its own page in the sidebar (admins only) - no `config/www` copy
+needed. To also put the card on a dashboard, first add
+`/roomflow_static/roomflow-card.js` as a **JavaScript module** under
+**Settings → Dashboards → Resources**, then:
 
 ```yaml
 type: custom:roomflow-card
@@ -126,7 +127,8 @@ menu to add it, and freely combine as many as you want using two levels of
 logic — **AND** within a group (all must be true), **OR** between groups (any
 group being fully true is enough). The available condition types:
 
-- **Time** — before/after a fixed clock time.
+- **Time** — before/after a fixed clock time, or between two (a range
+  like 22:00–06:00 wraps past midnight).
 - **Sun position** — before/after a solar event (dawn, sunrise, solar noon,
   sunset, dusk), with an optional +/- minute offset, and optional
   earliest/latest clamps so a solar event never resolves before or after a

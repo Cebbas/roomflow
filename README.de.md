@@ -146,11 +146,12 @@ Drei-Punkte-Menü → **Benutzerdefinierte Repositories**, Kategorie **Integrati
    RoomFlow** — es gibt nichts auszufüllen, nur bestätigen. Alles andere
    geschieht in der Karte.
 
-   RoomFlow stellt seine eigene Karte bereit und registriert sie
-   automatisch — kein `config/www`-Kopieren und kein manueller Eintrag
-   unter **Einstellungen → Dashboards → Ressourcen** nötig. Es fügt sich
-   außerdem selbst als Seite in der Seitenleiste hinzu. Du kannst die Karte
-   auch manuell zu einem Dashboard hinzufügen:
+   RoomFlow stellt seine eigene Karte bereit und fügt sich selbst als Seite
+   in der Seitenleiste hinzu (nur für Administratoren) - kein
+   `config/www`-Kopieren nötig. Um die Karte zusätzlich auf einem Dashboard
+   zu nutzen, füge zuerst `/roomflow_static/roomflow-card.js` als
+   **JavaScript-Modul** unter **Einstellungen → Dashboards → Ressourcen**
+   hinzu, dann:
    ```yaml
    type: custom:roomflow-card
    ```

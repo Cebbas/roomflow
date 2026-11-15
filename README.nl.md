@@ -140,11 +140,11 @@ drie stippen → **Aangepaste repositories**, categorie **Integration**.
    RoomFlow** — er is niets in te vullen, gewoon bevestigen. Al het andere
    gebeurt in de kaart.
 
-   RoomFlow serveert zijn eigen kaart en registreert deze automatisch —
-   geen `config/www`-kopie en geen handmatige invoer onder **Instellingen
-   → Dashboards → Bronnen** nodig. Het voegt zichzelf ook toe als pagina
-   in het zijpaneel. Je kunt de kaart ook handmatig aan een dashboard
-   toevoegen:
+   RoomFlow serveert zijn eigen kaart en voegt zichzelf toe als pagina in
+   het zijpaneel (alleen voor beheerders) - geen `config/www`-kopie nodig.
+   Wil je de kaart ook op een dashboard, voeg dan eerst
+   `/roomflow_static/roomflow-card.js` toe als **JavaScript-module** onder
+   **Instellingen → Dashboards → Bronnen**, en daarna:
    ```yaml
    type: custom:roomflow-card
    ```

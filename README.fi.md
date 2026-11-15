@@ -94,11 +94,11 @@ tavalla: HACS → kolmen pisteen valikko → **Custom repositories**, kategoria
 ### Ensimmäinen käyttöönotto
 
 **Settings → Devices & services → Add integration → RoomFlow** — mitään ei
-tarvitse täyttää, vahvista vain. RoomFlow tarjoilee oman korttinsa ja
-rekisteröi sen automaattisesti: ei `config/www`-kopiointia, ei manuaalista
-**Settings → Dashboards → Resources** -merkintää, ja se lisää itsensä
-sivupaneeliin omana sivunaan. Voit toki lisätä kortin myös manuaalisesti
-mihin tahansa kojelautaan:
+tarvitse täyttää, vahvista vain. RoomFlow tarjoilee oman korttinsa ja lisää
+itsensä sivupaneeliin omana sivunaan (vain ylläpitäjille) -
+`config/www`-kopiointia ei tarvita. Jos haluat kortin myös kojelautaan,
+lisää ensin `/roomflow_static/roomflow-card.js` **JavaScript-moduulina**
+kohdassa **Settings → Dashboards → Resources**, ja sitten:
 
 ```yaml
 type: custom:roomflow-card

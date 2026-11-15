@@ -133,11 +133,11 @@ tre-punktsmenyn → **Anpassade arkiv**, kategori **Integration**.
 1. **Inställningar → Enheter & tjänster → Lägg till integration → RoomFlow**
    — det finns inget att fylla i, bara bekräfta. Allt annat sker i kortet.
 
-   RoomFlow serverar sitt eget kort och registrerar det automatiskt — ingen
-   `config/www`-kopiering och ingen manuell post under **Inställningar →
-   Instrumentpaneler → Resurser** behövs. Den lägger också till sig själv
-   som en sida i sidopanelen. Du kan även lägga till kortet i en
-   instrumentpanel manuellt:
+   RoomFlow serverar sitt eget kort och lägger till sig själv som en sida i
+   sidopanelen (bara för administratörer) - ingen `config/www`-kopiering
+   behövs. Vill du även ha kortet i en instrumentpanel lägger du först till
+   `/roomflow_static/roomflow-card.js` som **JavaScript-modul** under
+   **Inställningar → Instrumentpaneler → Resurser**, och sedan:
    ```yaml
    type: custom:roomflow-card
    ```

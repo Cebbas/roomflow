@@ -8,26 +8,6 @@ actually built.
 
 ## High priority
 
-### Native midnight-spanning time condition
-
-A period's `time` condition (`CONDITION_TYPE_TIME` in `const.py`, evaluated
-by `_condition_ok` in `__init__.py`) only supports a single `after`/`before`
-boundary compared against the current time-of-day - there's no condition
-that natively expresses a range like "22:00 to 06:00". Today the only way
-to cover a window that crosses midnight is two separate OR'd condition
-groups (one `after 22:00`, one `before 06:00`), which is exactly the
-pattern `_default_condition_groups` already generates for the last default
-period, and works correctly, but has to be built by hand for any
-custom period a user adds (e.g. a "Night" period covering 22:00-06:00) -
-hit on every room migration that has an evening/night period.
-
-Possible approach: add a `between` operator (or a dedicated condition type)
-that takes two clock values and, when the "start" is later than the "end",
-treats the range as wrapping past midnight (`now >= start or now < end`)
-instead of requiring the user to construct two OR'd groups manually. Purely
-a UX simplification over what two condition groups already accomplish -
-not a new capability.
-
 ### Holidays / specific dates and seasons
 
 Today's overrides are limited to away/weekend and per-room custom

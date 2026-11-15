@@ -149,11 +149,12 @@ HACS → menu à trois points → **Dépôts personnalisés**, catégorie **Inte
    RoomFlow** — il n'y a rien à remplir, confirmez simplement. Tout le
    reste se passe dans la carte.
 
-   RoomFlow sert sa propre carte et l'enregistre automatiquement — aucune
-   copie dans `config/www` ni entrée manuelle dans **Paramètres → Tableaux
-   de bord → Ressources** n'est nécessaire. Elle s'ajoute aussi elle-même
-   comme page dans le panneau latéral. Vous pouvez aussi ajouter la carte
-   manuellement à un tableau de bord :
+   RoomFlow sert sa propre carte et s'ajoute lui-même comme page dans le
+   panneau latéral (administrateurs uniquement) - aucune copie dans
+   `config/www` n'est nécessaire. Pour aussi placer la carte sur un tableau
+   de bord, ajoutez d'abord `/roomflow_static/roomflow-card.js` comme
+   **module JavaScript** dans **Paramètres → Tableaux de bord →
+   Ressources**, puis :
    ```yaml
    type: custom:roomflow-card
    ```

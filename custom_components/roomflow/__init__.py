@@ -246,6 +246,41 @@ def _condition_pins_device(device: dict, period: str, active_condition_ids: list
     return any((behaviors.get(cid) or {}).get("enabled") for cid in active_condition_ids)
 
 
+def _condition_restores_buttons(hass: HomeAssistant, room: dict, cfg: dict, condition_id: str) -> bool:
+    """True if the active condition with this id that applies to the room
+    (its own, its floor's or the house's - ids repeat across scopes, e.g.
+    every "stadning") is flagged restore_button_devices."""
+    floor_id = _room_floor_id(hass, room)
+    candidates = (
+        list(room.get("custom_conditions", []))
+        + [c for c in cfg.get("floor_conditions", []) if c.get("floor_id") == floor_id]
+        + list(cfg.get("house_conditions", []))
+    )
+    return any(
+        c.get("id") == condition_id and c.get("restore_button_devices") and _condition_active(hass, c)
+        for c in candidates
+    )
+
+
+def _snapshot_light_state(hass: HomeAssistant, entity_id: str) -> dict | None:
+    """The device's current on/off (and brightness) as a behavior that
+    would put it back - None if its state is unknown/unavailable. Used to
+    restore a "button" device once a condition stops holding it."""
+    state = hass.states.get(entity_id)
+    if state is None or state.state not in ("on", "off"):
+        return None
+    if state.state == "off":
+        return {"state": "off"}
+    snapshot = {"state": "on"}
+    brightness = state.attributes.get("brightness")
+    if brightness is not None:
+        snapshot["brightness"] = round(brightness)
+    color_temp = state.attributes.get("color_temp_kelvin")
+    if color_temp is not None:
+        snapshot["color_temp_kelvin"] = color_temp
+    return snapshot
+
+
 def _behavior_signature(behavior: dict) -> tuple:
     """A comparable snapshot of what a behavior asks for, used to tell
     "the schedule's target actually changed" apart from "we're just being
@@ -813,6 +848,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # "room_id:entity_id" of motion devices currently held by an active
     # room condition's own variant - see _condition_pins_device.
     hass.data[DOMAIN].setdefault("condition_pinned", set())
+    # "room_id:entity_id" -> the state a "button" device had before an
+    # active condition took it over, restored when the condition ends (see
+    # _apply_single_device). In memory only: a restart drops it.
+    hass.data[DOMAIN].setdefault("condition_held", {})
     hass.data[DOMAIN].setdefault("last_logged_period", {})
     hass.data[DOMAIN].setdefault("last_applied_signature", {})
     await async_load_logs(hass)
@@ -992,10 +1031,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         source: str,
         respect_manual_override: bool = False,
     ) -> None:
+        entity_id = device["entity_id"]
+        signature_key = f"{room['id']}:{entity_id}"
+        held = hass.data[DOMAIN]["condition_held"]
         if _device_season_blocked(hass, device, hass.data[DOMAIN]["config"]):
             # Out of season (or hidden by an active one) - kept off
             # regardless of period, control mode, condition or away state.
             behavior = {"state": "off"}
+            held.pop(signature_key, None)
         else:
             raw_behaviors = device.get("behaviors", {}).get(period)
             if not raw_behaviors:
@@ -1010,11 +1053,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 default_enabled=control["mode"] != "button",
                 away_default=device.get("away_default"),
             )
+            if control["mode"] == "button":
+                # A "button" device is normally left alone by the schedule,
+                # so a condition (e.g. Städning) turning it on would leave it
+                # on for good once the condition ends. Remember how it was
+                # before the condition took over, and put it back after -
+                # see condition_held.
+                # Only for conditions flagged restore_button_devices (e.g.
+                # Städning) - others (e.g. Mys) leave the device as they set it.
+                winner = next(
+                    (cid for cid in active_condition_ids if (behaviors.get(cid) or {}).get("enabled")), None
+                )
+                if winner is not None:
+                    if signature_key not in held and _condition_restores_buttons(
+                        hass, room, hass.data[DOMAIN]["config"], winner
+                    ):
+                        held[signature_key] = _snapshot_light_state(hass, entity_id)
+                elif signature_key in held:
+                    previous = held.pop(signature_key)
+                    if previous is not None and not behavior:
+                        behavior = previous
             if not behavior:
                 return
 
-        entity_id = device["entity_id"]
-        signature_key = f"{room['id']}:{entity_id}"
         target_signature = _behavior_signature(behavior)
 
         if respect_manual_override:
@@ -2554,6 +2615,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         watchdog_unsub()
     hass.data[DOMAIN].get("period_override", {}).clear()
     hass.data[DOMAIN].get("condition_pinned", set()).clear()
+    hass.data[DOMAIN].get("condition_held", {}).clear()
     for service in (SERVICE_FORCE_PERIOD, SERVICE_CLEAR_FORCED_PERIOD):
         hass.services.async_remove(DOMAIN, service)
     try:

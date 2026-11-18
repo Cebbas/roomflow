@@ -293,6 +293,11 @@ keeps the bathroom dimmed while you lie still in the tub. When the condition
 ends, motion takes over again (the usual countdown starts from then, or the
 motion-on behavior if someone is moving in the room).
 
+Turn on **Restore after** on a condition (say, Cleaning) to have
+**button-controlled** devices it turned on or changed put back the way
+they were when it ends - off if they were off before. Without it, they're
+left as the condition set them.
+
 ### Weekday/weekend and home/away
 
 Configured once, globally, from **⚙ Settings**, and used everywhere

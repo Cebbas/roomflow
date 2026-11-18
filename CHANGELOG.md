@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **"Restore after" per condition: hand button devices back when it
+  ends.** A button-controlled device (left alone by the schedule) that a
+  condition turned on - e.g. a hall ceiling light lit by Städning -
+  stayed on after the condition ended, since nothing else ever touches
+  such a device. A condition can now be flagged **Restore after**
+  (`restore_button_devices`, a toggle next to "Off when away" on room,
+  floor and house conditions): RoomFlow then snapshots each button
+  device's state when that condition first takes it over
+  (`_snapshot_light_state`, `condition_held`) and restores it once no
+  condition holds it anymore - off if it was off, otherwise its earlier
+  brightness/colour. Off by default, so e.g. Mys keeps leaving lights as
+  it set them. Seen live on 2026-11-17 (Hall taklampa and Entré
+  takbelysning left on after cleaning). In memory only - a restart in
+  between drops the snapshot.
+
 - **Room conditions now work on motion-controlled devices.** A
   condition's own enabled variant on a motion device used to be ignored
   when the condition switched on (ambient re-applies skip motion devices)

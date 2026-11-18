@@ -709,6 +709,8 @@ const STRINGS = {
     auto_off_time_title: "Turn itself off automatically at this time every day (blank = never)",
     auto_off_time_weekend_title: "A different auto-off time for weekends (blank = same as weekdays, every day)",
     off_when_away_label: "Off when away",
+    restore_buttons_label: "Restore after",
+    restore_buttons_title: "When this condition ends, put button-controlled devices it turned on or changed back the way they were before it started",
     off_when_away_title: "Turn this condition off automatically when the house becomes empty (home -> away)",
 
     applying: "Applying…",
@@ -998,6 +1000,8 @@ const STRINGS = {
     auto_off_time_title: "Stäng av sig själv automatiskt vid den här tiden varje dag (tomt = aldrig)",
     auto_off_time_weekend_title: "Egen avstängningstid för helger (tomt = samma som vardagar, varje dag)",
     off_when_away_label: "Av vid borta",
+    restore_buttons_label: "Återställ efteråt",
+    restore_buttons_title: "När villkoret slutar ställs knappstyrda enheter som det tände eller ändrade tillbaka som de var innan det började",
     off_when_away_title: "Stäng av det här villkoret automatiskt när huset blir tomt (hemma -> borta)",
 
     applying: "Tillämpar…",
@@ -4896,6 +4900,33 @@ class RoomFlowCard extends HTMLElement {
       return;
     }
 
+    const conditionRestore = e.target.closest("[data-condition-restore]");
+    if (conditionRestore) {
+      const [roomId, conditionId] = conditionRestore.getAttribute("data-condition-restore").split("|");
+      this._updateCustomCondition(roomId, conditionId, "restore_button_devices", conditionRestore.checked);
+      return;
+    }
+
+    const houseConditionRestore = e.target.closest("[data-house-condition-restore]");
+    if (houseConditionRestore) {
+      this._updateHouseCondition(
+        houseConditionRestore.getAttribute("data-house-condition-restore"),
+        "restore_button_devices",
+        houseConditionRestore.checked
+      );
+      return;
+    }
+
+    const floorConditionRestore = e.target.closest("[data-floor-condition-restore]");
+    if (floorConditionRestore) {
+      this._updateFloorCondition(
+        floorConditionRestore.getAttribute("data-floor-condition-restore"),
+        "restore_button_devices",
+        floorConditionRestore.checked
+      );
+      return;
+    }
+
     const houseConditionOffAway = e.target.closest("[data-house-condition-offaway]");
     if (houseConditionOffAway) {
       this._updateHouseCondition(
@@ -6073,7 +6104,7 @@ class RoomFlowCard extends HTMLElement {
   // Shared row markup for a house/floor/room condition - only the fields
   // that vary (data-attribute key, list, move handlers) differ between
   // the three scopes, so this one renderer backs all of them.
-  _renderConditionRows(conditions, { nameAttr, entityAttr, createAttr, stateAttr, autoOffAttr, autoOffWeekendAttr, offAwayAttr, moveUpAttr, moveDownAttr, removeAttr }) {
+  _renderConditionRows(conditions, { nameAttr, entityAttr, createAttr, stateAttr, autoOffAttr, autoOffWeekendAttr, offAwayAttr, restoreAttr, moveUpAttr, moveDownAttr, removeAttr }) {
     return conditions
       .map(
         (c, i) => `
@@ -6090,6 +6121,9 @@ class RoomFlowCard extends HTMLElement {
           : ""}
         <label title="${this._t("off_when_away_title")}" style="display:flex;align-items:center;gap:4px;font-size:0.85em;white-space:nowrap;cursor:pointer">
           ${switchEl(`${offAwayAttr(c)} ${c.off_when_away ? "checked" : ""}`)}${this._t("off_when_away_label")}
+        </label>
+        <label title="${this._t("restore_buttons_title")}" style="display:flex;align-items:center;gap:4px;font-size:0.85em;white-space:nowrap;cursor:pointer">
+          ${switchEl(`${restoreAttr(c)} ${c.restore_button_devices ? "checked" : ""}`)}${this._t("restore_buttons_label")}
         </label>
         <button class="rf-icon-btn" ${moveUpAttr(c)} ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
         <button class="rf-icon-btn" ${moveDownAttr(c)} ${i === conditions.length - 1 ? "disabled" : ""}>${icon("mdi:arrow-down")}</button>
@@ -6247,6 +6281,7 @@ class RoomFlowCard extends HTMLElement {
       autoOffAttr: (c) => `data-house-condition-autooff="${c.id}"`,
       autoOffWeekendAttr: (c) => `data-house-condition-autooff-weekend="${c.id}"`,
       offAwayAttr: (c) => `data-house-condition-offaway="${c.id}"`,
+      restoreAttr: (c) => `data-house-condition-restore="${c.id}"`,
       moveUpAttr: (c) => `data-move-house-condition-up="${c.id}"`,
       moveDownAttr: (c) => `data-move-house-condition-down="${c.id}"`,
       removeAttr: (c) => `data-remove-house-condition="${c.id}"`,
@@ -6274,6 +6309,7 @@ class RoomFlowCard extends HTMLElement {
       autoOffAttr: (c) => `data-floor-condition-autooff="${c.id}"`,
       autoOffWeekendAttr: (c) => `data-floor-condition-autooff-weekend="${c.id}"`,
       offAwayAttr: (c) => `data-floor-condition-offaway="${c.id}"`,
+      restoreAttr: (c) => `data-floor-condition-restore="${c.id}"`,
       moveUpAttr: (c) => `data-move-floor-condition-up="${c.id}"`,
       moveDownAttr: (c) => `data-move-floor-condition-down="${c.id}"`,
       removeAttr: (c) => `data-remove-floor-condition="${c.id}"`,
@@ -6376,6 +6412,9 @@ class RoomFlowCard extends HTMLElement {
           : ""}
         <label title="${this._t("off_when_away_title")}" style="display:flex;align-items:center;gap:4px;font-size:0.85em;white-space:nowrap;cursor:pointer">
           ${switchEl(`data-condition-offaway="${room.id}|${c.id}" ${c.off_when_away ? "checked" : ""}`)}${this._t("off_when_away_label")}
+        </label>
+        <label title="${this._t("restore_buttons_title")}" style="display:flex;align-items:center;gap:4px;font-size:0.85em;white-space:nowrap;cursor:pointer">
+          ${switchEl(`data-condition-restore="${room.id}|${c.id}" ${c.restore_button_devices ? "checked" : ""}`)}${this._t("restore_buttons_label")}
         </label>
         <button class="rf-icon-btn" data-move-custom-condition-up="${room.id}|${c.id}" ${i === 0 ? "disabled" : ""}>${icon("mdi:arrow-up")}</button>
         <button class="rf-icon-btn" data-move-custom-condition-down="${room.id}|${c.id}" ${
